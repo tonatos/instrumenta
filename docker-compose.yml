@@ -1,0 +1,34 @@
+services:
+  bond-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bond-monitor:latest
+    container_name: bond-monitor
+    ports:
+      # IPv4 loopback + LAN
+      - "0.0.0.0:8501:8501"
+      # IPv6 loopback — нужно, потому что macOS резолвит localhost в ::1
+      - "[::1]:8501:8501"
+    env_file:
+      # Copy .env.example → .env and fill TINKOFF_TOKEN before running
+      - path: .env
+        required: false
+    environment:
+      # These can also be set here directly (overrides .env values)
+      # KEY_RATE: "14.5"
+      # MAX_DAYS: "120"
+      # MIN_VOLUME_RUB: "500000"
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      # Mount ratings.json so it can be updated without rebuilding the image
+      - ./data/ratings.json:/app/data/ratings.json:ro
+      # Persist MOEX disk cache across container restarts (avoids re-fetching on restart)
+      - ./cache:/app/cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

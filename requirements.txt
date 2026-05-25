@@ -1,0 +1,19 @@
+# Runtime dependencies
+streamlit>=1.35.0
+httpx>=0.27.0
+pandas>=2.2.0
+plotly>=5.22.0
+python-dotenv>=1.0.0
+
+# T-Invest API (optional — app works without it, but risk flags and coupon charts won't be available)
+# The official SDK was renamed from `tinkoff-investments` to `t-tech-investments` (namespace
+# `tinkoff` → `t_tech`) and moved from GitHub (archived) to T-Bank Open Source GitLab.
+# Both PyPI packages (`tinkoff-investments`, `t-tech-investments`) are currently in quarantine
+# (https://pypi.org/simple/t-tech-investments/ → project-status: quarantined),
+# and the GitLab git endpoint requires authentication, so we install from the public
+# tarball archive. Pinned to release 0.3.5 (Mar 2026).
+t-tech-investments @ https://opensource.tbank.ru/invest/invest-python/-/archive/0.3.5/invest-python-0.3.5.tar.gz
+
+# Dev / lint
+ruff>=0.4.0
+mypy>=1.10.0

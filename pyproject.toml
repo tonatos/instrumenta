@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=70"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "bond-monitor"
+version = "0.1.0"
+description = "Short-term Russian bond screener with risk/reward scoring"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+    "N",   # pep8-naming
+]
+ignore = [
+    "B008",  # do not perform function calls in default arguments
+    "N803",  # argument name should be lowercase (uppercase used for MOEX field names)
+    "N806",  # variable in function should be lowercase (same reason)
+    "E501",  # line too long — not enforced for Russian UI/markdown strings
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "data", "ui"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
