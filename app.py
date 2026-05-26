@@ -23,6 +23,7 @@ from datetime import date
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 from dotenv import load_dotenv
 
 from core.bond_model import (
@@ -72,6 +73,7 @@ from ui.components import (
     render_screener_table,
     render_warnings,
 )
+from ui.portfolio import render_portfolio_tab
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -381,10 +383,10 @@ _FRONTEND_PATCH: str = """
   // элементе с ``[data-baseweb="tab-list"]``; мы предполагаем, что
   // порядок вкладок в Streamlit совпадает с порядком, в котором они
   // переданы в st.tabs(...) в Python — для нас это [screener,
-  // favorites, calc]. Если перестановка вкладок в app.py меняется,
-  // здесь тоже нужно поправить TAB_INDEX_TO_KEY.
+  // favorites, portfolio, calc]. Если перестановка вкладок в app.py
+  // меняется, здесь тоже нужно поправить TAB_INDEX_TO_KEY.
   const TAB_QUERY_PARAM = 'tab';
-  const TAB_INDEX_TO_KEY = ['screener', 'favorites', 'calc'];
+  const TAB_INDEX_TO_KEY = ['screener', 'favorites', 'portfolio', 'calc'];
   const TAB_KEY_TO_INDEX = Object.fromEntries(
     TAB_INDEX_TO_KEY.map((k, i) => [k, i])
   );
@@ -936,48 +938,108 @@ if detail_secid:
 # просто «Избранное», а счётчик навешиваем поверх через CSS-badge
 # (см. ниже): ::after-псевдоэлемент не влияет на текст label-а, и
 # идентификация вкладки Streamlit-ом остаётся стабильной.
-tab_screener, tab_favorites, tab_calc = st.tabs(
+tab_screener, tab_favorites, tab_portfolio, tab_calc = st.tabs(
     [
         "Скринер",
         "Избранное",
+        "Портфель",
         "Калькулятор",
     ]
 )
 
 # Счётчик-«пилюля» на вкладке «Избранное».
 #
-# Реализован как CSS ``::after`` на втором табе ``role="tab"`` внутри
-# единственного ``stTabs`` контейнера на странице. ``content`` —
-# строковая константа (число подставляется в f-string на каждом rerun),
-# поэтому смена количества избранных не меняет HTML-текст label-а и не
-# триггерит сброс активной вкладки в Streamlit. При нулевом счётчике
-# CSS не инжектится, чтобы вкладка не несла бесполезный «0».
+# Реализация через ``streamlit.components.v1.html`` — это создаёт
+# скрытый iframe (height=0), внутри которого JS *гарантированно*
+# выполняется (в отличие от ``st.html(..., unsafe_allow_javascript=True)``,
+# где поведение санитизации Streamlit-а оказалось непредсказуемым на
+# составных скриптах). Внутри iframe-а мы дотягиваемся до
+# parent-документа через ``window.parent.document`` и:
+# 1) ищем кнопку таба по ``[data-testid="stTab"]`` (Streamlit маркирует
+#    так каждую кнопку таба) с текстом, начинающимся на «Избранное»;
+# 2) дописываем дочерний ``<span>``-badge с числом из COUNT.
 #
-# Цвета через ``currentColor`` + полупрозрачный фон, чтобы пилюля
-# одинаково читалась в светлой и тёмной темах.
-if favorite_isins:
-    _favorites_count = len(favorite_isins)
-    st.html(
-        f"""
-        <style>
-        div[data-testid="stTabs"] [role="tablist"] > button[role="tab"]:nth-of-type(2)::after {{
-            content: "{_favorites_count}";
-            display: inline-block;
-            margin-left: 8px;
-            padding: 1px 8px;
-            min-width: 1.4em;
-            background: rgba(127, 127, 127, 0.22);
-            color: currentColor;
-            border-radius: 999px;
-            font-size: 0.78em;
-            font-weight: 600;
-            line-height: 1.4;
-            text-align: center;
-            vertical-align: 1px;
-        }}
-        </style>
-        """
-    )
+# Streamlit пере-рендерит DOM табов на каждом rerun, поэтому одного
+# применения мало: badge быстро удаляется вместе со старым DOM таба.
+# Чтобы badge всегда был «прилеплен», держим единственный таймер
+# (``setInterval`` 500 мс) на parent-window, который повторно применяет
+# текущее значение из ``win.__bmFavBadgeCount``. Guard
+# ``win.__bmFavBadgeTimer`` нужен потому что каждый rerun создаёт
+# новый iframe — без него мы плодили бы дублирующие таймеры.
+#
+# Сам badge не входит в текстовый label-кнопки — Streamlit не считает
+# label изменившимся, активная вкладка не сбрасывается при обновлении
+# счётчика.
+
+_favorites_count = len(favorite_isins)
+components.html(
+    f"""
+    <script>
+    (function() {{
+      const win = window.parent;
+      const doc = win.document;
+      const COUNT = {_favorites_count};
+      const LABEL = "Избранное";
+      const BADGE_CLASS = "bm-fav-badge";
+      const BADGE_STYLE = [
+        "display:inline-block",
+        "margin-left:8px",
+        "padding:1px 8px",
+        "min-width:1.4em",
+        "background:rgba(127,127,127,0.22)",
+        "color:currentColor",
+        "border-radius:999px",
+        "font-size:0.78em",
+        "font-weight:600",
+        "line-height:1.4",
+        "text-align:center",
+        "vertical-align:1px",
+      ].join(";");
+
+      function apply(count) {{
+        const tabs = doc.querySelectorAll(
+          'div[data-testid="stTabs"] [data-testid="stTab"]'
+        );
+        tabs.forEach(function(tab) {{
+          const text = (tab.textContent || "").trim();
+          // Удаляем чужой/устаревший badge сами, чтобы не двоить, если
+          // label другого таба случайно совпадёт по префиксу.
+          const stripPrefix = function() {{
+            const stale = tab.querySelector("." + BADGE_CLASS);
+            if (stale) stale.remove();
+          }};
+          if (!text.startsWith(LABEL)) {{ stripPrefix(); return; }}
+          if (count <= 0) {{ stripPrefix(); return; }}
+          let badge = tab.querySelector("." + BADGE_CLASS);
+          if (!badge) {{
+            badge = doc.createElement("span");
+            badge.className = BADGE_CLASS;
+            badge.setAttribute("style", BADGE_STYLE);
+            tab.appendChild(badge);
+          }}
+          badge.textContent = String(count);
+        }});
+      }}
+
+      // Guard: на каждый rerun Streamlit создаёт новый iframe, и без
+      // guard-а мы плодили бы лишние ``setInterval``-таймеры. Держим
+      // единственный таймер на parent-window — он постоянно держит
+      // актуальное значение из ``win.__bmFavBadgeCount``.
+      win.__bmFavBadgeCount = COUNT;
+      if (win.__bmFavBadgeTimer) {{
+        // Применяем новое значение сразу, без ожидания следующего тика.
+        apply(COUNT);
+        return;
+      }}
+      apply(COUNT);
+      win.__bmFavBadgeTimer = win.setInterval(function() {{
+        apply(win.__bmFavBadgeCount || 0);
+      }}, 500);
+    }})();
+    </script>
+    """,
+    height=0,
+)
 
 
 # ══════════════════════════════════════════════
@@ -1179,7 +1241,39 @@ with tab_favorites:
 
 
 # ══════════════════════════════════════════════
-#  TAB 3: Калькулятор
+#  TAB 3: Портфель
+# ══════════════════════════════════════════════
+#
+# Модуль «Портфель» — отдельный слой поверх скринера. Хранит несколько
+# именованных портфелей в ``cache/portfolios.json`` (см. data.portfolios)
+# с поддержкой автосостава по риск-профилю, моделирования реинвестиций
+# до заданного горизонта, напоминаний по пут-офертам и заглушки под
+# будущую интеграцию с биржевым API. Подробности — в AGENTS.md и
+# docstrings модулей ``ui.portfolio`` / ``core.portfolio_planner``.
+#
+# В планировщик передаём весь актуальный универс ``all_bonds`` (а не
+# отфильтрованный под скринер), чтобы пользователь мог отбирать бумаги,
+# отсечённые сайдбар-фильтрами скринера. Сами фильтры скринера — про
+# показ таблицы, портфель — про реальные сделки и должен видеть
+# максимально широкий пул.
+
+with tab_portfolio:
+    if detail_bond is not None:
+        st.info(
+            "Открыта страница деталей бумаги — она показана на вкладке «Скринер». "
+            "Нажмите «← Назад к таблице», чтобы вернуться к портфелю."
+        )
+    else:
+        render_portfolio_tab(
+            universe=all_bonds,
+            key_rate=key_rate_input,
+            tax_rate=tax_rate_input,
+            today=date.today(),
+        )
+
+
+# ══════════════════════════════════════════════
+#  TAB 4: Калькулятор
 # ══════════════════════════════════════════════
 
 with tab_calc:

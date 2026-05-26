@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from statistics import quantiles
 
 from core.bond_model import RATING_ORDER, BondRecord, CouponType, RiskLevel
+from core.portfolio_model import RiskProfile
 
 logger = logging.getLogger(__name__)
 
@@ -188,5 +189,76 @@ def score_bonds(
         len(result),
         key_rate,
         tax_rate * 100,
+    )
+    return result
+
+
+# Profile-specific weight presets for the portfolio module. The screener and
+# the calculator stay on the default 40/40/20 mix; only ``score_bonds_for_profile``
+# uses these. Keeping them here (rather than in ``core.portfolio_planner``)
+# keeps every scoring weight in a single place.
+_PROFILE_WEIGHTS: dict[RiskProfile, tuple[float, float, float]] = {
+    RiskProfile.NORMAL: (0.30, 0.50, 0.20),
+    RiskProfile.AGGRESSIVE: (0.55, 0.25, 0.20),
+}
+
+
+def score_bonds_for_profile(
+    bonds: Sequence[BondRecord],
+    profile: RiskProfile,
+    *,
+    key_rate: float = KEY_RATE_DEFAULT,
+    tax_rate: float = TAX_RATE_DEFAULT,
+) -> list[BondRecord]:
+    """Аналог :func:`score_bonds`, но с весами под выбранный риск-профиль.
+
+    * ``NORMAL`` — упор на качество (риск-скор × 0.50 при доходности × 0.30):
+      выбираются более надёжные бумаги, даже если их YTM ниже.
+    * ``AGGRESSIVE`` — упор на доходность (YTM × 0.55, риск × 0.25):
+      допускает менее надёжные эмиссии ради бо́льшего ожидаемого дохода.
+
+    Шкалы под YTM/ликвидность строятся по тому же принципу, что и в
+    :func:`score_bonds` (95-й перцентиль для YTM, log-шкала для объёма),
+    поэтому оба варианта совместимы по диапазону значений [0, 100].
+    """
+    if not bonds:
+        return []
+
+    after_tax_multiplier = 1.0 - tax_rate
+    risk_free_net = key_rate * after_tax_multiplier
+    weight_ytm, weight_risk, weight_liq = _PROFILE_WEIGHTS[profile]
+
+    for bond in bonds:
+        bond.ytm_net = bond.ytm * after_tax_multiplier if bond.ytm is not None else None
+
+    ytm_values: list[float] = [b.ytm_net for b in bonds if b.ytm_net is not None]
+    scale_ytm_net = _ytm_scale_reference(ytm_values)
+    if scale_ytm_net is None:
+        scale_ytm_net = risk_free_net
+    max_spread = max(scale_ytm_net - risk_free_net, 0.0)
+
+    volumes = [b.volume_rub for b in bonds if b.volume_rub and b.volume_rub > 0]
+    max_volume = max(volumes) if volumes else 1.0
+
+    result: list[BondRecord] = []
+    for bond in bonds:
+        bond.ytm_score = calc_ytm_score(bond.ytm_net, risk_free_net, max_spread)
+        bond.risk_score = calc_risk_score(bond)
+        bond.liquidity_score = calc_liquidity_score(bond.volume_rub, max_volume)
+        bond.score = (
+            bond.ytm_score * weight_ytm
+            + bond.risk_score * weight_risk
+            + bond.liquidity_score * weight_liq
+        )
+        result.append(bond)
+
+    result.sort(key=lambda b: b.score or 0.0, reverse=True)
+    logger.info(
+        "Profile-scored %d bonds (profile=%s, weights=%.2f/%.2f/%.2f)",
+        len(result),
+        profile.value,
+        weight_ytm,
+        weight_risk,
+        weight_liq,
     )
     return result

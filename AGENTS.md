@@ -15,7 +15,12 @@ smart-lab.ru/q/bonds/ ──► data/ratings_scraper.py    │           │
                               └──► data/ratings_loader.py ───────┘
                                                                   ▼
                                                           core/scorer.py  ──► app.py (Streamlit)
-                                                                                ui/components.py
+                                                                  │             ui/components.py
+                                                                  ▼
+                                          core/portfolio_planner.py ──► ui/portfolio.py
+                                          core/portfolio_model.py        (вкладка «Портфель»)
+                                          data/portfolios.py
+                                          data/trading_client.py (stub)
 ```
 
 Каждый слой независим: можно заменить источник данных, не трогая скоринг или UI.
@@ -24,9 +29,12 @@ smart-lab.ru/q/bonds/ ──► data/ratings_scraper.py    │           │
 
 ## Ключевые типы
 
-- `BondRecord` (`core/bond_model.py`) — единственная модель данных. Содержит поля из всех источников. **Добавляй новые поля сюда, а не в промежуточные словари.**
+- `BondRecord` (`core/bond_model.py`) — единственная модель данных по облигации. Содержит поля из всех источников. **Добавляй новые поля сюда, а не в промежуточные словари.**
 - `CouponType` (enum) — FIXED / FLOATING / VARIABLE / UNKNOWN
 - `RiskLevel` (enum) — UNKNOWN(0) / LOW(1) / MODERATE(2) / HIGH(3)
+- `Portfolio` / `PortfolioPosition` / `ReinvestmentSlot` (`core/portfolio_model.py`) — типы для модуля «Портфель». Только данные и (де)сериализация в JSON; вся логика — в `core/portfolio_planner.py`.
+- `RiskProfile` (enum) — NORMAL / AGGRESSIVE; влияет и на фильтрацию универса, и на веса в `score_bonds_for_profile`.
+- `PutOfferDecision` (enum) — PENDING / EXERCISE / HOLD; решение пользователя по ближайшей пут-оферте, сохраняется в позиции.
 
 ---
 
@@ -132,6 +140,94 @@ ruff format .
 
 ---
 
+## Портфели
+
+Модуль «Портфель» — отдельная вкладка `tab_portfolio` в `app.py`. Состоит из четырёх слоёв:
+
+| Слой                    | Файл                          | Что делает                                                                                                |
+|-------------------------|-------------------------------|-----------------------------------------------------------------------------------------------------------|
+| Модель данных           | `core/portfolio_model.py`     | `Portfolio`, `PortfolioPosition`, `ReinvestmentSlot` + перечисления (`RiskProfile`, `PutOfferDecision`)   |
+| Персистентность         | `data/portfolios.py`          | `cache/portfolios.json` (envelope `{_updated_at, _count, portfolios: [...]}`) + CRUD (атомарная запись)  |
+| Бизнес-логика           | `core/portfolio_planner.py`   | `auto_compose`, `select_replacement`, `build_plan`, `risk_profile_filter`; чистые функции, без Streamlit |
+| Скоринг                 | `core/scorer.py`              | `score_bonds_for_profile(...)` с весами под профиль                                                       |
+| UI                      | `ui/portfolio.py`             | Селектор портфелей, форма настроек, таблица позиций, слоты реинвестиций, cashflow-таймлайн, заглушка API  |
+
+### Хранение
+
+`cache/portfolios.json` лежит в read-write cache-директории (Docker: `./cache:/app/cache`). Не коммитится в git (исключено `cache/` в `.gitignore`). Структура:
+
+```json
+{
+  "_updated_at": "...",
+  "_count": 1,
+  "portfolios": [{
+    "id": "<uuid4-hex>",
+    "name": "...",
+    "initial_amount_rub": 100000.0,
+    "horizon_date": "2027-06-01",
+    "risk_profile": "normal",
+    "cash_balance_rub": 12500.0,
+    "positions": [/* PortfolioPosition.to_dict() */],
+    "slots":    [/* ReinvestmentSlot.to_dict()    */]
+  }]
+}
+```
+
+### Риск-профили
+
+| Профиль       | Уровень риска T-Invest | Мин. рейтинг | Допуски                                  | Веса скоринга (YTM/Risk/Liq) |
+|---------------|------------------------|--------------|------------------------------------------|------------------------------|
+| `NORMAL`      | LOW, MODERATE          | `ruA-`       | без субординации, без HIGH-риска         | 0.30 / 0.50 / 0.20           |
+| `AGGRESSIVE`  | LOW, MODERATE, HIGH    | `ruBB-`      | разрешены амортизация, колл-оферта        | 0.55 / 0.25 / 0.20           |
+
+Дефолтные/тех.дефолтные эмиссии и «только для квалов» отсекаются в обоих профилях. Бумаги без кредитного рейтинга в NORMAL отбрасываются (нельзя оценить риск), в AGGRESSIVE — пропускаются.
+
+### Реинвестиции
+
+* **Гэп между событием и покупкой замены:** `REINVESTMENT_GAP_DAYS = 2` (T+2 сеттлмент MOEX + день на принятие решения).
+* **Окно напоминания о пут-оферте:** `PUT_OFFER_REMINDER_DAYS = 30`. Внутри этого окна позиция в состоянии `PutOfferDecision.PENDING` появляется в блоке напоминаний с двумя кнопками «Предъявить» / «Держать».
+* **Купонный кэш:** на каждом шаге `COUPON_CASH_REINVEST_INTERVAL_DAYS = 180` `build_plan` пытается реинвестировать накопленные купоны в новый лот, если набралось достаточно средств.
+* **Глубина цепочек:** `MAX_REINVEST_DEPTH = 10`. Цепочка погашение → реинвест → погашение → … обрывается на этой глубине; в плане появляется note.
+* **Лимит на одну бумагу при автосоставе:** `MAX_POSITION_SHARE = 0.25`, не больше `MAX_AUTO_POSITIONS = 10` бумаг.
+
+### Слоты — где живёт пользовательский override
+
+`ReinvestmentSlot.confirmed_isin` — единственная пользовательская мутация в плане, которая переживает rerun. Остальные поля слотов (`trigger_date`, `expected_cash_rub`, `suggested_isin`) пересчитываются `build_plan` каждый раз.
+
+* `suggested_isin` — что предложил планировщик (через `select_replacement`).
+* `confirmed_isin` — что выбрал пользователь в UI («Применить выбор»).
+* В `Portfolio.slots` upsert-ятся ТОЛЬКО слоты с явным override (`confirmed_isin != None`); чистые auto-suggestion-ы не сохраняются — это уменьшает шум в JSON.
+
+### Когда менять что
+
+* **Новая стратегия профилей** (например, «защитный»): добавить ветку в `risk_profile_filter` + свой кортеж весов в `_PROFILE_WEIGHTS` (`core/scorer.py`).
+* **Корректировка диверсификации:** `MAX_POSITION_SHARE`, `MAX_AUTO_POSITIONS` (`core/portfolio_planner.py`).
+* **Новые типы реинвестиции** (например, «купон → депозит»): добавить значение в `ReinvestmentTriggerReason`, обработать в `build_plan` и UI-метках (`_TRIGGER_REASON_LABELS`).
+* **Изменение хранения:** `data/portfolios.py` — единственный модуль, знающий путь к `cache/portfolios.json`; UI/планировщик — нет.
+
+---
+
+## Расширение: API торговли
+
+`data/trading_client.py` сейчас содержит только интерфейсный скелет:
+
+* `TradeOrder` (dataclass) — направление BUY/SELL, FIGI, лотность, опциональная лимитная цена.
+* `submit_order(order, token)` — бросает `NotImplementedError` сознательно.
+
+UI (`ui/portfolio.render_trading_stub_section`) рендерит disabled-кнопку «Отправить план на биржу», чтобы зафиксировать точку интеграции.
+
+План реализации:
+
+1. Используем `tinkoff-investments` (тот же пакет, что в `data/tinvest_client.py` для read-only обогащения). У него есть `tinkoff.invest.OrdersService.post_order` / `cancel_order` / `get_order_state`.
+2. Маппинг: `BondRecord.figi` → `OrderRequest.figi`; направление `BUY` / `SELL` → `ORDER_DIRECTION_BUY` / `ORDER_DIRECTION_SELL`; объём в лотах.
+3. Сначала включаем sandbox через `Client(token, sandbox=True)`: виртуальные деньги, тесты без риска (отдельный `SandboxOrdersService`).
+4. Production-режим — отдельный токен с правом «торговля» (read-only текущий не подойдёт).
+5. Перед отправкой — двойная сверка ISIN/FIGI с локальной позицией портфеля и audit-лог в `cache/orders.log`.
+
+Документация: <https://russianinvestments.github.io/investAPI/sandbox/>, <https://russianinvestments.github.io/investAPI/orders/>.
+
+---
+
 ## Тестирование
 
 Юнит-тесты отсутствуют в v0.1, но скоринговые функции специально изолированы для тестируемости:
@@ -143,6 +239,8 @@ from core.bond_model import BondRecord, RiskLevel
 bond = BondRecord(secid="TEST", isin="RU000TEST", risk_level=RiskLevel.LOW)
 assert calc_risk_score(bond) == 80.0
 ```
+
+Функции планировщика портфеля (`risk_profile_filter`, `auto_compose`, `select_replacement`, `build_plan`) тоже спроектированы как чистые: принимают `today` и `universe` параметрами, не зовут Streamlit, не лезут в файловую систему. Тестируются ровно так же — собрать синтетический список `BondRecord`, передать в функцию, проверить результат.
 
 Добавляй тесты в `tests/` при разработке новых фич.
 
@@ -166,7 +264,7 @@ docker compose down
 
 `ratings.json` монтируется в контейнер как read-only volume — изменения на хосте подхватываются после нажатия «Обновить данные» в UI (сбрасывает кэш Streamlit).
 
-`./cache:/app/cache` смонтирован read-write — там же лежит и `ratings_auto.json` (auto-слой рейтингов), который пишется приложением через кнопку «Обновить рейтинги».
+`./cache:/app/cache` смонтирован read-write — там же лежат `ratings_auto.json` (auto-слой рейтингов, пишется кнопкой «Обновить рейтинги»), `favorites.json` (избранные ISIN-ы) и `portfolios.json` (модуль «Портфель»). Все три файла переживают рестарт контейнера.
 
 ---
 
