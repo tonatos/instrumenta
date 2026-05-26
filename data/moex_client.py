@@ -237,6 +237,77 @@ def _save_disk_cache(merged: dict[str, dict[str, Any]]) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+def _build_bond_record(isin: str, raw: dict[str, Any], today: date) -> BondRecord | None:
+    """Construct a ``BondRecord`` from one raw merged MOEX row.
+
+    Returns ``None`` when the row should be skipped entirely (foreign
+    currency face value, no future maturity/offer date, …). The
+    "would the bond pass the screener window?" question is intentionally
+    NOT decided here — callers apply their own date / liquidity filters
+    so we can reuse the same construction logic for the favorites tab,
+    portfolio tab, etc. where the window doesn't apply.
+    """
+    if raw.get("FACEUNIT", "SUR") != "SUR":
+        return None
+
+    maturity = _parse_date(raw.get("MATDATE"))
+    offer = _parse_date(raw.get("OFFERDATE"))
+
+    candidates = [d for d in (maturity, offer) if d is not None and d >= today]
+    if not candidates:
+        return None
+    effective = min(candidates)
+
+    days = (effective - today).days
+    if days <= 0:
+        return None
+
+    val_today = _parse_float(raw.get("VALTODAY")) or 0.0
+
+    ytm = _pick_ytm(raw.get("YIELDATWAP"), raw.get("YIELD"), raw.get("YIELDCLOSE"))
+    last_price = _parse_float(raw.get("LAST")) or _parse_float(raw.get("PREVPRICE"))
+
+    face_value = _parse_float(raw.get("FACEVALUE")) or 1000.0
+    # LOTSIZE — количество ценных бумаг в лоте (для ~99.9% облигаций MOEX = 1).
+    # Fallback: если LOTSIZE отсутствует, восстанавливаем из LOTVALUE = FACEVALUE × LOTSIZE.
+    lot_size_raw = _parse_float(raw.get("LOTSIZE"))
+    if lot_size_raw is None or lot_size_raw <= 0:
+        lot_value = _parse_float(raw.get("LOTVALUE"))
+        lot_size_raw = (lot_value / face_value) if (lot_value and face_value > 0) else 1.0
+    lot_size = max(1, int(round(lot_size_raw)))
+
+    return BondRecord(
+        secid=raw["SECID"],
+        isin=isin,
+        name=raw.get("SHORTNAME", ""),
+        maturity_date=maturity,
+        offer_date=offer,
+        effective_date=effective,
+        days_to_maturity=days,
+        ytm=ytm,
+        coupon_rate=_parse_float(raw.get("COUPONPERCENT")),
+        accrued_interest=_parse_float(raw.get("ACCRUEDINT")),
+        coupon_type=CouponType.UNKNOWN,
+        coupon_period_days=int(_parse_float(raw.get("COUPONPERIOD")) or 0) or None,
+        coupon_value=_parse_float(raw.get("COUPONVALUE")),
+        next_coupon_date=_parse_date(raw.get("NEXTCOUPON")),
+        last_price=last_price,
+        face_value=face_value,
+        lot_size=lot_size,
+        duration_days=_parse_float(raw.get("DURATION")),
+        volume_rub=val_today,
+    )
+
+
+def _load_or_fetch_merged() -> dict[str, dict[str, Any]]:
+    """Return merged ISIN-keyed rows, hitting the disk cache when fresh."""
+    merged = _load_disk_cache()
+    if merged is None:
+        merged = _fetch_from_moex()
+        _save_disk_cache(merged)
+    return merged
+
+
 def fetch_all_bonds(
     max_days: int = 120,
     min_volume_rub: float = 500_000.0,
@@ -267,84 +338,70 @@ def fetch_all_bonds(
     today = date.today()
     cutoff = today + timedelta(days=max_days)
 
-    merged = _load_disk_cache()
-    if merged is None:
-        merged = _fetch_from_moex()
-        _save_disk_cache(merged)
-
+    merged = _load_or_fetch_merged()
     logger.info("After ISIN deduplication: %d unique bonds", len(merged))
 
     bonds: list[BondRecord] = []
     for isin, raw in merged.items():
-        if raw.get("FACEUNIT", "SUR") != "SUR":
+        bond = _build_bond_record(isin, raw, today)
+        if bond is None:
             continue
-
-        maturity = _parse_date(raw.get("MATDATE"))
-        offer = _parse_date(raw.get("OFFERDATE"))
-
-        candidates = [d for d in (maturity, offer) if d is not None and d >= today]
-        if not candidates:
-            continue
-        effective = min(candidates)
 
         # ``effective`` (default) — cap by min(maturity, offer); matches
         # MOEX YTM. ``maturity`` — cap strictly by the maturity date so
         # the user sees only bonds guaranteed to be fully redeemed by
         # the cap, regardless of put-offers along the way.
         if filter_by == "maturity":
-            if maturity is None or maturity < today or maturity > cutoff:
+            if bond.maturity_date is None or bond.maturity_date > cutoff:
                 continue
         else:
-            if effective > cutoff:
+            if bond.effective_date is None or bond.effective_date > cutoff:
                 continue
 
-        days = (effective - today).days
-        if days <= 0:
+        if (bond.volume_rub or 0.0) < min_volume_rub:
             continue
 
-        val_today = _parse_float(raw.get("VALTODAY")) or 0.0
-        if val_today < min_volume_rub:
-            continue
-
-        ytm = _pick_ytm(raw.get("YIELDATWAP"), raw.get("YIELD"), raw.get("YIELDCLOSE"))
-        last_price = _parse_float(raw.get("LAST")) or _parse_float(raw.get("PREVPRICE"))
-
-        face_value = _parse_float(raw.get("FACEVALUE")) or 1000.0
-        # LOTSIZE — количество ценных бумаг в лоте (для ~99.9% облигаций MOEX = 1).
-        # Fallback: если LOTSIZE отсутствует, восстанавливаем из LOTVALUE = FACEVALUE × LOTSIZE.
-        lot_size_raw = _parse_float(raw.get("LOTSIZE"))
-        if lot_size_raw is None or lot_size_raw <= 0:
-            lot_value = _parse_float(raw.get("LOTVALUE"))
-            lot_size_raw = (lot_value / face_value) if (lot_value and face_value > 0) else 1.0
-        lot_size = max(1, int(round(lot_size_raw)))
-
-        bond = BondRecord(
-            secid=raw["SECID"],
-            isin=isin,
-            name=raw.get("SHORTNAME", ""),
-            maturity_date=maturity,
-            offer_date=offer,
-            effective_date=effective,
-            days_to_maturity=days,
-            ytm=ytm,
-            coupon_rate=_parse_float(raw.get("COUPONPERCENT")),
-            accrued_interest=_parse_float(raw.get("ACCRUEDINT")),
-            coupon_type=CouponType.UNKNOWN,
-            coupon_period_days=int(_parse_float(raw.get("COUPONPERIOD")) or 0) or None,
-            coupon_value=_parse_float(raw.get("COUPONVALUE")),
-            next_coupon_date=_parse_date(raw.get("NEXTCOUPON")),
-            last_price=last_price,
-            face_value=face_value,
-            lot_size=lot_size,
-            duration_days=_parse_float(raw.get("DURATION")),
-            volume_rub=val_today,
-        )
         bonds.append(bond)
 
     logger.info(
         "Bonds after filtering (≤%d days, vol≥%.0f RUB): %d",
         max_days,
         min_volume_rub,
+        len(bonds),
+    )
+    return bonds
+
+
+def fetch_bonds_by_isins(isins: set[str]) -> list[BondRecord]:
+    """Return ``BondRecord`` for a specific set of ISINs.
+
+    Unlike :func:`fetch_all_bonds`, this function does NOT apply any
+    maturity-window or liquidity filters — it only checks that the bond
+    is still listed on MOEX (present in the merged dataset) and not yet
+    matured. Used by the favorites tab where the user wants to see all
+    their pinned bonds regardless of the sidebar filters.
+
+    ISINs that are absent from MOEX (delisted/redeemed/never existed)
+    or whose all reference dates lie in the past are silently skipped.
+    """
+    if not isins:
+        return []
+
+    today = date.today()
+    merged = _load_or_fetch_merged()
+
+    bonds: list[BondRecord] = []
+    for isin in isins:
+        raw = merged.get(isin)
+        if raw is None:
+            continue
+        bond = _build_bond_record(isin, raw, today)
+        if bond is not None:
+            bonds.append(bond)
+
+    logger.info(
+        "Favorites lookup: requested=%d, returned=%d",
+        len(isins),
         len(bonds),
     )
     return bonds

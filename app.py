@@ -40,7 +40,7 @@ from data.favorites import (
     sync_visible_favorites,
     toggle_favorite,
 )
-from data.moex_client import fetch_all_bonds, is_moex_cache_fresh
+from data.moex_client import fetch_all_bonds, fetch_bonds_by_isins, is_moex_cache_fresh
 from data.moex_defaults_client import enrich_bonds_with_defaults
 from data.ratings_loader import (
     apply_ratings,
@@ -97,6 +97,37 @@ MIN_VOLUME_RUB: float = float(os.getenv("MIN_VOLUME_RUB", 500_000))
 # ──────────────────────────────────────────────
 
 
+def _enrich_and_score_bonds(
+    bonds: list[BondRecord],
+    *,
+    key_rate: float,
+    tax_rate: float,
+    token: str | None,
+) -> tuple[list[BondRecord], str]:
+    """Apply the standard enrichment + scoring pipeline to a bond list.
+
+    Pipeline:
+        1. MOEX default flags (HASDEFAULT / HASTECHNICALDEFAULT) — 24h disk cache.
+        2. T-Invest enrichment when a token is configured.
+        3. Manual + auto credit ratings.
+        4. Numeric scoring (``score_bonds``).
+
+    Returns ``(bonds, source_description)``.
+    """
+    source = "MOEX ISS API"
+    bonds = enrich_bonds_with_defaults(bonds)
+
+    if token:
+        bonds = enrich_bonds_from_tinvest(bonds, token)
+        source += " + T-Invest API"
+
+    ratings = load_ratings()
+    auto_ratings = load_auto_ratings()
+    bonds = apply_ratings(bonds, ratings, auto_ratings=auto_ratings)
+    bonds = score_bonds(bonds, key_rate=key_rate, tax_rate=tax_rate)
+    return bonds, source
+
+
 @st.cache_data(ttl=900, show_spinner=False)
 def load_bonds(
     max_days: int,
@@ -124,25 +155,47 @@ def load_bonds(
         min_volume_rub=min_volume_rub,
         filter_by=filter_by,
     )
-    source = "MOEX ISS API"
+    return _enrich_and_score_bonds(
+        bonds,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+        token=token,
+    )
 
-    # Enrich with MOEX default flags on the *post-filter* window only.
-    # The /securities/{isin}.json endpoint requires one round-trip per
-    # bond, but we have at most ~200 bonds in scope after the maturity +
-    # liquidity filters, and the enricher uses a thread pool + 24 h disk
-    # cache (cache/moex_defaults.json), so the cost is ~1-2 s on cold
-    # start and ~0 s on every subsequent rerun within the day.
-    bonds = enrich_bonds_with_defaults(bonds)
 
-    if token:
-        bonds = enrich_bonds_from_tinvest(bonds, token)
-        source += " + T-Invest API"
+@st.cache_data(ttl=900, show_spinner=False)
+def load_favorite_bonds(
+    isins: tuple[str, ...],
+    key_rate: float,
+    tax_rate: float,
+    token: str | None,
+) -> list[BondRecord]:
+    """Load bonds for the favorites tab, ignoring screener-window filters.
 
-    ratings = load_ratings()
-    auto_ratings = load_auto_ratings()
-    bonds = apply_ratings(bonds, ratings, auto_ratings=auto_ratings)
-    bonds = score_bonds(bonds, key_rate=key_rate, tax_rate=tax_rate)
-    return bonds, source
+    The favorites view must always show **all actual** bonds the user
+    has pinned, regardless of the sidebar filters (max-days window,
+    liquidity, coupon type, risk level, …). We fetch the requested
+    ISINs directly from the MOEX dataset — no window filtering, no
+    liquidity cutoff — and run the same enrichment + scoring pipeline
+    used by the screener so risk/YTM/price columns stay consistent.
+
+    ``isins`` is a sorted tuple (not a set) because ``st.cache_data``
+    requires hashable arguments; tuples also give stable cache keys.
+
+    Bonds that are no longer listed on MOEX (redeemed/delisted ISINs)
+    are silently skipped; callers can compare ``len(isins)`` to the
+    returned list to surface "missing favorites" messages.
+    """
+    bonds = fetch_bonds_by_isins(set(isins))
+    enriched, _ = _enrich_and_score_bonds(
+        bonds,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+        token=token,
+    )
+    for bond in enriched:
+        bond.is_favorite = True
+    return enriched
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -1155,14 +1208,20 @@ with tab_screener:
 # ══════════════════════════════════════════════
 #
 # Список избранных хранится в ``cache/favorites.json`` по ISIN (см.
-# data.favorites). Здесь мы пересекаем сохранённые ISIN-ы с актуальным
-# окном ``all_bonds`` — то есть с тем, что MOEX отдаёт под текущие
-# параметры в сайдбаре. Если избранная бумага не пролезла под фильтры
-# (слишком длинная или менее ликвидная), пользователю показывается
-# подсказка с числом «невидимых» избранных и инструкцией расширить
-# параметры. Это сознательное упрощение для v1: отдельно фетчить
-# бумаги вне основного окна — отдельная история по производительности
-# (см. AGENTS.md / расширение источников).
+# data.favorites). Вкладка должна показывать ВСЕ актуальные бумаги
+# из избранного — независимо от боковых фильтров (тип купона, риск,
+# YTM, флаги) и параметров окна скринера (max_days / min_volume_rub /
+# filter_by). Поэтому здесь мы не пересекаем с ``all_bonds`` (он
+# уже отфильтрован под скринер) и не применяем ``apply_table_filters``,
+# а отдельным запросом тянем нужные ISIN-ы через ``load_favorite_bonds``
+# (внутри — ``fetch_bonds_by_isins``, который только проверяет, что
+# бумага ещё на MOEX и не погашена).
+#
+# «Актуальной» считается бумага, которую MOEX по-прежнему отдаёт в
+# списке ценных бумаг и у которой хотя бы одна из дат (погашение /
+# оферта) ≥ сегодня. Если ISIN из favorites.json делистнут или
+# погашен — MOEX его не вернёт, и такая бумага попадает в счётчик
+# «не найдены на MOEX» под таблицей.
 
 with tab_favorites:
     if detail_bond is not None:
@@ -1181,59 +1240,61 @@ with tab_favorites:
             "и бумага появится здесь."
         )
     else:
-        favorite_bonds = [b for b in all_bonds if b.isin in favorite_isins]
-        favorite_bonds_filtered = apply_table_filters(favorite_bonds)
-        hidden_by_filters = len(favorite_bonds) - len(favorite_bonds_filtered)
-        # ISIN-ы, которые в принципе не пришли с MOEX под текущие
-        # параметры макс. срока / мин. объёма — отличаем их от тех, что
-        # отфильтрованы только боковыми фильтрами.
-        not_in_window = favorite_isins - {b.isin for b in all_bonds}
+        # Отдельный, независимый от боковых фильтров загрузчик: тянем
+        # все избранные ISIN-ы прямо из MOEX-merged словаря, минуя
+        # окно max_days / min_volume_rub / filter_by.
+        favorite_bonds = load_favorite_bonds(
+            isins=tuple(sorted(favorite_isins)),
+            key_rate=key_rate_input,
+            tax_rate=tax_rate_input,
+            token=TINKOFF_TOKEN,
+        )
+        # ISIN-ы, которые MOEX уже не возвращает (делистинг / полное
+        # погашение). Не путаем их с теми, что просто скрыты фильтрами —
+        # фильтры здесь не применяются.
+        missing_isins = favorite_isins - {b.isin for b in favorite_bonds if b.isin}
 
         st.subheader(f"Избранное · {len(favorite_isins)} бумаг(а)")
         st.caption(
             "Снимите галочку, чтобы убрать бумагу из избранного. "
-            "ℹ️ — детали. Состав колонок и боковые фильтры — те же, что в скринере."
+            "ℹ️ — детали. Боковые фильтры здесь не применяются: "
+            "показаны все актуальные бумаги из избранного."
         )
 
-        if not_in_window:
+        if missing_isins:
             st.warning(
-                f"{len(not_in_window)} бумаг(и) в избранном не попали в текущее "
-                "окно MOEX. Увеличьте «Макс. дней до погашения» и/или "
-                "уменьшите «Мин. объём торгов» в сайдбаре, чтобы их увидеть."
-            )
-        if hidden_by_filters > 0:
-            st.info(
-                f"Ещё {hidden_by_filters} бумаг(а) скрыты текущими боковыми "
-                "фильтрами (тип купона, риск, YTM, флаги). Снимите фильтры, "
-                "если нужно увидеть их."
+                f"{len(missing_isins)} бумаг(и) из избранного не найдены на MOEX "
+                "(вероятно, погашены или делистнуты). Снимите их с избранного "
+                "вручную через прежний интерфейс, либо удалите ISIN из "
+                "`cache/favorites.json`."
             )
 
-        if not favorite_bonds_filtered:
+        if not favorite_bonds:
             st.info(
-                "Под текущими фильтрами нет видимых избранных бумаг. "
-                "Снимите часть фильтров или смягчите параметры окна."
+                "Ни одна бумага из избранного сейчас не торгуется на MOEX. "
+                "Проверьте список ISIN в `cache/favorites.json`."
             )
         else:
-            _favorites_editor_key = make_editor_key("favorites_editor", favorite_bonds_filtered)
+            _favorites_editor_key = make_editor_key("favorites_editor", favorite_bonds)
             edited_favorites_df = render_screener_table(
-                favorite_bonds_filtered,
+                favorite_bonds,
                 editor_key=_favorites_editor_key,
             )
-            # Та же синхронизация, что и в скринере: visible_isins здесь —
-            # ISIN-ы, реально показанные на этой вкладке (с учётом боковых
-            # фильтров). Снятие галочки удалит бумагу ИЗ ИЗБРАННОГО, не
-            # затрагивая ISIN-ы, которых сейчас на экране нет.
+            # Синхронизация снятия галочек: visible_isins — все ISIN,
+            # реально показанные на этой вкладке (фильтров нет, поэтому
+            # это весь видимый набор). Бумаги, отсутствующие на MOEX,
+            # сюда не попадают и не затрагиваются.
             _new_visible_favs_tab = {
                 bond.isin
                 for bond, is_fav in zip(
-                    favorite_bonds_filtered,
+                    favorite_bonds,
                     edited_favorites_df[FAVORITE_COLUMN].tolist(),
                     strict=True,
                 )
                 if is_fav and bond.isin
             }
             if sync_visible_favorites(
-                visible_isins={b.isin for b in favorite_bonds_filtered if b.isin},
+                visible_isins={b.isin for b in favorite_bonds if b.isin},
                 new_visible_favs=_new_visible_favs_tab,
             ):
                 invalidate_editor_state()
