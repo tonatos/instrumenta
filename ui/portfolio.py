@@ -45,13 +45,16 @@ from core.portfolio_planner import (
     build_plan,
     position_from_bond,
     risk_profile_filter,
+    validate_replacement_bond,
 )
+from core.scorer import score_bonds_for_profile
 from data.portfolios import (
     create_portfolio,
     delete_portfolio,
     rename_portfolio,
     update_portfolio,
 )
+from ui.components import DETAIL_QUERY_PARAM
 
 # ── Константы UI ─────────────────────────────────────────────────────────────
 
@@ -483,9 +486,21 @@ def _render_manual_add_form(
 def render_portfolio_summary(plan: PortfolioPlan) -> None:
     """Карточки с итоговыми цифрами портфеля.
 
-    Самая важная цифра — «Чистая прибыль за период»: разница между
-    итоговым кэш-балансом на горизонте и стартовой суммой, с учётом всех
-    реинвестиций, купонов и налогов.
+    Главные цифры:
+
+    * **Эффективная годовая доходность** — реальный annualized return
+      портфеля за горизонт (отвечает на вопрос «как у депозита»).
+      Считается как ``(final_value / initial)^(365/days) − 1``.
+    * **Итоговая прибыль** — разница между итоговой стоимостью портфеля
+      (кэш + удерживаемые бумаги) и стартовой суммой.
+
+    Подсветка YTM:
+
+    * **YTM текущих позиций** — годовая YTM нетто только initial-позиций,
+      к их собственному погашению. НЕ описывает доходность за горизонт.
+    * **YTM всех позиций плана** — то же, но включая phantom-позиции
+      реинвест-цепочек. Если она ниже YTM текущих позиций — реинвестиции
+      «разбавляют» доходность (в notes плана появится явный warning).
     """
     st.subheader("Итоги по портфелю")
     portfolio = plan.portfolio
@@ -497,61 +512,153 @@ def render_portfolio_summary(plan: PortfolioPlan) -> None:
         help="Сумма, заданная пользователем при создании портфеля.",
     )
     col_b.metric(
-        "Вложено всего",
-        format_rub(plan.total_invested_rub, decimals=0),
-        help=(
-            "Суммарная стоимость всех покупок, включая будущие реинвестиции. "
-            "Может превышать стартовую сумму, если деньги «прокручиваются» "
-            "несколько раз через цепочку реинвестиций."
-        ),
+        "Итоговая стоимость",
+        format_rub(plan.final_portfolio_value_rub, decimals=0),
+        help=("Кэш + удерживаемые бумаги = «сколько денег в портфеле всего» на дату горизонта."),
     )
     col_c.metric(
-        "Купонный доход (нетто)",
-        format_rub(plan.total_coupon_net_rub, decimals=0),
-        help="Накопленный купонный доход за весь горизонт после НДФЛ.",
-    )
-    col_d.metric(
-        "Уплачено НДФЛ",
-        format_rub(plan.total_tax_rub, decimals=0),
-        help="Сумма налогов: на купоны + на курсовую разницу при погашении.",
-    )
-
-    col_e, col_f, col_g, col_h = st.columns(4)
-    col_e.metric(
-        "Возврат номинала",
-        format_rub(plan.total_redemption_rub, decimals=0),
-        help="Суммарные выплаты при погашениях/офертах за весь горизонт (нетто).",
-    )
-    col_f.metric(
-        "Кэш на горизонте",
-        format_rub(plan.final_cash_balance_rub, decimals=0),
-        help=(
-            "Сколько денег будет на счёте в дату горизонта: всё, что не "
-            "удалось реинвестировать, плюс последние возвраты номинала "
-            "после последней даты реинвестиции."
-        ),
-    )
-    col_g.metric(
-        "Чистая прибыль за период",
-        format_rub(plan.total_net_profit_rub, decimals=0),
+        "Итоговая прибыль",
+        format_rub(plan.total_net_profit_with_held_rub, decimals=0),
         delta=(
-            f"+{plan.total_net_profit_rub / portfolio.initial_amount_rub * 100:.1f}%"
+            f"{plan.total_net_profit_with_held_rub / portfolio.initial_amount_rub * 100:+.1f}%"
             if portfolio.initial_amount_rub > 0
             else None
         ),
         help=(
-            "Главная цифра: итоговый кэш на горизонте минус стартовый бюджет. "
-            "Учитывает все реинвестиции, купоны и налоги."
+            "Итоговая стоимость − стартовая сумма. Учитывает и кэш, и "
+            "оценочную стоимость недогашенных бумаг."
+        ),
+    )
+    if plan.effective_annual_return_pct is not None:
+        col_d.metric(
+            "Эффективная годовая доходность",
+            f"{plan.effective_annual_return_pct:+.2f}%",
+            help=(
+                "Реальная annualized доходность портфеля за горизонт: "
+                "(итоговая стоимость / стартовая сумма) ^ (365 / дней горизонта) − 1. "
+                "Это самая корректная цифра для сравнения с депозитом или "
+                "ключевой ставкой. Учитывает все купоны, налоги, "
+                "реинвестиции и settlement-gaps."
+            ),
+        )
+    else:
+        col_d.metric("Эффективная годовая доходность", "—")
+
+    col_e, col_f, col_g, col_h = st.columns(4)
+    col_e.metric(
+        "Кэш на горизонте",
+        format_rub(plan.final_cash_balance_rub, decimals=0),
+        help=(
+            "Деньги, которые «материализовались» к дате горизонта: "
+            "погашения + купоны + последние возвраты номинала, минус все "
+            "будущие реинвестиционные покупки."
+        ),
+    )
+    col_f.metric(
+        "Удерживаемые бумаги",
+        format_rub(plan.held_positions_value_rub, decimals=0),
+        help=(
+            "Оценочная стоимость бумаг, которые ещё не погасились к "
+            "горизонту (maturity > horizon). Стоимость берётся как "
+            "live-цена × количество, при отсутствии цены — номинал."
+        ),
+    )
+    col_g.metric(
+        "Купонный доход (нетто)",
+        format_rub(plan.total_coupon_net_rub, decimals=0),
+        help="Накопленный купонный доход за весь горизонт после НДФЛ.",
+    )
+    col_h.metric(
+        "Уплачено НДФЛ",
+        format_rub(plan.total_tax_rub, decimals=0),
+        help=(
+            "Сумма НДФЛ по двум видам дохода:\n\n"
+            "• **Купоны**: налог = купон_брутто × ставка. "
+            "Пример при ставке 18%: купон 100 ₽ брутто → вы получаете 82 ₽, "
+            "платите 18 ₽. Поэтому налог = чистые_купоны × 18% / 82% ≈ 21,95% "
+            "от чистого дохода, а не 18% — 18% берётся от брутто.\n\n"
+            "• **Курсовая разница**: если бумага куплена ниже номинала, "
+            "при погашении налог = (номинал − цена_покупки) × ставка. "
+            "Возврат самого номинала налогом не облагается.\n\n"
+            "Итого: налог / (налог + чистая_прибыль) ≠ ставка_НДФЛ, "
+            "так как ставка применяется к брутто-доходу."
+        ),
+    )
+
+    col_i, col_j, col_k, col_l = st.columns(4)
+    col_i.metric(
+        "Вложено всего",
+        format_rub(plan.total_invested_rub, decimals=0),
+        help=(
+            "Суммарная стоимость всех покупок, включая phantom-позиции "
+            "реинвест-цепочек. Может превышать стартовую сумму, если "
+            "деньги «прокручиваются» несколько раз."
+        ),
+    )
+    col_j.metric(
+        "Возврат номинала (все цепочки)",
+        format_rub(plan.total_redemption_rub, decimals=0),
+        help=(
+            "Сумма всех выплат номинала по всем бумагам, включая "
+            "phantom-позиции реинвест-цепочек. Каждая maturity → "
+            "следующая reinvest-покупка, поэтому при цепочках эта цифра "
+            "растёт пропорционально числу циклов (а НЕ остаётся равной "
+            "стартовой сумме)."
         ),
     )
     if plan.weighted_ytm_net_pct is not None:
-        col_h.metric(
-            "Ср.взв. YTM нетто",
+        col_k.metric(
+            "YTM текущих позиций",
             f"{plan.weighted_ytm_net_pct:.2f}%",
-            help="Средневзвешенная (по сумме покупки) YTM нетто текущих позиций.",
+            help=(
+                "Средневзвешенная (по сумме покупки) YTM нетто ТОЛЬКО "
+                "текущих initial-позиций — к их собственному погашению. "
+                "Это ГОДОВАЯ доходность; реальная прибыль = "
+                "purchase × ((1 + YTM)^(days / 365) − 1). "
+                "НЕ описывает доходность портфеля за горизонт, если "
+                "присутствуют реинвестиции."
+            ),
         )
     else:
-        col_h.metric("Ср.взв. YTM нетто", "—")
+        col_k.metric("YTM текущих позиций", "—")
+    if plan.weighted_ytm_net_full_pct is not None:
+        delta_full = (
+            f"{plan.weighted_ytm_net_full_pct - plan.weighted_ytm_net_pct:+.2f} п.п."
+            if plan.weighted_ytm_net_pct is not None
+            else None
+        )
+        col_l.metric(
+            "YTM всех позиций плана",
+            f"{plan.weighted_ytm_net_full_pct:.2f}%",
+            delta=delta_full,
+            delta_color="normal",
+            help=(
+                "Средневзвешенная YTM нетто по ВСЕМ позициям плана, "
+                "включая phantom-ы реинвест-цепочек. Если значительно "
+                "ниже «YTM текущих позиций» — реинвестиции «разбавляют» "
+                "доходность (короткие бумаги на дату реинвеста имеют "
+                "более низкую YTM, чем твои стартовые). В notes плана "
+                "появится явный warning, если разбавление > 30%."
+            ),
+        )
+    else:
+        col_l.metric("YTM всех позиций плана", "—")
+
+    if plan.held_positions:
+        with st.expander(
+            f"Удерживаемые бумаги на горизонте ({len(plan.held_positions)})",
+            expanded=False,
+        ):
+            for held in plan.held_positions:
+                pos = held.position
+                end = pos.maturity_date.isoformat() if pos.maturity_date else "—"
+                st.markdown(
+                    f"**{pos.name}** ({pos.secid}) · "
+                    f"{pos.bonds_count} облиг. · "
+                    f"погашение {end} · "
+                    f"оценка: {format_rub(held.estimated_value_rub, decimals=0)} "
+                    f"({held.valuation_source})"
+                )
 
 
 # ── Напоминания о пут-офертах ────────────────────────────────────────────────
@@ -620,7 +727,19 @@ def _set_put_offer_decision(
 
 
 def render_positions_table(portfolio: Portfolio, universe: Sequence[BondRecord]) -> None:
-    """Таблица купленных позиций с актуальной рыночной ценой и кнопкой удаления."""
+    """Таблица купленных позиций с рыночными данными, скором и удалением.
+
+    Колонки:
+
+    * **Открыть** — ссылка на детальную страницу бумаги (открывает экран
+      деталей в табе «Скринер» через query-param ``?bond=SECID``).
+    * **Скор** — текущий профильный скор бумаги (по выбранному
+      риск-профилю портфеля). Если бумаги нет в актуальном универсе
+      MOEX (например, делистинг) — прочерк.
+    * **Удалить** — ссылка-иконка, открывающая ту же страницу с
+      query-param ``?pos_remove=ISIN&portfolio_id=...``. ``app.py``
+      перехватывает параметр и удаляет позицию из портфеля.
+    """
     st.subheader(f"Текущие позиции · {len(portfolio.positions)}")
 
     if not portfolio.positions:
@@ -630,6 +749,21 @@ def render_positions_table(portfolio: Portfolio, universe: Sequence[BondRecord])
         return
 
     universe_by_isin = {b.isin: b for b in universe}
+
+    # Считаем скоры по профилю на копии активных бумаг, чтобы не мутировать
+    # общий объект.
+    live_bonds_for_score: list[BondRecord] = []
+    for position in portfolio.positions:
+        live = universe_by_isin.get(position.isin)
+        if live is not None:
+            live_bonds_for_score.append(live)
+    score_by_isin: dict[str, float | None] = {}
+    ytm_net_by_isin: dict[str, float | None] = {}
+    if live_bonds_for_score:
+        scored = score_bonds_for_profile(list(live_bonds_for_score), portfolio.risk_profile)
+        score_by_isin = {b.isin: b.score for b in scored}
+        ytm_net_by_isin = {b.isin: b.ytm_net for b in scored}
+
     rows: list[dict] = []
     for position in portfolio.positions:
         live = universe_by_isin.get(position.isin)
@@ -637,10 +771,17 @@ def render_positions_table(portfolio: Portfolio, universe: Sequence[BondRecord])
         live_dirty = live.dirty_price_rub if live else None
         current_value = (live_dirty or position.purchase_dirty_price_rub) * position.bonds_count
         change_rub = current_value - position.purchase_amount_rub
+        score_value = score_by_isin.get(position.isin)
+        ytm_net_value = ytm_net_by_isin.get(position.isin)
+        detail_url = f"?{DETAIL_QUERY_PARAM}={position.secid}"
+        remove_url = f"?pos_remove={position.isin}&portfolio_id={portfolio.id}"
         rows.append(
             {
+                "Детали": detail_url,
                 "Тикер": position.secid,
                 "Наименование": position.name,
+                "Скор": round(score_value, 1) if score_value is not None else None,
+                "YTM нетто, %": round(ytm_net_value, 2) if ytm_net_value is not None else None,
                 "Источник": _POSITION_SOURCE_LABELS.get(position.source, position.source.value),
                 "Лотов": position.lots,
                 "Облиг.": position.bonds_count,
@@ -654,6 +795,7 @@ def render_positions_table(portfolio: Portfolio, universe: Sequence[BondRecord])
                 "Оферта": position.offer_date.isoformat() if position.offer_date else "—",
                 "Решение по оферте": _put_offer_decision_label(position.put_offer_decision),
                 "ISIN": position.isin,
+                "Удалить": remove_url,
             }
         )
 
@@ -664,30 +806,48 @@ def render_positions_table(portfolio: Portfolio, universe: Sequence[BondRecord])
         hide_index=True,
         use_container_width=True,
         column_config={
+            "Детали": st.column_config.LinkColumn(
+                # Пустой label — как в скринере; визуально склеиваем
+                # action-колонки в одну группу без подписи.
+                "",
+                display_text=":material/info:",
+                help="Открыть страницу бумаги в табе «Скринер».",
+                pinned=True,
+                width="small",
+            ),
+            "Скор": st.column_config.NumberColumn(
+                format="%.1f",
+                help=(
+                    f"Скор бумаги по риск-профилю «{RISK_PROFILE_LABELS[portfolio.risk_profile]}»."
+                ),
+            ),
+            "YTM нетто, %": st.column_config.NumberColumn(
+                format="%.2f%%",
+                help=(
+                    "YTM нетто = ГОДОВАЯ доходность бумаги к погашению после "
+                    "НДФЛ. Реальный вклад бумаги в прибыль портфеля = "
+                    "purchase_amount × ((1 + YTM)^(дней до погашения / 365) − 1). "
+                    "Для коротких бумаг (2–4 месяца) вклад значительно "
+                    "меньше, чем YTM × горизонт_лет."
+                ),
+            ),
             "Вложено, ₽": st.column_config.NumberColumn(format=rub_format_int),
             "Стоимость сейчас, ₽": st.column_config.NumberColumn(format=rub_format_int),
             "Δ, ₽": st.column_config.NumberColumn(format=rub_format_int),
             "Цена покупки, %": st.column_config.NumberColumn(format="%.2f%%"),
             "Цена сейчас, %": st.column_config.NumberColumn(format="%.2f%%"),
+            "Удалить": st.column_config.LinkColumn(
+                # Пустой label — действие и так понятно из иконки.
+                "",
+                display_text=":material/delete:",
+                help=(
+                    "Удалить позицию из портфеля. Клик мгновенно применит "
+                    "изменение через query-param и перезагрузит страницу."
+                ),
+                width="small",
+            ),
         },
     )
-
-    with st.expander("Удалить позицию", expanded=False):
-        position_options = [p.isin for p in portfolio.positions]
-        selected = st.selectbox(
-            "Выберите бумагу",
-            options=position_options,
-            format_func=lambda isin: next(
-                (p.name for p in portfolio.positions if p.isin == isin),
-                isin,
-            ),
-            key=f"portfolio_remove_isin_{portfolio.id}",
-        )
-        if st.button("Удалить", key=f"portfolio_remove_btn_{portfolio.id}"):
-            portfolio.positions = [p for p in portfolio.positions if p.isin != selected]
-            portfolio.slots = [s for s in portfolio.slots if s.source_position_isin != selected]
-            update_portfolio(portfolio)
-            st.rerun()
 
 
 def _put_offer_decision_label(decision: PutOfferDecision) -> str:
@@ -742,7 +902,16 @@ def _render_single_slot(
     universe_by_isin: dict[str, BondRecord],
     profile_universe_by_isin: dict[str, BondRecord],
 ) -> None:
-    """Рендер одного слота реинвестиции с селектом для переопределения."""
+    """Рендер одного слота реинвестиции с селектом для переопределения.
+
+    В селект попадают только бумаги, прошедшие
+    :func:`core.portfolio_planner.validate_replacement_bond`: погашение
+    строго после ``slot.purchase_date + MIN_REPLACEMENT_HORIZON_DAYS`` и
+    не позже горизонта портфеля. Это критически важно: если бумага
+    гасится до даты покупки, build_plan эмитит maturity-событие в
+    прошлое относительно purchase, и cash «удваивается» в итоговых
+    цифрах (см. историю багов в AGENTS.md).
+    """
     reason_label = _TRIGGER_REASON_LABELS.get(slot.trigger_reason, slot.trigger_reason.value)
 
     source_position_name = "—"
@@ -765,14 +934,55 @@ def _render_single_slot(
         )
 
     with col_select:
-        # Кандидаты под профиль + текущий suggested/confirmed (даже если он
-        # вышел за рамки профиля — пользователь сознательно его выбрал).
-        candidates_isins = list(profile_universe_by_isin.keys())
-        if slot.suggested_isin and slot.suggested_isin not in candidates_isins:
-            candidates_isins.append(slot.suggested_isin)
-        if slot.confirmed_isin and slot.confirmed_isin not in candidates_isins:
-            candidates_isins.append(slot.confirmed_isin)
-        # Сортируем кандидатов по доступности: сначала те, что помещаются в кэш
+        # Кандидаты для ручного выбора строятся тем же fallback-принципом,
+        # что и select_replacement в планировщике:
+        #   1) основной профиль портфеля;
+        #   2) NORMAL как fallback;
+        #   3) любые бумаги без дефолта.
+        # На каждом уровне применяется validate_replacement_bond, чтобы
+        # исключить временно-невалидные бумаги (матью ≤ purchase_date и т.п.).
+        def _valid_isins_from(source: dict[str, BondRecord]) -> list[str]:
+            return [
+                isin
+                for isin, bond in source.items()
+                if validate_replacement_bond(
+                    bond,
+                    slot_purchase_date=slot.purchase_date,
+                    horizon=portfolio.horizon_date,
+                )
+                is None
+            ]
+
+        candidates_isins = _valid_isins_from(profile_universe_by_isin)
+
+        fallback_label: str = ""
+        if not candidates_isins and portfolio.risk_profile != RiskProfile.NORMAL:
+            normal_by_isin = {
+                b.isin: b
+                for b in risk_profile_filter(list(universe_by_isin.values()), RiskProfile.NORMAL)
+            }
+            candidates_isins = _valid_isins_from(normal_by_isin)
+            if candidates_isins:
+                fallback_label = "NORMAL"
+
+        if not candidates_isins:
+            no_default_by_isin = {
+                isin: b
+                for isin, b in universe_by_isin.items()
+                if not b.has_default and not b.has_technical_default
+            }
+            candidates_isins = _valid_isins_from(no_default_by_isin)
+            if candidates_isins:
+                fallback_label = "без профильных ограничений"
+
+        if fallback_label:
+            st.info(
+                f"Под профиль «{portfolio.risk_profile.value}» нет кандидатов в этом окне. "
+                f"Показаны бумаги ({fallback_label}) — планировщик тоже использует их "
+                "как fallback, чтобы не держать деньги в кэше."
+            )
+
+        # Сортируем: сначала те, что помещаются в ожидаемый кэш
         candidates_isins.sort(
             key=lambda isin: (
                 (universe_by_isin.get(isin) is None),
@@ -782,16 +992,29 @@ def _render_single_slot(
             )
         )
 
+        if not candidates_isins:
+            st.warning(
+                f"Нет бумаг с погашением между {slot.purchase_date.isoformat()} и "
+                f"{portfolio.horizon_date.isoformat()}. Деньги останутся в кэше. "
+                "Рассмотрите расширение горизонта портфеля."
+            )
+            return
+
+        if not slot.suggested_isin and not slot.confirmed_isin:
+            st.info(
+                "Планировщик не нашёл автозамену под профиль и горизонт. "
+                "Можете выбрать бумагу вручную ниже — учитываются только "
+                "пригодные к покупке кандидаты (погашение строго после "
+                f"{slot.purchase_date.isoformat()}). Если не выбирать, "
+                "деньги после погашения останутся в кэше."
+            )
+
         # Выбор по умолчанию: confirmed_isin > suggested_isin > первый
         default_isin = slot.confirmed_isin or slot.suggested_isin
         if default_isin and default_isin in candidates_isins:
             default_index = candidates_isins.index(default_isin)
         else:
             default_index = 0
-
-        if not candidates_isins:
-            st.warning("Под выбранный профиль и горизонт нет кандидатов.")
-            return
 
         selected_isin = st.selectbox(
             "Бумага замены",
@@ -802,6 +1025,12 @@ def _render_single_slot(
             ),
             key=f"slot_select_{portfolio.id}_{idx}",
         )
+
+        # «Применить выбор» disabled, если selected совпадает с тем, что
+        # уже в плане (effective_isin). Это включает случай, когда
+        # confirmed=None, suggested=X, selected=X: ничего применять не
+        # нужно. И случай confirmed=X, selected=X — тоже.
+        effective_now = slot.effective_isin
         col_apply, col_reset = st.columns([1, 1])
         with col_apply:
             if st.button(
@@ -809,7 +1038,7 @@ def _render_single_slot(
                 key=f"slot_apply_{portfolio.id}_{idx}",
                 type="primary",
                 use_container_width=True,
-                disabled=(selected_isin == (slot.confirmed_isin or slot.suggested_isin)),
+                disabled=(selected_isin == effective_now),
             ):
                 _apply_slot_override(portfolio, slot, selected_isin)
                 st.rerun()

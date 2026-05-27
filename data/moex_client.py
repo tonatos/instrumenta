@@ -372,6 +372,67 @@ def fetch_all_bonds(
     return bonds
 
 
+def fetch_all_bonds_unfiltered() -> list[BondRecord]:
+    """Return all currently traded bonds without any screener window filters.
+
+    Unlike :func:`fetch_all_bonds`, this function does NOT apply
+    ``max_days`` or ``min_volume_rub`` restrictions — it returns every
+    bond that is still listed on MOEX and has at least one future
+    maturity/offer date. Already-redeemed bonds (``_build_bond_record``
+    returns ``None``) are silently skipped.
+
+    Used by the portfolio module so that ``auto_compose`` and
+    ``build_plan`` see the full universe, regardless of the screener
+    sidebar settings. The portfolio's own horizon already gates the
+    maturity window: ``auto_compose`` keeps only bonds whose
+    ``maturity_date ≤ horizon_date``, and ``select_replacement`` only
+    picks bonds that fit ``[purchase_date + MIN_REPLACEMENT_HORIZON_DAYS,
+    horizon_date]``.
+    """
+    today = date.today()
+    merged = _load_or_fetch_merged()
+
+    bonds: list[BondRecord] = []
+    for isin, raw in merged.items():
+        bond = _build_bond_record(isin, raw, today)
+        if bond is None:
+            continue
+        bonds.append(bond)
+
+    logger.info("fetch_all_bonds_unfiltered: %d bonds (no window/liquidity filter)", len(bonds))
+    return bonds
+
+
+def fetch_bond_by_secid(secid: str) -> BondRecord | None:
+    """Return a single ``BondRecord`` for the given MOEX SECID, ignoring filters.
+
+    Used by the bond detail page: deep links use ``?bond=<SECID>`` and the
+    target bond may legitimately fall outside the screener's window
+    (e.g. longer maturity than ``max_days`` or lower daily volume than
+    ``min_volume_rub``). The detail page must still open in that case,
+    so we look the bond up directly in the MOEX merged dataset.
+
+    The MOEX merged cache is keyed by ISIN, so we do a linear scan over
+    rows (~3 000 elements) matching on ``SECID``. That's well under 5 ms
+    and the merged dict is already in memory via the disk cache.
+
+    Returns ``None`` when the SECID is unknown to MOEX or the bond has
+    no future maturity/offer date (already redeemed).
+    """
+    if not secid:
+        return None
+
+    today = date.today()
+    merged = _load_or_fetch_merged()
+
+    for isin, raw in merged.items():
+        if raw.get("SECID") != secid:
+            continue
+        return _build_bond_record(isin, raw, today)
+
+    return None
+
+
 def fetch_bonds_by_isins(isins: set[str]) -> list[BondRecord]:
     """Return ``BondRecord`` for a specific set of ISINs.
 

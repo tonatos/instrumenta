@@ -40,7 +40,13 @@ from data.favorites import (
     sync_visible_favorites,
     toggle_favorite,
 )
-from data.moex_client import fetch_all_bonds, fetch_bonds_by_isins, is_moex_cache_fresh
+from data.moex_client import (
+    fetch_all_bonds,
+    fetch_all_bonds_unfiltered,
+    fetch_bond_by_secid,
+    fetch_bonds_by_isins,
+    is_moex_cache_fresh,
+)
 from data.moex_defaults_client import enrich_bonds_with_defaults
 from data.ratings_loader import (
     apply_ratings,
@@ -196,6 +202,82 @@ def load_favorite_bonds(
     for bond in enriched:
         bond.is_favorite = True
     return enriched
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def load_portfolio_bonds(
+    key_rate: float,
+    tax_rate: float,
+    token: str | None,
+) -> list[BondRecord]:
+    """Load the full bond universe for the portfolio tab, ignoring all screener filters.
+
+    The portfolio module must see every currently listed bond so that:
+
+    * ``auto_compose`` can select bonds matching the **portfolio's own
+      horizon**, not the screener's ``max_days`` window.
+    * ``build_plan`` / ``select_replacement`` can find reinvestment
+      candidates even when the screener is filtered to, say, 90 days.
+    * The user's manual "add bond" form works for any bond available
+      on MOEX, regardless of sidebar settings.
+
+    Maturity gating is handled by the planner itself:
+    ``auto_compose`` keeps only ``maturity_date ≤ portfolio.horizon_date``,
+    and ``select_replacement`` enforces the ``[purchase_date +
+    MIN_REPLACEMENT_HORIZON_DAYS, horizon_date]`` window.
+
+    No ``min_volume_rub`` filter: illiquid bonds are not excluded —
+    low liquidity is surfaced via the score's liquidity component and
+    the user can decide.  High-quality but illiquid corporate bonds
+    are common in the Russian market and their exclusion from the
+    portfolio universe would be undesirable.
+    """
+    bonds = fetch_all_bonds_unfiltered()
+    enriched, _ = _enrich_and_score_bonds(
+        bonds,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+        token=token,
+    )
+    return enriched
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def load_bond_by_secid(
+    secid: str,
+    key_rate: float,
+    tax_rate: float,
+    token: str | None,
+) -> BondRecord | None:
+    """Load a single bond by SECID, ignoring screener-window filters.
+
+    The detail page is opened via ``?bond=<SECID>`` deep links and must
+    work for any actual MOEX bond — even one outside the current
+    sidebar window (longer maturity than ``max_days``, lower volume
+    than ``min_volume_rub``, hidden by coupon-type / risk / default
+    filters etc.). We therefore look the bond up directly via
+    :func:`fetch_bond_by_secid` and run the same enrichment + scoring
+    pipeline so the detail page sees consistent numbers (rating, score,
+    default flags, …).
+
+    Returns ``None`` if the bond is not listed on MOEX anymore
+    (delisted or fully redeemed). The caller is responsible for
+    clearing the query-param in that case.
+    """
+    if not secid:
+        return None
+
+    bond = fetch_bond_by_secid(secid)
+    if bond is None:
+        return None
+
+    enriched, _ = _enrich_and_score_bonds(
+        [bond],
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+        token=token,
+    )
+    return enriched[0] if enriched else None
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -965,16 +1047,68 @@ def render_bond_detail_view(bond: BondRecord) -> None:
         )
 
 
+# Обработка query-param ``?pos_remove=ISIN&portfolio_id=...`` — удаление
+# позиции из портфеля через клик по иконке-LinkColumn в таблице позиций.
+# Делаем до рендера вкладок, чтобы UI отрисовался с уже обновлённым
+# состоянием (а не «успешно удалили, но в таблице ещё видно»).
+_pos_remove_isin: str | None = st.query_params.get("pos_remove")
+_pos_remove_portfolio_id: str | None = st.query_params.get("portfolio_id")
+if _pos_remove_isin and _pos_remove_portfolio_id:
+    from data.portfolios import get_portfolio as _get_portfolio_for_remove
+    from data.portfolios import update_portfolio as _update_portfolio_for_remove
+
+    _target_portfolio = _get_portfolio_for_remove(_pos_remove_portfolio_id)
+    if _target_portfolio is not None:
+        before_count = len(_target_portfolio.positions)
+        _target_portfolio.positions = [
+            p for p in _target_portfolio.positions if p.isin != _pos_remove_isin
+        ]
+        _target_portfolio.slots = [
+            s for s in _target_portfolio.slots if s.source_position_isin != _pos_remove_isin
+        ]
+        if len(_target_portfolio.positions) != before_count:
+            _update_portfolio_for_remove(_target_portfolio)
+            # Сразу запоминаем выбранный портфель, чтобы после удаления
+            # не «прыгало» на первый в списке.
+            st.session_state["portfolio_selected_id"] = _target_portfolio.id
+    # Снимаем оба параметра и перерисовываемся.
+    del st.query_params["pos_remove"]
+    if "portfolio_id" in st.query_params:
+        del st.query_params["portfolio_id"]
+    st.rerun()
+
+
 # Какой бумаге (если есть) нужно показать страницу деталей в текущем прогоне.
 # Источник истины — query-param ``?bond=<SECID>``. Это даёт shareable deep-link
 # на детальную страницу и работает с навигацией браузера (back/forward).
 detail_secid: str | None = st.query_params.get(DETAIL_QUERY_PARAM)
 detail_bond: BondRecord | None = None
 if detail_secid:
+    # Сначала пробуем найти бумагу в текущей выдаче скринера (она уже
+    # обогащена и проскорена — это бесплатный путь). Если её там нет —
+    # значит бумага вне окна сайдбара (max_days / min_volume_rub /
+    # filter_by) или скрыта боковыми фильтрами (тип купона, риск,
+    # YTM, флаги, has_default). В deep-link сценарии («открыл прямую
+    # ссылку», «перешёл по истории браузера») это легитимный кейс,
+    # поэтому добираем бумагу напрямую через ``load_bond_by_secid`` —
+    # та же логика, что и для избранного, чтобы детальная страница
+    # открывалась независимо от фильтров.
     detail_bond = next((b for b in all_bonds if b.secid == detail_secid), None)
     if detail_bond is None:
-        # Бумага исчезла из выдачи (например, изменились фильтры/кэш) —
-        # снимаем параметр и возвращаемся к скринеру.
+        detail_bond = load_bond_by_secid(
+            secid=detail_secid,
+            key_rate=key_rate_input,
+            tax_rate=tax_rate_input,
+            token=TINKOFF_TOKEN,
+        )
+        if detail_bond is not None:
+            # Помечаем избранное вручную: на этой ветке бумаги нет
+            # в ``all_bonds``, где is_favorite уже проставлен выше.
+            detail_bond.is_favorite = detail_bond.isin in favorite_isins
+    if detail_bond is None:
+        # Бумага не найдена ни в выдаче скринера, ни в MOEX в принципе
+        # (несуществующий SECID, делистинг, полное погашение). Снимаем
+        # параметр и возвращаемся к скринеру.
         _close_detail_view()
 
 
@@ -1325,8 +1459,18 @@ with tab_portfolio:
             "Нажмите «← Назад к таблице», чтобы вернуться к портфелю."
         )
     else:
+        # Портфель использует полный универс MOEX без фильтров сайдбара.
+        # Screener-фильтры (max_days, min_volume) не должны влиять на
+        # подбор бумаг в портфеле: горизонт планирования задаётся
+        # настройками самого портфеля, а ликвидность учитывается через
+        # скоринговую компоненту, а не жёстким отсечением.
+        portfolio_universe = load_portfolio_bonds(
+            key_rate=key_rate_input,
+            tax_rate=tax_rate_input,
+            token=TINKOFF_TOKEN,
+        )
         render_portfolio_tab(
-            universe=all_bonds,
+            universe=portfolio_universe,
             key_rate=key_rate_input,
             tax_rate=tax_rate_input,
             today=date.today(),

@@ -197,9 +197,21 @@ def score_bonds(
 # the calculator stay on the default 40/40/20 mix; only ``score_bonds_for_profile``
 # uses these. Keeping them here (rather than in ``core.portfolio_planner``)
 # keeps every scoring weight in a single place.
+# Веса (ytm, risk, liquidity) для скоринга под риск-профиль портфеля.
+# Сумма должна быть 1.0; отклонение допустимо, но интерпретация скора
+# (0..100) тогда теряет смысл.
+#
+# ``NORMAL`` — приоритет качеству эмитента (риск × 0.50); YTM весит меньше
+# (× 0.30), потому что в этом профиле мы заведомо отсекаем низкие рейтинги.
+#
+# ``AGGRESSIVE`` — приоритет доходности (YTM × 0.65); риск-фильтр уже
+# отсёк совсем junk-бумаги, дальше выбираем самые прибыльные. Раньше
+# было (0.55, 0.25, 0.20), но по фидбэку — слишком осторожно: рейтинг
+# уже учтён фильтром, дублировать его весом смысла нет, поэтому усилили
+# YTM до 0.65.
 _PROFILE_WEIGHTS: dict[RiskProfile, tuple[float, float, float]] = {
     RiskProfile.NORMAL: (0.30, 0.50, 0.20),
-    RiskProfile.AGGRESSIVE: (0.55, 0.25, 0.20),
+    RiskProfile.AGGRESSIVE: (0.65, 0.20, 0.15),
 }
 
 

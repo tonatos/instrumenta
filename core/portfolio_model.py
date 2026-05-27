@@ -111,6 +111,7 @@ class PortfolioPosition:
     maturity_date: date | None
     offer_date: date | None
     coupon_period_days: int | None
+    next_coupon_date: date | None = None
     source: PositionSourceType = PositionSourceType.INITIAL
     put_offer_decision: PutOfferDecision = PutOfferDecision.PENDING
 
@@ -136,6 +137,9 @@ class PortfolioPosition:
             "maturity_date": self.maturity_date.isoformat() if self.maturity_date else None,
             "offer_date": self.offer_date.isoformat() if self.offer_date else None,
             "coupon_period_days": self.coupon_period_days,
+            "next_coupon_date": (
+                self.next_coupon_date.isoformat() if self.next_coupon_date else None
+            ),
             "source": self.source.value,
             "put_offer_decision": self.put_offer_decision.value,
         }
@@ -168,6 +172,11 @@ class PortfolioPosition:
             coupon_period_days=(
                 int(data["coupon_period_days"])
                 if data.get("coupon_period_days") is not None
+                else None
+            ),
+            next_coupon_date=(
+                date.fromisoformat(str(data["next_coupon_date"]))
+                if data.get("next_coupon_date")
                 else None
             ),
             source=PositionSourceType(data.get("source", PositionSourceType.INITIAL.value)),
