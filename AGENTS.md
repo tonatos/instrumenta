@@ -9,6 +9,7 @@
 
 ```
 MOEX ISS API          ──► data/moex_client.py     ──┐
+                          data/moex_offers_client.py ─┤ (окна пут-оферт)
 T-Invest API          ──► data/tinvest_client.py  ──┤
 data/ratings.json (vendored) ─┐                      ├──► core/bond_model.py (BondRecord)
 smart-lab.ru/q/bonds/ ──► data/ratings_scraper.py    │           │
@@ -209,10 +210,27 @@ ruff format .
 
 В `core/portfolio_planner._coupon_dates_in_range` купоны якорятся на `PortfolioPosition.next_coupon_date` (берётся из MOEX в момент покупки), а не на `purchase_date + period`. Это критично для коротких бумаг, где первый запланированный купон по простой формуле попадает ЗА дату погашения: в реальности эмитент платит итоговый купон в дату погашения. Якорь по `next_coupon_date` корректно его ловит (последний купон обычно совпадает с `maturity_date`). Для старых позиций без `next_coupon_date` (сохранённых до фикса) — fallback на `purchase_date + period`, плюс попытка подтянуть `next_coupon_date` из live-универса MOEX при перерасчёте плана.
 
+### Пут-оферты (окно подачи и цена выкупа)
+
+MOEX snapshot (`OFFERDATE`) даёт только **дату исполнения** оферты. Окно подачи заявки и цена выкупа подтягиваются из `GET /iss/securities/{SECID}/bondization/offers.json` модулем `data/moex_offers_client.enrich_bonds_with_put_offers` (кэш 24 ч в `cache/moex_put_offers.json`):
+
+| Поле `BondRecord` | MOEX | Смысл |
+|---|---|---|
+| `offer_date` | `offerdate` | Дата исполнения оферты |
+| `offer_submission_start` | `offerdatestart` | С какого дня можно подать заявку |
+| `offer_submission_end` | `offerdateend` | Крайний срок подачи (часто за 1–2 нед. до исполнения) |
+| `offer_price_pct` | `price` | Цена выкупа, % от номинала (часто ≠ 100) |
+
+**Фильтр при покупке:** `put_offer_buy_blocked(bond, as_of_date)` отсекает бумаги, у которых ближайшая пут-оферта ещё впереди, но окно подачи **уже закрыто** — покупать их бессмысленно (YTM «к оферте» недостижим). Применяется в `auto_compose`, `select_replacement`, `validate_replacement_bond`.
+
+**Cashflow при EXERCISE:** сумма выкупа = `face × offer_price_pct / 100`, НДФЛ на курсовую разницу считается от фактической цены выкупа, не от 100% номинала.
+
+**UI:** блок «Пут-оферты» показывает окно подачи, цену выкупа; кнопка «Предъявить» disabled, если окно закрыто или ещё не открыто. Решение EXERCISE при закрытом окне игнорируется — расчёт идёт до `maturity_date`.
+
 ### Реинвестиции
 
 * **Гэп между событием и покупкой замены:** `REINVESTMENT_GAP_DAYS = 2` (T+2 сеттлмент MOEX + день на принятие решения).
-* **Окно напоминания о пут-оферте:** `PUT_OFFER_REMINDER_DAYS = 30`. Внутри этого окна позиция в состоянии `PutOfferDecision.PENDING` появляется в блоке напоминаний с двумя кнопками «Предъявить» / «Держать».
+* **Окно напоминания о пут-оферте:** `PUT_OFFER_REMINDER_DAYS = 30`. Позиция с `PutOfferDecision.PENDING` попадает в блок напоминаний, когда до оферты ≤ 30 дн., открыто окно подачи или до его закрытия ≤ 30 дн.
 * **Купонный кэш:** на каждом шаге `COUPON_CASH_REINVEST_INTERVAL_DAYS = 180` `build_plan` пытается реинвестировать накопленные купоны в новый лот, если набралось достаточно средств.
 * **Глубина цепочек:** `MAX_REINVEST_DEPTH = 10`. Цепочка погашение → реинвест → погашение → … обрывается на этой глубине; в плане появляется note.
 

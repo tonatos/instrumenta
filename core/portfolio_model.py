@@ -111,6 +111,9 @@ class PortfolioPosition:
     maturity_date: date | None
     offer_date: date | None
     coupon_period_days: int | None
+    offer_submission_start: date | None = None
+    offer_submission_end: date | None = None
+    offer_price_pct: float | None = None
     next_coupon_date: date | None = None
     source: PositionSourceType = PositionSourceType.INITIAL
     put_offer_decision: PutOfferDecision = PutOfferDecision.PENDING
@@ -136,6 +139,13 @@ class PortfolioPosition:
             "face_value": self.face_value,
             "maturity_date": self.maturity_date.isoformat() if self.maturity_date else None,
             "offer_date": self.offer_date.isoformat() if self.offer_date else None,
+            "offer_submission_start": (
+                self.offer_submission_start.isoformat() if self.offer_submission_start else None
+            ),
+            "offer_submission_end": (
+                self.offer_submission_end.isoformat() if self.offer_submission_end else None
+            ),
+            "offer_price_pct": self.offer_price_pct,
             "coupon_period_days": self.coupon_period_days,
             "next_coupon_date": (
                 self.next_coupon_date.isoformat() if self.next_coupon_date else None
@@ -168,6 +178,19 @@ class PortfolioPosition:
             ),
             offer_date=(
                 date.fromisoformat(str(data["offer_date"])) if data.get("offer_date") else None
+            ),
+            offer_submission_start=(
+                date.fromisoformat(str(data["offer_submission_start"]))
+                if data.get("offer_submission_start")
+                else None
+            ),
+            offer_submission_end=(
+                date.fromisoformat(str(data["offer_submission_end"]))
+                if data.get("offer_submission_end")
+                else None
+            ),
+            offer_price_pct=(
+                float(data["offer_price_pct"]) if data.get("offer_price_pct") is not None else None
             ),
             coupon_period_days=(
                 int(data["coupon_period_days"])

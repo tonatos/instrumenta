@@ -48,6 +48,7 @@ from data.moex_client import (
     is_moex_cache_fresh,
 )
 from data.moex_defaults_client import enrich_bonds_with_defaults
+from data.moex_offers_client import enrich_bonds_with_put_offers
 from data.ratings_loader import (
     apply_ratings,
     load_auto_ratings,
@@ -126,6 +127,8 @@ def _enrich_and_score_bonds(
     if token:
         bonds = enrich_bonds_from_tinvest(bonds, token)
         source += " + T-Invest API"
+
+    bonds = enrich_bonds_with_put_offers(bonds)
 
     ratings = load_ratings()
     auto_ratings = load_auto_ratings()

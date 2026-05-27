@@ -674,9 +674,10 @@ def render_put_offer_reminders(portfolio: Portfolio, plan: PortfolioPlan) -> Non
 
     st.caption(
         f"Бумаги с пут-офертой в ближайшие {PUT_OFFER_REMINDER_DAYS} дней. "
-        "Решение «Предъявить» — продадим эмитенту по 100% номинала и "
-        "запланируем реинвестицию через 2 дня. «Держать» — продолжаем удержание "
-        "до даты погашения, оферта игнорируется."
+        "Заявку на предъявление нужно подать в окно между датами «начало» и "
+        "«конец подачи» (через чат брокера). «Предъявить» — выкуп по цене "
+        "оферты (может быть ниже 100% номинала) и реинвест через 2 дня. "
+        "«Держать» — до погашения."
     )
 
     for upcoming in plan.upcoming_put_offers:
@@ -684,17 +685,38 @@ def render_put_offer_reminders(portfolio: Portfolio, plan: PortfolioPlan) -> Non
         days_until = upcoming.days_until
         col_info, col_yes, col_no = st.columns([4, 1, 1])
         with col_info:
+            window_parts: list[str] = []
+            if upcoming.submission_start:
+                window_parts.append(f"с `{upcoming.submission_start.isoformat()}`")
+            if upcoming.submission_end:
+                window_parts.append(f"до `{upcoming.submission_end.isoformat()}`")
+            window_str = " ".join(window_parts) if window_parts else "—"
+            price_str = (
+                f"{upcoming.offer_price_pct:.0f}% номинала"
+                if upcoming.offer_price_pct is not None
+                else "100% номинала (нет данных MOEX)"
+            )
             st.markdown(
-                f"**{position.name}** — оферта "
+                f"**{position.name}** — исполнение оферты "
                 f"`{position.offer_date.isoformat() if position.offer_date else '—'}` "
                 f"(через **{days_until}** дн.)"
             )
+            st.caption(f"Подача заявки: {window_str} · цена выкупа: {price_str}")
+            if not upcoming.can_exercise and upcoming.submission_end:
+                if date.today() > upcoming.submission_end:
+                    st.error(
+                        f"Окно подачи закрыто {upcoming.submission_end.isoformat()}. "
+                        "Предъявить уже нельзя — держите до погашения."
+                    )
+                elif upcoming.submission_start and date.today() < upcoming.submission_start:
+                    st.info(f"Окно откроется {upcoming.submission_start.isoformat()}.")
         with col_yes:
             if st.button(
                 "Предъявить",
                 key=f"putoffer_exercise_{portfolio.id}_{position.isin}",
                 type="primary",
                 use_container_width=True,
+                disabled=not upcoming.can_exercise,
             ):
                 _set_put_offer_decision(portfolio, position.isin, PutOfferDecision.EXERCISE)
                 st.rerun()

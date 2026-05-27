@@ -89,6 +89,15 @@ class BondRecord:
     # --- Dates ---
     maturity_date: date | None = None
     offer_date: date | None = None
+    # Окно подачи заявки на пут-оферту (MOEX bondization/offers).
+    # ``offer_submission_start`` — с какого дня можно подать заявку эмитенту;
+    # ``offer_submission_end`` — крайний срок подачи (часто за 1–2 нед. до
+    # ``offer_date``). Если окно уже закрыто, купить бумагу «под оферту»
+    # бессмысленно — предъявить уже нельзя.
+    offer_submission_start: date | None = None
+    offer_submission_end: date | None = None
+    # Цена выкупа по пут-оферте, % от номинала (MOEX ``price``). Часто ≠ 100.
+    offer_price_pct: float | None = None
     # Effective date: min(maturity_date, offer_date) — the date we actually expect return of principal
     effective_date: date | None = None
     days_to_maturity: int | None = None

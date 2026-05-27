@@ -540,10 +540,28 @@ def render_bond_info_table(bond: BondRecord) -> None:
             "Дата пут-оферты",
             bond.offer_date.isoformat() if bond.offer_date else MISSING_VALUE,
             (
-                "Право ИНВЕСТОРА досрочно продать облигацию эмитенту обратно по 100% "
-                "от номинала. До оферты YTM считается именно к этой дате — после "
-                "оферты ставка купона обычно меняется"
+                "Дата исполнения: эмитент выкупает бумаги у тех, кто подал заявку. "
+                "YTM до этой даты считается MOEX именно к оферте"
             ),
+        ),
+        (
+            "Окно подачи (пут)",
+            (
+                f"{bond.offer_submission_start.isoformat()} — "
+                f"{bond.offer_submission_end.isoformat()}"
+                if bond.offer_submission_start and bond.offer_submission_end
+                else (
+                    f"до {bond.offer_submission_end.isoformat()}"
+                    if bond.offer_submission_end
+                    else MISSING_VALUE
+                )
+            ),
+            "Период, когда можно подать заявку на предъявление (обычно через чат брокера)",
+        ),
+        (
+            "Цена пут-оферты",
+            f"{bond.offer_price_pct:.2f}% номинала" if bond.offer_price_pct else MISSING_VALUE,
+            "По какой цене эмитент выкупит бумагу при предъявлении — часто ниже 100%",
         ),
         (
             "Дата колл-оферты",

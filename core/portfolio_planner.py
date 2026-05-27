@@ -121,6 +121,11 @@ class UpcomingPutOffer:
 
     position: PortfolioPosition
     days_until: int
+    days_until_submission_end: int | None
+    submission_start: date | None
+    submission_end: date | None
+    offer_price_pct: float | None
+    can_exercise: bool
 
 
 @dataclass
@@ -261,6 +266,58 @@ def _has_usable_price(bond: BondRecord) -> bool:
     return bond.price_per_lot_rub is not None and bond.price_per_lot_rub > 0
 
 
+def put_offer_buy_blocked(bond: BondRecord, as_of_date: date) -> str | None:
+    """Проверить, можно ли покупать бумагу с учётом окна пут-оферты.
+
+    Возвращает ``None``, если покупка допустима; иначе — причину отсечения.
+
+    Типичный анти-паттерн: ``offer_date`` через неделю, а
+    ``offer_submission_end`` уже прошёл — купить «под оферту» нельзя,
+    YTM к оферте вводит в заблуждение, держать придётся до погашения.
+    """
+    if bond.offer_date is None or bond.offer_date <= as_of_date:
+        return None
+    if bond.offer_submission_end is None:
+        return None
+    if bond.offer_submission_end >= as_of_date:
+        return None
+    return (
+        f"окно подачи по пут-оферте закрыто "
+        f"{bond.offer_submission_end.isoformat()}, оферта "
+        f"{bond.offer_date.isoformat()} — предъявить уже нельзя"
+    )
+
+
+def put_offer_can_exercise(position: PortfolioPosition, as_of_date: date) -> bool:
+    """Можно ли **прямо сейчас** подать заявку на предъявление по пут-оферте."""
+    if put_offer_submission_closed(position, as_of_date):
+        return False
+    if position.offer_date is None or position.offer_date <= as_of_date:
+        return False
+    return not (
+        position.offer_submission_start is not None and as_of_date < position.offer_submission_start
+    )
+
+
+def put_offer_submission_closed(position: PortfolioPosition, as_of_date: date) -> bool:
+    """Окно подачи заявки по пут-оферте уже закрыто (или оферты нет)."""
+    if position.offer_date is None or position.offer_date <= as_of_date:
+        return True
+    if position.offer_submission_end is None:
+        return False
+    return as_of_date > position.offer_submission_end
+
+
+def _sync_put_offer_from_bond(position: PortfolioPosition, bond: BondRecord) -> None:
+    """Подтянуть окно пут-оферты из live-универса MOEX в позицию."""
+    if bond.offer_date is None or bond.offer_date < position.purchase_date:
+        return
+    position.offer_date = bond.offer_date
+    position.offer_submission_start = bond.offer_submission_start
+    position.offer_submission_end = bond.offer_submission_end
+    position.offer_price_pct = bond.offer_price_pct
+
+
 def validate_replacement_bond(
     bond: BondRecord,
     *,
@@ -304,6 +361,9 @@ def validate_replacement_bond(
         )
     if bond.has_default or bond.has_technical_default:
         return "у бумаги статус дефолта / тех.дефолта"
+    blocked = put_offer_buy_blocked(bond, slot_purchase_date)
+    if blocked is not None:
+        return blocked
     return None
 
 
@@ -389,6 +449,8 @@ def select_replacement(
     def _candidates_for(bonds: Sequence[BondRecord]) -> list[BondRecord]:
         result: list[BondRecord] = []
         for bond in bonds:
+            if put_offer_buy_blocked(bond, target_date) is not None:
+                continue
             if not _has_usable_price(bond):
                 continue
             lot_cost = bond.price_per_lot_rub or 0.0
@@ -500,7 +562,10 @@ def auto_compose(
     candidates = [
         b
         for b in filtered
-        if _has_usable_price(b) and b.maturity_date and b.maturity_date <= horizon_date
+        if _has_usable_price(b)
+        and b.maturity_date
+        and b.maturity_date <= horizon_date
+        and put_offer_buy_blocked(b, today) is None
     ]
     if not candidates:
         notes.append(
@@ -680,6 +745,8 @@ def position_from_bond(
     aci_per_bond = bond.accrued_interest or 0.0
     bonds_count = lots * bond.lot_size
     offer_date = bond.offer_date if bond.offer_date and bond.offer_date >= purchase_date else None
+    if offer_date and put_offer_buy_blocked(bond, purchase_date):
+        offer_date = None
     return PortfolioPosition(
         isin=bond.isin,
         secid=bond.secid,
@@ -695,6 +762,9 @@ def position_from_bond(
         face_value=bond.face_value,
         maturity_date=bond.maturity_date,
         offer_date=offer_date,
+        offer_submission_start=bond.offer_submission_start if offer_date else None,
+        offer_submission_end=bond.offer_submission_end if offer_date else None,
+        offer_price_pct=bond.offer_price_pct if offer_date else None,
         coupon_period_days=bond.coupon_period_days,
         next_coupon_date=bond.next_coupon_date,
         source=source,
@@ -705,9 +775,13 @@ def position_from_bond(
 # ── Plan builder ─────────────────────────────────────────────────────────────
 
 
-def _position_end_date(position: PortfolioPosition, horizon: date) -> date | None:
+def _position_end_date(position: PortfolioPosition, horizon: date, *, today: date) -> date | None:
     """Эффективная дата возврата номинала по позиции."""
-    if position.put_offer_decision == PutOfferDecision.EXERCISE and position.offer_date is not None:
+    if (
+        position.put_offer_decision == PutOfferDecision.EXERCISE
+        and position.offer_date is not None
+        and not put_offer_submission_closed(position, today)
+    ):
         return position.offer_date
     return position.maturity_date
 
@@ -809,6 +883,12 @@ def build_plan(
             saved_slots_by_source[slot.source_position_isin] = slot
 
     worklist: list[tuple[PortfolioPosition, int]] = [(p, 0) for p in portfolio.positions]
+    # Подтягиваем окна пут-оферт из live-универса в сохранённые позиции.
+    for pos in portfolio.positions:
+        live_bond = universe_by_isin.get(pos.isin)
+        if live_bond is not None:
+            _sync_put_offer_from_bond(pos, live_bond)
+
     # ISIN-ы, для которых уже добавлено напоминание о пут-оферте: одна
     # бумага не должна порождать несколько одинаковых UI-карточек (а ключ
     # ``st.button`` строится из ``portfolio.id + position.isin`` —
@@ -830,14 +910,51 @@ def build_plan(
             and today <= position.offer_date <= horizon
             and position.isin not in reminded_isins
         ):
+            live_bond = universe_by_isin.get(position.isin)
+            if live_bond is not None:
+                _sync_put_offer_from_bond(position, live_bond)
             days_until = (position.offer_date - today).days
-            if days_until <= PUT_OFFER_REMINDER_DAYS:
+            days_until_sub_end: int | None = None
+            if position.offer_submission_end is not None:
+                days_until_sub_end = (position.offer_submission_end - today).days
+            can_exercise = put_offer_can_exercise(position, today)
+            submission_closed = put_offer_submission_closed(position, today)
+            show_reminder = (
+                days_until <= PUT_OFFER_REMINDER_DAYS
+                or can_exercise
+                or (
+                    days_until_sub_end is not None
+                    and 0 <= days_until_sub_end <= PUT_OFFER_REMINDER_DAYS
+                )
+            )
+            if show_reminder:
                 plan.upcoming_put_offers.append(
-                    UpcomingPutOffer(position=position, days_until=days_until)
+                    UpcomingPutOffer(
+                        position=position,
+                        days_until=days_until,
+                        days_until_submission_end=days_until_sub_end,
+                        submission_start=position.offer_submission_start,
+                        submission_end=position.offer_submission_end,
+                        offer_price_pct=position.offer_price_pct,
+                        can_exercise=can_exercise and not submission_closed,
+                    )
                 )
                 reminded_isins.add(position.isin)
 
-        end_date = _position_end_date(position, horizon)
+        if (
+            position.put_offer_decision == PutOfferDecision.EXERCISE
+            and position.offer_date is not None
+            and put_offer_submission_closed(position, today)
+        ):
+            plan.notes.append(
+                f"{position.name}: решение «Предъявить» невозможно — окно подачи "
+                f"по пут-оферте "
+                f"{position.offer_submission_end.isoformat() if position.offer_submission_end else '—'} "
+                f"уже закрыто. Расчёт идёт до погашения "
+                f"{position.maturity_date.isoformat() if position.maturity_date else '—'}."
+            )
+
+        end_date = _position_end_date(position, horizon, today=today)
         if end_date is None or end_date > horizon:
             # Позиция не успевает погаситься в горизонте — фиксируем её как
             # «удерживаемую на горизонте». Стоимость на горизонте оцениваем
@@ -878,10 +995,15 @@ def build_plan(
             )
             continue
 
-        net_at_end = _net_redemption_amount(position, tax_rate)
         is_put = (
             position.put_offer_decision == PutOfferDecision.EXERCISE
             and position.offer_date is not None
+            and not put_offer_submission_closed(position, today)
+        )
+        net_at_end = (
+            _net_redemption_amount(position, tax_rate, is_put=is_put)
+            if is_put
+            else _net_redemption_amount(position, tax_rate)
         )
 
         slot = saved_slots_by_source.get(position.isin)
@@ -1067,7 +1189,7 @@ def _emit_position_events(
         if live_bond is not None and live_bond.next_coupon_date is not None:
             position.next_coupon_date = live_bond.next_coupon_date
 
-    end_date = _position_end_date(position, horizon)
+    end_date = _position_end_date(position, horizon, today=today)
     coupon_end = end_date if end_date and end_date <= horizon else horizon
 
     coupon_gross = _coupon_payment_per_event(position)
@@ -1089,28 +1211,49 @@ def _emit_position_events(
         return
 
     is_put = (
-        position.put_offer_decision == PutOfferDecision.EXERCISE and position.offer_date is not None
+        position.put_offer_decision == PutOfferDecision.EXERCISE
+        and position.offer_date is not None
+        and not put_offer_submission_closed(position, today)
     )
+    if is_put:
+        price_suffix = (
+            f" ({position.offer_price_pct:.0f}% номинала)"
+            if position.offer_price_pct is not None
+            else ""
+        )
+        desc = f"Пут-оферта по {position.name}{price_suffix}"
+    else:
+        desc = f"Погашение {position.name}"
+    redemption = _net_redemption_amount(position, tax_rate, is_put=is_put)
     plan.events.append(
         CashflowEvent(
             date=end_date,
             kind="put_offer" if is_put else "maturity",
-            amount_rub=_net_redemption_amount(position, tax_rate),
-            description=(
-                f"Пут-оферта по {position.name}" if is_put else f"Погашение {position.name}"
-            ),
+            amount_rub=redemption,
+            description=desc,
             related_isin=position.isin,
             is_projected=end_date >= today,
         )
     )
 
 
-def _net_redemption_amount(position: PortfolioPosition, tax_rate: float) -> float:
-    """Сумма к получению при погашении/оферте после НДФЛ на курсовую разницу."""
-    face_back = position.face_value * position.bonds_count
-    price_gain_taxable = max(0.0, _price_gain_total(position))
-    tax = price_gain_taxable * tax_rate
-    return face_back - tax
+def _net_redemption_amount(
+    position: PortfolioPosition,
+    tax_rate: float,
+    *,
+    is_put: bool = False,
+) -> float:
+    """Сумма к получению при погашении/пут-оферте после НДФЛ на курсовую разницу."""
+    if is_put:
+        price_pct = position.offer_price_pct or 100.0
+        redemption_per_bond = position.face_value * (price_pct / 100.0)
+    else:
+        redemption_per_bond = position.face_value
+    gross = redemption_per_bond * position.bonds_count
+    clean_at_purchase = position.purchase_clean_price_pct / 100.0 * position.face_value
+    taxable_gain = max(0.0, (redemption_per_bond - clean_at_purchase) * position.bonds_count)
+    tax = taxable_gain * tax_rate
+    return gross - tax
 
 
 def _maybe_add_coupon_cash_reinvestments(
@@ -1211,7 +1354,7 @@ def _maybe_add_coupon_cash_reinvestments(
 
         # Если бумага «купонной» реинвестиции не успевает погаситься —
         # фиксируем её как удерживаемую на горизонте.
-        phantom_end = _position_end_date(phantom, horizon)
+        phantom_end = _position_end_date(phantom, horizon, today=today)
         if phantom_end is None or phantom_end > horizon:
             est_value = (candidate.dirty_price_rub or candidate.face_value) * phantom.bonds_count
             plan.held_positions.append(
