@@ -148,6 +148,7 @@ export interface Portfolio {
   account_kind: string | null;
   positions_count: number;
   closed_positions_count?: number;
+  invested_capital_rub: number;
   api_trade_only?: boolean;
   data: PortfolioData;
 }

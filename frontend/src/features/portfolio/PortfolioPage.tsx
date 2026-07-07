@@ -1,6 +1,5 @@
-import { forwardRef, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BarChart3,
   ChevronDown,
@@ -13,19 +12,21 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import { api } from "@/api/client";
-import type { Bond, Portfolio, PortfolioPosition } from "@/api/types";
-import { CashflowTable } from "@/features/portfolio/CashflowTable";
-import { AccountOperationsTable } from "@/features/portfolio/AccountOperationsTable";
+import { ForecastMetrics } from "@/features/portfolio/components/ForecastMetrics";
+import { PortfolioForm } from "@/features/portfolio/components/PortfolioForm";
+import { PortfolioTabs } from "@/features/portfolio/components/PortfolioTabs";
+import {
+  defaultCreateForm,
+  usePortfolioMutations,
+} from "@/features/portfolio/hooks/usePortfolioMutations";
+import { usePortfolioQueries } from "@/features/portfolio/hooks/usePortfolioQueries";
+import { RISK_LABELS } from "@/features/portfolio/labels";
 import { PortfolioValueChart } from "@/features/portfolio/PortfolioValueChart";
-import { ReinvestmentSlots } from "@/features/portfolio/ReinvestmentSlots";
-import { TradingActionQueue } from "@/features/portfolio/TradingActionQueue";
+import { TradingActionQueue } from "@/features/portfolio/trading/TradingActionQueue";
 import { TradingModeBadge, TradingModeWizard } from "@/features/portfolio/TradingModeWizard";
-import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
-import { Badge } from "@/components/ui/badge";
+import { portfolioInvestedCapitalRub, portfolioPath } from "@/features/portfolio/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import {
   DialogContent,
   DialogDescription,
@@ -35,607 +36,47 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
-import { cn, formatDate, formatPct, formatRub, todayIsoDate } from "@/lib/utils";
-
-// ─── constants ───────────────────────────────────────────────────────────────
-
-const RISK_LABELS: Record<string, string> = {
-  normal: "Нормальный",
-  aggressive: "Агрессивный",
-  conservative: "Консервативный",
-};
-
-const SOURCE_LABELS: Record<string, string> = {
-  initial: "Старт",
-  reinvest_maturity: "Реинв. погаш.",
-  reinvest_put_offer: "Реинв. оферта",
-  reinvest_coupon_cash: "Реинв. купоны",
-};
-
-const POSITION_STATUS_LABELS: Record<string, string> = {
-  pending: "Ожидает",
-  active: "Активна",
-  drift: "Расхождение",
-  closed: "Закрыта",
-};
-
-function isClosedPosition(pos: PortfolioPosition): boolean {
-  return pos.status === "closed" || pos.closed_at != null;
-}
-
-function openPositionsCount(positions: PortfolioPosition[]): number {
-  return positions.filter((p) => !isClosedPosition(p)).length;
-}
-
-function portfolioInvestedCapitalRub(portfolio: Portfolio): number {
-  return portfolio.initial_amount_rub + (portfolio.data?.acknowledged_top_ups_rub ?? 0);
-}
-
-// ─── Portfolio form (shared create / edit) ───────────────────────────────────
-
-function PortfolioForm({
-  initial,
-  onSubmit,
-  isPending,
-  submitLabel,
-}: {
-  initial: {
-    name: string;
-    initial_amount_rub: number;
-    horizon_date: string;
-    risk_profile: string;
-    api_trade_only: boolean;
-  };
-  onSubmit: (values: typeof initial) => void;
-  isPending: boolean;
-  submitLabel: string;
-}) {
-  const [form, setForm] = useState(initial);
-
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <label className="space-y-1.5 text-sm sm:col-span-2">
-        <span className="font-medium text-muted-foreground">Название</span>
-        <Input
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          placeholder="Мой портфель"
-          autoFocus
-        />
-      </label>
-      <label className="space-y-1.5 text-sm">
-        <span className="font-medium text-muted-foreground">Начальный бюджет, ₽</span>
-        <Input
-          type="number"
-          min={1000}
-          step={10000}
-          value={form.initial_amount_rub}
-          onChange={(e) => setForm({ ...form, initial_amount_rub: Number(e.target.value) })}
-        />
-      </label>
-      <label className="space-y-1.5 text-sm">
-        <span className="font-medium text-muted-foreground">Горизонт инвестирования</span>
-        <DatePicker
-          value={form.horizon_date}
-          min={todayIsoDate()}
-          onChange={(horizon_date) => setForm({ ...form, horizon_date })}
-        />
-      </label>
-      <label className="space-y-1.5 text-sm sm:col-span-2">
-        <span className="font-medium text-muted-foreground">Профиль риска</span>
-        <select
-          className="flex h-9 w-full rounded-md border border-border bg-card px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-          value={form.risk_profile}
-          onChange={(e) => setForm({ ...form, risk_profile: e.target.value })}
-        >
-          <option value="conservative">Консервативный</option>
-          <option value="normal">Нормальный</option>
-          <option value="aggressive">Агрессивный</option>
-        </select>
-      </label>
-      <label className="flex cursor-pointer items-start gap-2 text-sm sm:col-span-2">
-        <input
-          type="checkbox"
-          className="mt-1"
-          checked={form.api_trade_only}
-          onChange={(e) => setForm({ ...form, api_trade_only: e.target.checked })}
-        />
-        <span>
-          <span className="font-medium text-foreground">Только API-торгуемые</span>
-          <span className="mt-0.5 block text-muted-foreground">
-            В автосборе и реинвесте — только бумаги, которые можно купить через T-Invest API
-            (рекомендуется для режима торговли)
-          </span>
-        </span>
-      </label>
-      <DialogFooter className="sm:col-span-2">
-        <Button
-          onClick={() => onSubmit(form)}
-          disabled={!form.name.trim() || isPending}
-        >
-          {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {submitLabel}
-        </Button>
-      </DialogFooter>
-    </div>
-  );
-}
-
-// ─── Positions Table ─────────────────────────────────────────────────────────
-
-function PositionsTab({
-  positions,
-  portfolioId,
-  isTrading,
-  bonds,
-}: {
-  positions: PortfolioPosition[];
-  portfolioId: string;
-  isTrading: boolean;
-  bonds: Bond[];
-}) {
-  const queryClient = useQueryClient();
-  const [addLots, setAddLots] = useState(1);
-  const [selectedIsin, setSelectedIsin] = useState<string | null>(null);
-  const [detailSecid, setDetailSecid] = useState<string | null>(null);
-  const [showClosed, setShowClosed] = useState(false);
-
-  const visiblePositions = useMemo(
-    () => (showClosed ? positions : positions.filter((p) => !isClosedPosition(p))),
-    [positions, showClosed],
-  );
-  const closedCount = positions.length - openPositionsCount(positions);
-
-  const removeMutation = useMutation({
-    mutationFn: (isin: string) => api.removePosition(portfolioId, isin),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["portfolios"] });
-      queryClient.invalidateQueries({ queryKey: ["plan", portfolioId] });
-    },
-  });
-
-  const addMutation = useMutation({
-    mutationFn: (isin: string) => api.addPosition(portfolioId, { isin, lots: addLots }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["portfolios"] });
-      queryClient.invalidateQueries({ queryKey: ["plan", portfolioId] });
-      setSelectedIsin(null);
-    },
-  });
-
-  const bondOptions: ComboboxOption[] = bonds.map((b) => ({
-    value: b.isin,
-    label: b.name,
-    description: [
-      b.ytm_net != null ? `YTM ${b.ytm_net.toFixed(2)}%` : null,
-      b.credit_rating ?? null,
-    ]
-      .filter(Boolean)
-      .join(" · "),
-  }));
-
-  return (
-    <div className="space-y-4">
-      {isTrading && closedCount > 0 && (
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={showClosed}
-            onChange={(e) => setShowClosed(e.target.checked)}
-            data-testid="show-closed-positions"
-          />
-          Показать закрытые ({closedCount})
-        </label>
-      )}
-
-      {visiblePositions.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-          {positions.length > 0 && !showClosed
-            ? "Нет активных позиций — включите «Показать закрытые»"
-            : "Позиций нет — воспользуйтесь «Автосостав» или добавьте бумаги вручную"}
-        </p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-xs" data-testid="positions-table">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold">Бумага</th>
-                {isTrading && (
-                  <th className="px-3 py-2 text-left font-semibold">Статус</th>
-                )}
-                <th className="px-3 py-2 text-right font-semibold">
-                  {isTrading ? "Пл / Фк" : "Лотов"}
-                </th>
-                <th className="px-3 py-2 text-right font-semibold">Вложено</th>
-                <th className="px-3 py-2 text-left font-semibold">Источник</th>
-                <th className="px-3 py-2 text-left font-semibold">Погашение</th>
-                {!isTrading && <th className="w-8 px-2 py-2" />}
-              </tr>
-            </thead>
-            <tbody>
-              {visiblePositions.map((pos) => {
-                const status = pos.status ?? (isClosedPosition(pos) ? "closed" : "active");
-                return (
-                <tr
-                  key={pos.isin}
-                  data-testid={`position-row-${pos.isin}`}
-                  data-status={status}
-                  className={cn(
-                    "cursor-pointer border-t border-border hover:bg-muted/20",
-                    status === "closed" && "text-muted-foreground opacity-70",
-                  )}
-                  onClick={() => setDetailSecid(pos.secid)}
-                >
-                  <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      className={cn(
-                        "max-w-[180px] truncate text-left font-medium hover:underline",
-                        status === "closed" && "line-through",
-                      )}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDetailSecid(pos.secid);
-                      }}
-                    >
-                      {pos.name}
-                    </button>
-                    <p className="text-muted-foreground">{pos.secid}</p>
-                  </td>
-                  {isTrading && (
-                    <td className="px-3 py-2">
-                      <Badge
-                        variant={
-                          status === "active"
-                            ? "default"
-                            : status === "pending"
-                              ? "secondary"
-                              : status === "drift"
-                                ? "destructive"
-                                : "outline"
-                        }
-                        className="text-[10px] font-normal"
-                      >
-                        {POSITION_STATUS_LABELS[status] ?? status}
-                      </Badge>
-                    </td>
-                  )}
-                  <td className="px-3 py-2 text-right font-medium">
-                    {isTrading && pos.actual_lots != null ? (
-                      <Tooltip
-                        content={`Плановых: ${pos.lots} л. · Фактических: ${pos.actual_lots} л.`}
-                      >
-                        <span
-                          className={cn(
-                            "cursor-help",
-                            pos.actual_lots !== pos.lots && "text-amber-600",
-                          )}
-                        >
-                          {pos.lots}&nbsp;/&nbsp;{pos.actual_lots}
-                        </span>
-                      </Tooltip>
-                    ) : (
-                      `${pos.lots} л.`
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right">
-                    {formatRub(pos.purchase_amount_rub)}
-                  </td>
-                  <td className="px-3 py-2 text-muted-foreground">
-                    {SOURCE_LABELS[pos.source] ?? pos.source}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
-                    {pos.offer_date
-                      ? <span className="text-orange-600 dark:text-orange-400">{formatDate(pos.offer_date)} ⚡</span>
-                      : formatDate(pos.maturity_date)}
-                  </td>
-                  {!isTrading && (
-                    <td className="px-2 py-2">
-                      <button
-                        type="button"
-                        className="rounded p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeMutation.mutate(pos.isin);
-                        }}
-                        disabled={removeMutation.isPending}
-                        title="Убрать позицию"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  )}
-                </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Add position row */}
-      {!isTrading && (
-        <div className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-border bg-muted/20 p-3">
-          <div className="min-w-[200px] flex-1">
-            <p className="mb-1 text-xs font-medium text-muted-foreground">Добавить бумагу</p>
-            <Combobox
-              options={bondOptions}
-              value={selectedIsin}
-              onChange={setSelectedIsin}
-              placeholder="Найти по названию или ISIN…"
-              searchPlaceholder="Поиск…"
-            />
-          </div>
-          <div className="w-24">
-            <p className="mb-1 text-xs font-medium text-muted-foreground">Лотов</p>
-            <Input
-              type="number"
-              min={1}
-              value={addLots}
-              onChange={(e) => setAddLots(Math.max(1, Number(e.target.value)))}
-              className="h-9 text-sm"
-            />
-          </div>
-          <Button
-            size="sm"
-            className="h-9"
-            onClick={() => { if (selectedIsin) addMutation.mutate(selectedIsin); }}
-            disabled={!selectedIsin || addMutation.isPending}
-          >
-            {addMutation.isPending
-              ? <Loader2 className="h-4 w-4 animate-spin" />
-              : <Plus className="h-4 w-4" />}
-          </Button>
-        </div>
-      )}
-
-      <BondDetailSheet secid={detailSecid} onClose={() => setDetailSecid(null)} />
-    </div>
-  );
-}
-
-// ─── Forecast metrics ────────────────────────────────────────────────────────
-
-function ForecastMetrics({
-  plan,
-  isTrading,
-}: {
-  plan: NonNullable<ReturnType<typeof useQuery>["data"]>;
-  isTrading: boolean;
-}) {
-  const [heldExpanded, setHeldExpanded] = useState(false);
-
-  const p = plan as {
-    total_net_profit_rub: number;
-    total_net_profit_with_held_rub: number;
-    invested_capital_rub: number;
-    expected_xirr_pct: number | null;
-    final_cash_balance: number;
-    final_portfolio_value: number;
-    held_positions: Array<{
-      isin: string;
-      name: string;
-      lots: number;
-      estimated_value_rub: number;
-      maturity_date: string | null;
-    }>;
-  };
-
-  const primaryProfit = isTrading ? p.total_net_profit_with_held_rub : p.total_net_profit_rub;
-  const secondaryProfit = isTrading ? p.total_net_profit_rub : p.total_net_profit_with_held_rub;
-  const secondaryLabel = isTrading ? "реализовано в кэш" : "с held";
-
-  return (
-    <div className="space-y-3">
-      {/* Primary metrics — big three */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            Чистая прибыль
-            <Tooltip
-              content={
-                isTrading
-                  ? "Итоговая стоимость на горизонте − вложенный капитал (старт + пополнения) − НДФЛ. Включает удерживаемые бумаги."
-                  : "Купоны + возврат номинала − вложения − НДФЛ. Позиции за горизонтом не учитываются."
-              }
-            >
-              <InfoIconButton />
-            </Tooltip>
-          </p>
-          <p
-            className={cn(
-              "mt-1.5 text-2xl font-bold tabular-nums",
-              primaryProfit > 0
-                ? "text-green-600 dark:text-green-400"
-                : "text-red-600 dark:text-red-400",
-            )}
-          >
-            {primaryProfit > 0 ? "+" : ""}
-            {formatRub(primaryProfit)}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            вложено: {formatRub(p.invested_capital_rub)}
-          </p>
-          {(isTrading || p.held_positions.length > 0) && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {secondaryLabel}: {secondaryProfit > 0 ? "+" : ""}
-              {formatRub(secondaryProfit)}
-            </p>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            Годовая доходность (XIRR)
-            <Tooltip content="Годовая доходность на вложенный капитал: XIRR по датам покупок и итоговой стоимости на горизонте, с учётом НДФЛ.">
-              <InfoIconButton />
-            </Tooltip>
-          </p>
-          {p.expected_xirr_pct != null ? (
-            <p
-              className={cn(
-                "mt-1.5 text-2xl font-bold tabular-nums",
-                p.expected_xirr_pct > 0
-                  ? "text-green-600 dark:text-green-400"
-                  : "text-muted-foreground",
-              )}
-            >
-              {formatPct(p.expected_xirr_pct)}
-            </p>
-          ) : (
-            <p className="mt-1.5 text-2xl font-bold text-muted-foreground">—</p>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-4">
-          <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            Итоговая стоимость
-            <Tooltip content="Свободный кэш + рыночная стоимость всех held-позиций по номиналу к дате горизонта.">
-              <InfoIconButton />
-            </Tooltip>
-          </p>
-          <p className="mt-1.5 text-2xl font-bold tabular-nums">
-            {formatRub(p.final_portfolio_value)}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            кэш: {formatRub(p.final_cash_balance)}
-          </p>
-        </div>
-      </div>
-
-      {/* Held positions — collapsible */}
-      {p.held_positions.length > 0 && (
-        <div className="rounded-xl border border-border bg-card">
-          <button
-            type="button"
-            onClick={() => setHeldExpanded((v) => !v)}
-            className="flex w-full items-center justify-between px-4 py-3 text-sm"
-          >
-            <span className="font-medium">
-              Удерживаются за горизонтом
-              <Badge variant="secondary" className="ml-2 text-xs">
-                {p.held_positions.length}
-              </Badge>
-            </span>
-            {heldExpanded
-              ? <ChevronUp className="h-4 w-4 text-muted-foreground" />
-              : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-          </button>
-          {heldExpanded && (
-            <div className="border-t border-border px-4 pb-4 pt-3">
-              <div className="space-y-2">
-                {p.held_positions.map((h) => (
-                  <div key={h.isin} className="flex items-center justify-between gap-2 text-sm">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{h.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {h.lots} л. · погашение {formatDate(h.maturity_date)}
-                      </p>
-                    </div>
-                    <span className="shrink-0 tabular-nums">
-                      {formatRub(h.estimated_value_rub)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const InfoIconButton = forwardRef<
-  HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement>
->(function InfoIconButton({ className, ...props }, ref) {
-  return (
-    <button
-      ref={ref}
-      type="button"
-      className={cn(
-        "inline-flex shrink-0 cursor-help rounded-sm text-muted-foreground/50 hover:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-        className,
-      )}
-      aria-label="Подробнее"
-      {...props}
-    >
-      <svg
-        className="h-3.5 w-3.5"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        aria-hidden
-      >
-        <circle cx="12" cy="12" r="10" />
-        <path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-    </button>
-  );
-});
-
-function portfolioPath(portfolioId: string, searchParams: URLSearchParams) {
-  const qs = searchParams.toString();
-  return `/portfolio/${encodeURIComponent(portfolioId)}${qs ? `?${qs}` : ""}`;
-}
-
-// ─── Main Page ───────────────────────────────────────────────────────────────
+import { cn, formatDate, formatRub } from "@/lib/utils";
 
 export function PortfolioPage() {
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { portfolioId: urlPortfolioId } = useParams();
-  const [searchParams] = useSearchParams();
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [notesExpanded, setNotesExpanded] = useState(false);
-  const defaultCreateForm = {
-    name: "",
-    initial_amount_rub: 400_000,
-    horizon_date: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().slice(0, 10),
-    risk_profile: "normal",
-    api_trade_only: true,
-  };
 
-  const { data: portfolios, isLoading } = useQuery({
-    queryKey: ["portfolios"],
-    queryFn: api.getPortfolios,
+  const {
+    searchParams,
+    portfolios,
+    isLoading,
+    config,
+    bondsList,
+    activeId,
+    active,
+    plan,
+    planLoading,
+    refetchPlan,
+    positions,
+    slots,
+    isTrading,
+  } = usePortfolioQueries();
+
+  const {
+    createMutation,
+    updateMutation,
+    composeMutation,
+    clearMutation,
+    deleteMutation,
+  } = usePortfolioMutations({
+    activeId,
+    onCreateSuccess: () => setCreateOpen(false),
+    onEditSuccess: () => setEditOpen(false),
+    onClearSuccess: () => setClearOpen(false),
+    onDeleteSuccess: () => setDeleteOpen(false),
   });
-
-  const { data: config } = useQuery({
-    queryKey: ["config"],
-    queryFn: api.getConfig,
-  });
-
-  const { data: bonds } = useQuery({
-    queryKey: ["bonds"],
-    queryFn: () => api.getBonds(),
-  });
-
-  const activeId = useMemo(() => {
-    if (!portfolios?.length) return null;
-    if (urlPortfolioId && portfolios.some((p) => p.id === urlPortfolioId)) {
-      return urlPortfolioId;
-    }
-    return portfolios[0].id;
-  }, [portfolios, urlPortfolioId]);
-
-  const searchQuery = searchParams.toString();
-
-  useEffect(() => {
-    if (!portfolios?.length || !activeId || urlPortfolioId === activeId) return;
-    navigate(portfolioPath(activeId, searchParams), { replace: true });
-  }, [portfolios, urlPortfolioId, activeId, navigate, searchQuery]);
-
-  const active = portfolios?.find((p) => p.id === activeId);
 
   const selectPortfolio = (id: string) => {
     navigate(portfolioPath(id, searchParams));
@@ -644,87 +85,14 @@ export function PortfolioPage() {
     setDeleteOpen(false);
   };
 
-  const {
-    data: plan,
-    isLoading: planLoading,
-    refetch: refetchPlan,
-  } = useQuery({
-    queryKey: ["plan", activeId],
-    queryFn: () => api.getPlan(activeId!),
-    enabled: !!activeId,
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (values: typeof defaultCreateForm) => api.createPortfolio(values),
-    onSuccess: (p) => {
-      queryClient.invalidateQueries({ queryKey: ["portfolios"] });
-      navigate(portfolioPath(p.id, new URLSearchParams()));
-      setCreateOpen(false);
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: (values: Partial<Portfolio>) => api.updatePortfolio(active!.id, values),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["portfolios"] });
-      queryClient.invalidateQueries({ queryKey: ["plan", activeId] });
-      queryClient.invalidateQueries({ queryKey: ["trading-sync", activeId] });
-      setEditOpen(false);
-    },
-  });
-
-  const composeMutation = useMutation({
-    mutationFn: (id: string) => api.autoCompose(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["portfolios"] });
-      queryClient.invalidateQueries({ queryKey: ["plan", activeId] });
-    },
-  });
-
-  const clearMutation = useMutation({
-    mutationFn: (id: string) => api.clearPositions(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["portfolios"] });
-      queryClient.invalidateQueries({ queryKey: ["plan", activeId] });
-      setClearOpen(false);
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.deletePortfolio(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["portfolios"] });
-      setDeleteOpen(false);
-    },
-  });
-
-  const positions: PortfolioPosition[] = (active?.data?.positions as PortfolioPosition[]) ?? [];
-  const slots = plan?.slots ?? [];
-  const isTrading = active?.mode === "trading";
-  const bondsList = bonds?.bonds ?? [];
-
-  const {
-    data: accountOperationsData,
-    isLoading: accountOperationsLoading,
-    isError: accountOperationsError,
-    refetch: refetchAccountOperations,
-    isFetching: accountOperationsFetching,
-  } = useQuery({
-    queryKey: ["account-operations", activeId],
-    queryFn: () => api.getAccountOperations(activeId!),
-    enabled: !!activeId && isTrading && !!active?.account_id,
-  });
-
   return (
     <div className="space-y-5">
-      {/* ── Page header ── */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Портфель</h1>
           <p className="text-sm text-muted-foreground">Планирование и прогноз доходности</p>
         </div>
 
-        {/* Create dialog */}
         <DialogRoot open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
@@ -751,7 +119,6 @@ export function PortfolioPage() {
 
       {isLoading && <Skeleton className="h-12 w-full" />}
 
-      {/* ── Portfolio selector ── */}
       {portfolios && portfolios.length > 0 && (
         <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1">
           {portfolios.map((p) => (
@@ -773,7 +140,6 @@ export function PortfolioPage() {
         </div>
       )}
 
-      {/* ── Empty state ── */}
       {portfolios?.length === 0 && !isLoading && (
         <Card>
           <CardContent className="flex flex-col items-center gap-4 py-16 text-center">
@@ -789,11 +155,7 @@ export function PortfolioPage() {
 
       {active && (
         <div className="space-y-5">
-          {/* ─────────────────────────────────────────────────────────────────
-              PORTFOLIO HEADER — визуально выделенная "шапка"
-          ───────────────────────────────────────────────────────────────── */}
           <div className="overflow-hidden rounded-2xl border-2 border-primary/20 bg-card shadow-sm">
-            {/* Name + mode + params */}
             <div className="bg-gradient-to-r from-primary/5 to-transparent px-6 py-5">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="space-y-1.5">
@@ -849,9 +211,7 @@ export function PortfolioPage() {
                   )}
                 </div>
 
-                {/* Action buttons */}
                 <div className="flex shrink-0 flex-wrap gap-2">
-                  {/* Edit dialog */}
                   <DialogRoot open={editOpen} onOpenChange={setEditOpen}>
                     <DialogTrigger asChild>
                       <Button variant="outline" size="sm" className="gap-1.5">
@@ -886,7 +246,6 @@ export function PortfolioPage() {
                     </DialogContent>
                   </DialogRoot>
 
-                  {/* Auto-compose */}
                   {!isTrading && (
                     <Button
                       size="sm"
@@ -902,7 +261,6 @@ export function PortfolioPage() {
                     </Button>
                   )}
 
-                  {/* Clear dialog */}
                   {!isTrading && positions.length > 0 && (
                     <DialogRoot open={clearOpen} onOpenChange={setClearOpen}>
                       <DialogTrigger asChild>
@@ -935,7 +293,6 @@ export function PortfolioPage() {
                     </DialogRoot>
                   )}
 
-                  {/* Trading mode */}
                   <TradingModeWizard
                     key={`${active.id}-${active.mode}`}
                     portfolio={active}
@@ -954,7 +311,6 @@ export function PortfolioPage() {
                     }}
                   />
 
-                  {/* Delete dialog */}
                   <DialogRoot open={deleteOpen} onOpenChange={setDeleteOpen}>
                     <DialogTrigger asChild>
                       <Button
@@ -992,17 +348,13 @@ export function PortfolioPage() {
             </div>
           </div>
 
-          {/* ── Pending operations (trading mode) ── */}
-          {isTrading && active && (
+          {isTrading && (
             <TradingActionQueue
               portfolio={active}
               pendingConfirmId={searchParams.get("pending_confirm")}
             />
           )}
 
-          {/* ─────────────────────────────────────────────────────────────────
-              FORECAST — ключевые метрики
-          ───────────────────────────────────────────────────────────────── */}
           {planLoading && (
             <div className="grid gap-3 sm:grid-cols-3">
               <Skeleton className="h-24" />
@@ -1020,110 +372,16 @@ export function PortfolioPage() {
             />
           )}
 
-          {/* ─────────────────────────────────────────────────────────────────
-              TABS: Позиции / Реинвестиции / Cashflow
-          ───────────────────────────────────────────────────────────────── */}
-          <TabsRoot defaultValue="positions">
-            <TabsList className="w-full sm:w-auto">
-              <TabsTrigger value="positions">
-                Позиции
-                {openPositionsCount(positions) > 0 && (
-                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-mono">
-                    {openPositionsCount(positions)}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="reinvest">
-                Реинвестиции
-                {slots.length > 0 && (
-                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-mono">
-                    {slots.length}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="cashflow" disabled={!plan}>
-                Cashflow
-                {plan && (
-                  <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-mono">
-                    {plan.cashflow.length}
-                  </span>
-                )}
-              </TabsTrigger>
-              {isTrading && active.account_id && (
-                <TabsTrigger value="operations">
-                  История операций
-                  {accountOperationsData && (
-                    <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-mono">
-                      {accountOperationsData.operations.length}
-                    </span>
-                  )}
-                </TabsTrigger>
-              )}
-            </TabsList>
+          <PortfolioTabs
+            active={active}
+            plan={plan}
+            positions={positions}
+            slots={slots}
+            bondsList={bondsList}
+            isTrading={isTrading}
+            refetchPlan={refetchPlan}
+          />
 
-            <TabsContent value="positions" className="mt-4">
-              <PositionsTab
-                positions={positions}
-                portfolioId={active.id}
-                isTrading={isTrading}
-                bonds={bondsList}
-              />
-            </TabsContent>
-
-            <TabsContent value="reinvest" className="mt-4">
-              {plan ? (
-                <ReinvestmentSlots
-                  portfolioId={active.id}
-                  slots={slots}
-                  positions={positions}
-                  planNotes={plan.notes}
-                />
-              ) : (
-                <div className="flex items-center justify-center py-10">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => refetchPlan()}
-                    className="gap-2"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Рассчитать прогноз
-                  </Button>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent value="cashflow" className="mt-4">
-              {plan && plan.cashflow.length > 0 ? (
-                <CashflowTable
-                  cashflow={plan.cashflow}
-                  initialCash={
-                    active.mode === "trading"
-                      ? active.cash_balance_rub
-                      : active.initial_amount_rub
-                  }
-                />
-              ) : (
-                <p className="py-8 text-center text-sm text-muted-foreground">
-                  Нет данных. Добавьте позиции и пересчитайте прогноз.
-                </p>
-              )}
-            </TabsContent>
-
-            {isTrading && active.account_id && (
-              <TabsContent value="operations" className="mt-4">
-                <AccountOperationsTable
-                  operations={accountOperationsData?.operations ?? []}
-                  isLoading={accountOperationsLoading}
-                  isError={accountOperationsError}
-                  onRefresh={() => refetchAccountOperations()}
-                  isRefreshing={accountOperationsFetching}
-                />
-              </TabsContent>
-            )}
-          </TabsRoot>
-
-          {/* Refresh plan */}
           {plan && (
             <div className="flex justify-end">
               <Button
@@ -1138,9 +396,6 @@ export function PortfolioPage() {
             </div>
           )}
 
-          {/* ─────────────────────────────────────────────────────────────────
-              NOTES — в самом низу, свёрнуто по умолчанию
-          ───────────────────────────────────────────────────────────────── */}
           {plan && plan.notes.length > 0 && (
             <div className="rounded-xl border border-border bg-muted/20">
               <button

@@ -35,7 +35,6 @@ TODO для пользователя:
 
 from __future__ import annotations
 
-import hashlib
 import logging
 from collections.abc import Sequence
 from dataclasses import replace
@@ -43,13 +42,12 @@ from datetime import date
 
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import (
-    PendingOperation,
     Portfolio,
     PortfolioPosition,
     PutOfferDecision,
     ReinvestmentSlot,
-    TradeRecord,
 )
+from bond_monitor.domain.trading.models import PendingOperation, TradeRecord
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, order_amount_rub
 from bond_monitor.domain.shared.formatting import format_date
 from bond_monitor.domain.trading.policies import (
@@ -57,12 +55,12 @@ from bond_monitor.domain.trading.policies import (
     format_buy_limit_buffer_label,
     suggested_buy_limit_price_pct,
 )
-from bond_monitor.infrastructure.tinvest.trading_client import AccountSnapshot
+from bond_monitor.domain.portfolio.put_offer import put_offer_submit_due
+from bond_monitor.domain.trading.ids import stable_id
+from bond_monitor.domain.trading.ports import BrokerSnapshot
 
 logger = logging.getLogger(__name__)
 
-
-PUT_OFFER_PENDING_DAYS: int = 30
 PUT_OFFER_SUBMIT_URGENT_DAYS: int = 2
 REINVEST_OVERDUE_DAYS: int = 3
 
@@ -79,12 +77,6 @@ _URGENCY_SORT_ORDER: dict[str, int] = {
     "soon": 1,
     "normal": 2,
 }
-
-
-def _stable_id(portfolio_id: str, kind: str, key: str) -> str:
-    """Детерминированный id для авто-генерируемых pending operations."""
-    digest = hashlib.sha256(f"{portfolio_id}|{kind}|{key}".encode()).hexdigest()
-    return digest[:32]
 
 
 def _has_fulfilled_trade_record(
@@ -155,7 +147,7 @@ def _order_direction(op: PendingOperation) -> str:
 def _suggested_buy_price_pct(
     position: PortfolioPosition,
     *,
-    snapshot: AccountSnapshot,
+    snapshot: BrokerSnapshot,
     last_price_pct: PriceUnitPct | None,
     buffer: float,
 ) -> PriceUnitPct:
@@ -210,7 +202,7 @@ def _resolve_aci_rub_per_bond(
     *,
     bond: BondRecord | None,
     position: PortfolioPosition | None,
-    snapshot: AccountSnapshot,
+    snapshot: BrokerSnapshot,
     figi: str | None,
 ) -> float:
     """НКД на одну облигацию: MOEX → брокерский snapshot → позиция портфеля."""
@@ -230,7 +222,7 @@ def _enrich_operation(
     portfolio: Portfolio,
     today: date,
     universe_by_isin: dict[str, BondRecord],
-    snapshot: AccountSnapshot,
+    snapshot: BrokerSnapshot,
 ) -> None:
     """Заполнить status, urgency, block_reason и пр. для UI."""
     bond = universe_by_isin.get(op.isin)
@@ -331,7 +323,7 @@ def _enrich_and_sort(
     portfolio: Portfolio,
     today: date,
     universe_by_isin: dict[str, BondRecord],
-    snapshot: AccountSnapshot,
+    snapshot: BrokerSnapshot,
 ) -> list[PendingOperation]:
     for op in ops:
         _enrich_operation(op, portfolio, today, universe_by_isin, snapshot)
@@ -380,7 +372,7 @@ def _is_api_tradable_bond(
 
 def _gen_initial_buys(
     portfolio: Portfolio,
-    snapshot: AccountSnapshot,
+    snapshot: BrokerSnapshot,
     last_prices: dict[str, PriceUnitPct] | None,
     *,
     universe_by_isin: dict[str, BondRecord],
@@ -417,7 +409,7 @@ def _gen_initial_buys(
         )
         result.append(
             PendingOperation(
-                id=_stable_id(portfolio.id, "initial_buy", position.isin),
+                id=stable_id(portfolio.id, "initial_buy", position.isin),
                 kind="initial_buy",
                 isin=position.isin,
                 name=position.name,
@@ -443,7 +435,7 @@ def _gen_initial_buys(
 
 def _gen_reinvest_buys(
     portfolio: Portfolio,
-    snapshot: AccountSnapshot,
+    snapshot: BrokerSnapshot,
     last_prices: dict[str, PriceUnitPct] | None,
     today: date,
     *,
@@ -498,7 +490,7 @@ def _gen_reinvest_buys(
         name = bond.name if bond else f"Реинвест слота {format_date(slot.trigger_date)}"
         result.append(
             PendingOperation(
-                id=_stable_id(
+                id=stable_id(
                     portfolio.id, "reinvest_buy", target_isin + slot.trigger_date.isoformat()
                 ),
                 kind="reinvest_buy",
@@ -513,7 +505,7 @@ def _gen_reinvest_buys(
                     f"{format_date(slot.trigger_date)}: ожидается "
                     f"{slot.expected_cash_rub:,.0f} ₽"
                 ),
-                slot_id=_stable_id(
+                slot_id=stable_id(
                     portfolio.id, "reinvest_slot", target_isin + slot.trigger_date.isoformat()
                 ),
             )
@@ -546,20 +538,11 @@ def _gen_put_offer_submits(
     for position in portfolio.positions:
         if position.put_offer_decision != PutOfferDecision.PENDING:
             continue
-        if position.offer_date is None:
-            continue
-        if position.offer_date <= today:
-            continue
-        if position.offer_submission_end is not None and position.offer_submission_end < today:
-            continue
-        days_until = (position.offer_date - today).days
-        if days_until > PUT_OFFER_PENDING_DAYS:
-            continue
-        if position.offer_submission_start is not None and position.offer_submission_start > today:
+        if not put_offer_submit_due(position, today):
             continue
         result.append(
             PendingOperation(
-                id=_stable_id(portfolio.id, "put_offer_submit", position.isin),
+                id=stable_id(portfolio.id, "put_offer_submit", position.isin),
                 kind="put_offer_submit",
                 isin=position.isin,
                 name=position.name,
@@ -609,7 +592,7 @@ def _filter_persisted_pending(
 
 def compute_pending_operations(
     portfolio: Portfolio,
-    snapshot: AccountSnapshot,
+    snapshot: BrokerSnapshot,
     today: date,
     *,
     last_prices: dict[str, PriceUnitPct] | None = None,
@@ -723,8 +706,10 @@ def render_put_offer_chat_template(position: PortfolioPosition) -> str:
     )
 
 
+from bond_monitor.domain.portfolio.put_offer import PUT_OFFER_REMINDER_DAYS
+
 __all__ = [
-    "PUT_OFFER_PENDING_DAYS",
+    "PUT_OFFER_REMINDER_DAYS",
     "PUT_OFFER_SUBMIT_URGENT_DAYS",
     "REINVEST_OVERDUE_DAYS",
     "compute_pending_operations",

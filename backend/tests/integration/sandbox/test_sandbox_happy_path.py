@@ -41,12 +41,14 @@ import pytest
 
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, Rub
 from bond_monitor.domain.portfolio.models import (
-    AccountKind,
     Portfolio,
     PortfolioMode,
     PortfolioPosition,
     PositionSourceType,
     RiskProfile,
+)
+from bond_monitor.domain.trading.models import (
+    AccountKind,
 )
 from bond_monitor.domain.trading.reconciler import reconcile_positions
 from bond_monitor.infrastructure.tinvest.trading_client import (
@@ -61,6 +63,8 @@ from bond_monitor.infrastructure.tinvest.trading_client import (
     sandbox_pay_in,
 )
 
+from helpers import find_liquid_ofz
+
 # Маркер для запуска ТОЛЬКО e2e: `pytest -m sandbox`.
 pytestmark = pytest.mark.sandbox
 
@@ -69,69 +73,15 @@ _SANDBOX_TOKEN: str = os.getenv("T_TRADING_TOKEN_SANDBOX", "").strip()
 _SKIP_REASON = "T_TRADING_TOKEN_SANDBOX не задан — e2e в sandbox пропускается"
 
 
-def _find_liquid_ofz_figi(token: str) -> tuple[str, PriceUnitPct] | None:
-    """Найти первую попавшуюся ликвидную ОФЗ + её последнюю цену в %.
-
-    Возвращает ``(figi, last_price_pct)`` или ``None``, если не нашли —
-    тогда тест скипается.
-
-    Идея: ОФЗ всегда есть, торги идут, цена обычно ~85–105%. Берём
-    первую, у которой `api_trade_available_flag=True` и есть `last_price`.
-    """
-    from t_tech.invest import Client, InstrumentStatus
-    from t_tech.invest.sandbox.client import SandboxClient
-
-    candidates: list[str] = []
-    with SandboxClient(token) as sandbox_client:
-        bonds_resp = sandbox_client.instruments.bonds(
-            instrument_status=InstrumentStatus.INSTRUMENT_STATUS_BASE,
-        )
-        for bond in bonds_resp.instruments:
-            # ОФЗ в Tinkoff API: ISIN с префиксом RU000 и «ОФЗ» в имени.
-            if "ОФЗ" not in (bond.name or ""):
-                continue
-            if not bond.api_trade_available_flag or not bond.buy_available_flag:
-                continue
-            candidates.append(bond.figi)
-            if len(candidates) >= 20:
-                break
-
-        for figi in candidates:
-            prices_resp = sandbox_client.market_data.get_last_prices(figi=[figi])
-            for entry in prices_resp.last_prices:
-                p = entry.price
-                units = int(getattr(p, "units", 0))
-                nano = int(getattr(p, "nano", 0))
-                if units == 0 and nano == 0:
-                    continue
-                price_pct = float(units) + nano / 1_000_000_000.0
-                return figi, PriceUnitPct(price_pct)
-
-    # Fallback на production Client — sandbox иногда возвращает пустые
-    # last_prices для редких инструментов; в production они есть.
-    with Client(token) as client:
-        for figi in candidates:
-            prices_resp = client.market_data.get_last_prices(figi=[figi])
-            for entry in prices_resp.last_prices:
-                p = entry.price
-                units = int(getattr(p, "units", 0))
-                nano = int(getattr(p, "nano", 0))
-                if units == 0 and nano == 0:
-                    continue
-                price_pct = float(units) + nano / 1_000_000_000.0
-                return figi, PriceUnitPct(price_pct)
-    return None
-
-
 @pytest.mark.skipif(not _SANDBOX_TOKEN, reason=_SKIP_REASON)
 def test_sandbox_happy_path() -> None:
     """Полный цикл sandbox: open → pay_in → BUY → state → snapshot → cancel → close."""
     token = _SANDBOX_TOKEN
 
-    target = _find_liquid_ofz_figi(token)
-    if target is None:
+    ofz = find_liquid_ofz(token)
+    if ofz is None:
         pytest.skip("Не нашли ликвидную ОФЗ для теста (last_prices пусто)")
-    figi, last_price_pct = target
+    figi, last_price_pct = ofz.figi, ofz.last_price_pct
 
     account_id = open_sandbox_account(token, name="bond-monitor-e2e")
     assert account_id, "open_sandbox_account вернул пустой account_id"

@@ -81,19 +81,7 @@ def portfolio_universe_filter(
     return filtered
 
 
-def put_offer_buy_blocked(bond: BondRecord, as_of_date: date) -> str | None:
-    """Return reason if put-offer window blocks purchase; else None."""
-    if bond.offer_date is None or bond.offer_date <= as_of_date:
-        return None
-    if bond.offer_submission_end is None:
-        return None
-    if bond.offer_submission_end >= as_of_date:
-        return None
-    return (
-        f"окно подачи по пут-оферте закрыто "
-        f"{format_date(bond.offer_submission_end)}, оферта "
-        f"{format_date(bond.offer_date)} — предъявить уже нельзя"
-    )
+from bond_monitor.domain.portfolio.put_offer import put_offer_buy_blocked
 
 
 def _fallback_steps(profile: RiskProfile) -> tuple[RiskProfile | None, ...]:
@@ -172,8 +160,7 @@ def eligible_bonds(
         pool = [
             b
             for b in universe
-            if not policy.exclude_default
-            or (not b.has_default and not b.has_technical_default)
+            if not policy.exclude_default or (not b.has_default and not b.has_technical_default)
         ]
 
     if ctx.api_trade_only:
@@ -256,9 +243,7 @@ def explain_selection_failure(
     budget = ctx.budget_rub
 
     for step in _fallback_steps(ctx.profile):
-        for bond in eligible_bonds(
-            universe, ctx, policy, profile_step=step, check_budget=False
-        ):
+        for bond in eligible_bonds(universe, ctx, policy, profile_step=step, check_budget=False):
             if budget is not None:
                 lot_cost = bond.price_per_lot_rub or 0.0
                 if lot_cost > budget:

@@ -74,6 +74,82 @@ class CreatePortfolioRequest(BaseModel):
     api_trade_only: bool = True
 
 
+class PortfolioPositionData(BaseModel):
+    isin: str
+    secid: str
+    name: str
+    lots: int
+    lot_size: int
+    purchase_clean_price_pct: float
+    purchase_dirty_price_rub: float
+    purchase_aci_rub: float
+    purchase_date: str
+    purchase_amount_rub: float
+    coupon_rate: float | None = None
+    face_value: float
+    maturity_date: str | None = None
+    offer_date: str | None = None
+    offer_submission_start: str | None = None
+    offer_submission_end: str | None = None
+    offer_price_pct: float | None = None
+    coupon_period_days: int | None = None
+    next_coupon_date: str | None = None
+    source: str
+    put_offer_decision: str
+    figi: str | None = None
+    actual_lots: int | None = None
+    closed_at: str | None = None
+    status: str | None = None
+
+
+class ReinvestmentSlotData(BaseModel):
+    trigger_date: str
+    trigger_reason: str
+    expected_cash_rub: float
+    suggested_isin: str | None = None
+    suggested_name: str | None = None
+    confirmed_isin: str | None = None
+    gap_days: int = 2
+    source_position_isin: str | None = None
+
+
+class FrozenForecastData(BaseModel):
+    expected_xirr_pct: float | None
+    expected_total_net_profit_rub: float
+    expected_final_value_rub: float
+    frozen_initial_amount_rub: float
+    horizon_date: str
+    created_at: str
+
+
+class PortfolioDataResponse(BaseModel):
+    id: str
+    name: str
+    created_at: str
+    updated_at: str
+    initial_amount_rub: float
+    horizon_date: str
+    risk_profile: str
+    api_trade_only: bool = True
+    cash_balance_rub: float
+    mode: str
+    account_id: str | None = None
+    account_kind: str | None = None
+    account_label: str | None = None
+    trading_started_at: str | None = None
+    last_synced_at: str | None = None
+    last_top_up_processed_at: str | None = None
+    acknowledged_top_ups_rub: float = 0.0
+    top_up_batch_meta: dict[str, Any] = Field(default_factory=dict)
+    frozen_forecast: FrozenForecastData | None = None
+    positions: list[PortfolioPositionData] = Field(default_factory=list)
+    slots: list[ReinvestmentSlotData] = Field(default_factory=list)
+    pending_operations: list[PendingOperationResponse] = Field(default_factory=list)
+    trade_records: list[dict[str, Any]] = Field(default_factory=list)
+    instrument_trade_cache: dict[str, Any] = Field(default_factory=dict)
+    closed_positions_count: int = 0
+
+
 class PortfolioResponse(BaseModel):
     id: str
     name: str
@@ -86,7 +162,8 @@ class PortfolioResponse(BaseModel):
     account_kind: str | None = None
     positions_count: int
     closed_positions_count: int = 0
-    data: dict[str, Any] = Field(default_factory=dict)
+    invested_capital_rub: float
+    data: PortfolioDataResponse
 
 
 class PlanResponse(BaseModel):

@@ -32,13 +32,15 @@ from bond_monitor.domain.bonds.models import BondRecord, RiskLevel
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, Rub
 from bond_monitor.domain.trading.pending_operations import compute_pending_operations
 from bond_monitor.domain.portfolio.models import (
-    AccountKind,
-    FrozenForecast,
     PortfolioMode,
     PortfolioPosition,
     PositionSourceType,
     PutOfferDecision,
     RiskProfile,
+)
+from bond_monitor.domain.trading.models import (
+    AccountKind,
+    FrozenForecast,
     TradeRecord,
 )
 from bond_monitor.domain.portfolio.planner import build_plan
@@ -56,56 +58,12 @@ from bond_monitor.infrastructure.tinvest.trading_client import (
     sandbox_pay_in,
 )
 
+from helpers import find_liquid_ofz
+
 pytestmark = pytest.mark.sandbox
 
 
 _SANDBOX_TOKEN: str = os.getenv("T_TRADING_TOKEN_SANDBOX", "").strip()
-
-
-def _find_ofz_for_buy(
-    token: str,
-) -> tuple[str, str, PriceUnitPct, int, float] | None:
-    """Вернуть (figi, isin, last_price_pct, lot_size, face_value) ликвидной ОФЗ.
-
-    Используется в smoke-тесте чтобы построить mini-universe из одной
-    бумаги для ``auto_compose``.
-    """
-    from t_tech.invest import InstrumentStatus
-    from t_tech.invest.sandbox.client import SandboxClient
-
-    with SandboxClient(token) as client:
-        bonds_resp = client.instruments.bonds(
-            instrument_status=InstrumentStatus.INSTRUMENT_STATUS_BASE,
-        )
-        # ОФЗ в Tinkoff API имеют ISIN с префиксом RU000 и «ОФЗ» в имени.
-        candidates = [
-            b
-            for b in bonds_resp.instruments
-            if "ОФЗ" in (b.name or "") and b.api_trade_available_flag and b.buy_available_flag
-        ][:30]
-
-        for bond in candidates:
-            prices_resp = client.market_data.get_last_prices(figi=[bond.figi])
-            for entry in prices_resp.last_prices:
-                p = entry.price
-                units = int(getattr(p, "units", 0))
-                nano = int(getattr(p, "nano", 0))
-                if units == 0 and nano == 0:
-                    continue
-                price_pct = float(units) + nano / 1_000_000_000.0
-                # face_value в Quotation
-                fv = bond.nominal
-                fv_value = float(getattr(fv, "units", 0)) + (
-                    int(getattr(fv, "nano", 0)) / 1_000_000_000.0
-                )
-                return (
-                    bond.figi,
-                    bond.isin,
-                    PriceUnitPct(price_pct),
-                    int(bond.lot or 1),
-                    fv_value or 1000.0,
-                )
-    return None
 
 
 def _mini_universe(
@@ -144,10 +102,16 @@ def test_full_ux_flow_in_sandbox() -> None:
     """Программная эмуляция «создание → TRADING → buy → sync → XIRR»."""
     token = _SANDBOX_TOKEN
 
-    target = _find_ofz_for_buy(token)
-    if target is None:
+    ofz = find_liquid_ofz(token)
+    if ofz is None:
         pytest.skip("Не нашли ОФЗ с last_price для теста")
-    figi, isin, last_price_pct, lot_size, face_value = target
+    figi, isin, last_price_pct, lot_size, face_value = (
+        ofz.figi,
+        ofz.isin,
+        ofz.last_price_pct,
+        ofz.lot_size,
+        ofz.face_value,
+    )
 
     # 1. Создаём портфель в локальном JSON
     portfolio = create_portfolio(

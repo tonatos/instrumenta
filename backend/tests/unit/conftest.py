@@ -1,16 +1,29 @@
-"""
-Общие фикстуры для всех тестов bond-monitor.
-
-`sys.path` корректируется чтобы `tests/` мог импортировать `core/`, `data/`
-напрямую — без установки пакета (нет `setup.py` / `pyproject.toml` для
-этого проекта).
-"""
+"""Unit tests package — shared fixtures live in tests/conftest.py."""
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
+from collections.abc import Generator
+from typing import Any
+from unittest.mock import patch
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _stub_tinvest_enrichment_in_unit_tests() -> Generator[None, None, None]:
+    """Stub T-Invest enrichment: mark bonds API-tradable without network I/O."""
+
+    def _enrich(bonds: list[Any], _token: str) -> list[Any]:
+        for bond in bonds:
+            if bond.api_trade_available_flag is None:
+                bond.api_trade_available_flag = True
+            if not bond.figi and bond.isin:
+                bond.figi = f"FIGI_{bond.isin[-8:]}"
+            bond.tinvest_enriched = True
+        return bonds
+
+    with patch(
+        "bond_monitor.application.bonds.bond_service.enrich_bonds_from_tinvest",
+        side_effect=_enrich,
+    ):
+        yield

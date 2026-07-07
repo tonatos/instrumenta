@@ -28,17 +28,10 @@ from datetime import UTC, date, datetime
 
 from bond_monitor.domain.portfolio.models import Portfolio, PortfolioPosition
 from bond_monitor.domain.shared.money import Rub
-from bond_monitor.infrastructure.tinvest.trading_client import AccountSnapshot, OperationRecord
+from bond_monitor.domain.shared.position_math import position_cost_basis
+from bond_monitor.domain.trading.ports import BrokerOperation, BrokerSnapshot
 
 logger = logging.getLogger(__name__)
-
-
-def _position_cost_basis(position: PortfolioPosition) -> float:
-    if position.actual_lots is not None and position.actual_lots > 0:
-        return position.purchase_dirty_price_rub * position.actual_lots * position.lot_size
-    if position.purchase_amount_rub > 0:
-        return position.purchase_amount_rub
-    return position.purchase_dirty_price_rub * position.lots * position.lot_size
 
 
 # Минимальный буфер RUB на счёте, который не распределяется через top-up:
@@ -102,7 +95,7 @@ class TopUpDetection:
 
     pending_top_up_rub: Rub  # сумма всех INPUT с last_top_up_processed_at
     available_for_distribution_rub: Rub  # min(pending_top_up, money_rub - buffer)
-    input_operations: list[OperationRecord]
+    input_operations: list[BrokerOperation]
     from_date: date  # точка отсчёта (last_top_up_processed_at или trading_started_at)
 
     @property
@@ -116,7 +109,7 @@ class TopUpDetection:
 
 
 def validate_account_for_attach(
-    snapshot: AccountSnapshot,
+    snapshot: BrokerSnapshot,
     portfolio: Portfolio,
 ) -> AttachValidation:
     """Strict-режим: счёт должен содержать ТОЛЬКО RUB-кэш.
@@ -202,8 +195,8 @@ def validate_account_for_attach(
 
 def reconcile_positions(
     portfolio: Portfolio,
-    snapshot: AccountSnapshot,
-    operations: list[OperationRecord] | None = None,
+    snapshot: BrokerSnapshot,
+    operations: list[BrokerOperation] | None = None,
 ) -> ReconciliationResult:
     """Сверить локальные позиции портфеля с фактическим состоянием счёта.
 
@@ -325,8 +318,8 @@ def reconcile_positions(
 
 def detect_top_up(
     portfolio: Portfolio,
-    operations: list[OperationRecord],
-    snapshot: AccountSnapshot,
+    operations: list[BrokerOperation],
+    snapshot: BrokerSnapshot,
 ) -> TopUpDetection:
     """Обнаружить свежие пополнения счёта пользователем.
 
@@ -367,7 +360,7 @@ def detect_top_up(
     if reference_dt.tzinfo is None:
         reference_dt = reference_dt.replace(tzinfo=UTC)
 
-    input_ops: list[OperationRecord] = []
+    input_ops: list[BrokerOperation] = []
     total: float = 0.0
     for op in operations:
         if op.type != "OPERATION_TYPE_INPUT":
@@ -400,7 +393,7 @@ def detect_top_up(
 
 def reconcile_acknowledged_top_ups(
     portfolio: Portfolio,
-    snapshot: AccountSnapshot,
+    snapshot: BrokerSnapshot,
 ) -> bool:
     """Синхронизировать ``acknowledged_top_ups_rub`` с фактическим капиталом на счёте.
 
@@ -411,7 +404,7 @@ def reconcile_acknowledged_top_ups(
     if not portfolio.is_trading:
         return False
 
-    deployed = sum(_position_cost_basis(position) for position in portfolio.positions)
+    deployed = sum(position_cost_basis(position) for position in portfolio.positions)
     on_account = deployed + float(snapshot.money_rub)
     implied_top_ups = max(0.0, on_account - portfolio.initial_amount_rub)
     if abs(implied_top_ups - portfolio.acknowledged_top_ups_rub) > 0.01:

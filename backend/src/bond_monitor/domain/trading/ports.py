@@ -1,0 +1,59 @@
+"""Broker account ports — domain types without infrastructure dependencies."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+from bond_monitor.domain.trading.models import AccountKind
+from bond_monitor.domain.shared.money import PriceUnitPct, Rub
+
+
+@dataclass(frozen=True)
+class BrokerBondPosition:
+    figi: str
+    instrument_uid: str
+    ticker: str
+    quantity: int
+    lots: int
+    blocked: int
+    current_price_pct: PriceUnitPct | None
+    current_nkd_rub: Rub | None
+    average_price_pct: PriceUnitPct | None
+
+
+@dataclass(frozen=True)
+class BrokerOtherInstrument:
+    instrument_type: str
+    figi: str
+    ticker: str
+    quantity: int
+
+
+@dataclass(frozen=True)
+class BrokerSnapshot:
+    account_id: str
+    account_kind: AccountKind
+    money_rub: Rub
+    bond_positions: dict[str, BrokerBondPosition]
+    other_instruments: list[BrokerOtherInstrument]
+    fetched_at: str
+
+    @property
+    def has_foreign_instruments(self) -> bool:
+        return bool(self.other_instruments)
+
+
+@dataclass(frozen=True)
+class BrokerOperation:
+    id: str
+    type: str
+    state: str
+    date: datetime
+    figi: str
+    instrument_uid: str
+    instrument_type: str
+    payment_rub: Rub | None
+    quantity: int
+    price_pct: PriceUnitPct | None
+    commission_rub: Rub | None

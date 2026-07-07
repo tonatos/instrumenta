@@ -148,10 +148,7 @@ class PortfolioService:
         lots: int,
         today: date,
     ) -> Portfolio:
-        from bond_monitor.domain.portfolio.models import (
-            PortfolioPosition,
-            PositionSourceType,
-        )
+        from bond_monitor.domain.portfolio.planner import position_from_bond
 
         portfolio = await self._repo.get_by_id(portfolio_id)
         if portfolio is None:
@@ -165,33 +162,8 @@ class PortfolioService:
                 f"Отключите фильтр «только API-торгуемые» в настройках портфеля "
                 f"или выберите другую бумагу."
             )
-        dirty = bond.dirty_price_rub
-        if dirty is None:
-            dirty = bond.face_value
-        purchase_amount = dirty * bond.lot_size * lots
-        position = PortfolioPosition(
-            isin=bond.isin,
-            secid=bond.secid,
-            name=bond.name,
-            lots=lots,
-            lot_size=bond.lot_size,
-            purchase_clean_price_pct=bond.last_price or 100.0,
-            purchase_dirty_price_rub=dirty,
-            purchase_aci_rub=bond.accrued_interest or 0.0,
-            purchase_date=today,
-            purchase_amount_rub=purchase_amount,
-            coupon_rate=bond.coupon_rate,
-            face_value=bond.face_value,
-            maturity_date=bond.maturity_date,
-            offer_date=bond.offer_date,
-            offer_submission_start=bond.offer_submission_start,
-            offer_submission_end=bond.offer_submission_end,
-            offer_price_pct=bond.offer_price_pct,
-            coupon_period_days=bond.coupon_period_days,
-            next_coupon_date=bond.next_coupon_date,
-            source=PositionSourceType.INITIAL,
-            figi=bond.figi or None,
-        )
+        position = position_from_bond(bond, lots=lots, purchase_date=today)
+        purchase_amount = position.purchase_amount_rub
         portfolio.positions.append(position)
         portfolio.cash_balance_rub = max(0.0, portfolio.cash_balance_rub - purchase_amount)
         portfolio.touch()
@@ -237,9 +209,9 @@ class PortfolioService:
         today: date,
     ) -> Portfolio:
         from bond_monitor.domain.portfolio.models import (
-            ReinvestmentSlot,
-            ReinvestmentTriggerReason,
-        )
+    ReinvestmentSlot,
+    ReinvestmentTriggerReason,
+)
 
         portfolio = await self._repo.get_by_id(portfolio_id)
         if portfolio is None:

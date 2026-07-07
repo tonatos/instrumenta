@@ -7,7 +7,6 @@ from datetime import date
 
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import (
-    PendingOperation,
     Portfolio,
     PortfolioPosition,
     PositionSourceType,
@@ -15,9 +14,10 @@ from bond_monitor.domain.portfolio.models import (
     ReinvestmentSlot,
     ReinvestmentTriggerReason,
 )
-from bond_monitor.domain.portfolio.planner import position_from_bond
-from bond_monitor.domain.trading.pending_operations import _stable_id
-from bond_monitor.infrastructure.tinvest.trading_client import AccountSnapshot
+from bond_monitor.domain.trading.models import PendingOperation
+from bond_monitor.domain.portfolio.position_factory import position_from_bond
+from bond_monitor.domain.trading.ids import stable_id
+from bond_monitor.domain.trading.ports import BrokerSnapshot
 
 _FILL_STATUS = "EXECUTION_REPORT_STATUS_FILL"
 
@@ -53,7 +53,7 @@ def _reinvest_source_from_slot(slot: ReinvestmentSlot) -> PositionSourceType:
 
 
 def _reinvest_op_id(portfolio: Portfolio, slot: ReinvestmentSlot, target_isin: str) -> str:
-    return _stable_id(
+    return stable_id(
         portfolio.id,
         "reinvest_buy",
         target_isin + slot.trigger_date.isoformat(),
@@ -87,7 +87,7 @@ def find_reinvest_slot_for_op(
         target_isin = slot.confirmed_isin or slot.suggested_isin
         if not target_isin:
             continue
-        slot_id = _stable_id(
+        slot_id = stable_id(
             portfolio.id,
             "reinvest_slot",
             target_isin + slot.trigger_date.isoformat(),
@@ -133,7 +133,7 @@ def ensure_reinvest_position(
 
 def close_matured_positions(
     portfolio: Portfolio,
-    snapshot: AccountSnapshot,
+    snapshot: BrokerSnapshot,
     today: date,
 ) -> int:
     """Архивировать позиции, погашённые/выкупленные и отсутствующие на счёте."""

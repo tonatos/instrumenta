@@ -43,7 +43,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from bond_monitor.domain.portfolio.models import AccountKind, OrderDirection
+from bond_monitor.domain.trading.models import AccountKind, OrderDirection
 from bond_monitor.domain.shared.money import (
     MAX_ORDER_AMOUNT_RUB,
     Lots,

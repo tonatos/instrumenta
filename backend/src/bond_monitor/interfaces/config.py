@@ -45,8 +45,11 @@ class Settings(BaseSettings):
     max_days: int = 120
     min_volume_rub: float = 500_000.0
 
-    # MOEX cache TTL (seconds)
-    moex_cache_ttl_seconds: int = 900
+    @property
+    def tax_rate_fraction(self) -> float:
+        """Tax rate as fraction (settings store percent, e.g. 13 → 0.13)."""
+        return self.tax_rate / 100.0
+
 
 
 @lru_cache

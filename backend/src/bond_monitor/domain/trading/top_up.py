@@ -9,11 +9,12 @@ from typing import Any
 
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import (
-    PendingOperation,
     Portfolio,
     PositionSourceType,
 )
-from bond_monitor.domain.portfolio.planner import TopUpAllocation, position_from_bond
+from bond_monitor.domain.trading.models import PendingOperation
+from bond_monitor.domain.portfolio.planner import TopUpAllocation
+from bond_monitor.domain.portfolio.position_factory import position_from_bond
 
 
 @dataclass(frozen=True)
@@ -159,7 +160,7 @@ def cancel_top_up_batch(portfolio: Portfolio, batch_id: str) -> None:
     )
     # Помечаем текущие INPUT как обработанные, чтобы auto-apply на следующем
     # sync не создал ту же партию заново.
-    portfolio.last_top_up_processed_at = datetime.now(UTC).isoformat(timespec="seconds")
+    portfolio.last_top_up_processed_at = datetime.now(UTC).isoformat()
     del portfolio.top_up_batch_meta[batch_id]
 
 

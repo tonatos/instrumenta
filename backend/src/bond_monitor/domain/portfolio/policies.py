@@ -62,33 +62,3 @@ class BondSelectionContext:
     purchase_date: date
     budget_rub: float | None
     api_trade_only: bool
-
-
-@dataclass(frozen=True)
-class ScoringPolicy:
-    """Parameters for bond scoring."""
-
-    key_rate: float
-    tax_rate: float
-    ytm_weight: float = 0.40
-    risk_weight: float = 0.40
-    liquidity_weight: float = 0.20
-
-    @property
-    def weights(self) -> tuple[float, float, float]:
-        return (self.ytm_weight, self.risk_weight, self.liquidity_weight)
-
-
-@dataclass(frozen=True)
-class ProfileScoringWeights:
-    """Scoring weights per risk profile."""
-
-    ytm: float
-    risk: float
-    liquidity: float
-
-
-PROFILE_SCORING_WEIGHTS: dict[str, ProfileScoringWeights] = {
-    "normal": ProfileScoringWeights(ytm=0.30, risk=0.50, liquidity=0.20),
-    "aggressive": ProfileScoringWeights(ytm=0.65, risk=0.20, liquidity=0.15),
-}

@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn, formatDate, formatRub } from "@/lib/utils";
+import { TRIGGER_LABELS } from "@/features/portfolio/labels";
 
 interface Props {
   portfolioId: string;
@@ -35,12 +36,6 @@ interface Props {
   bonds?: Bond[];
   planNotes?: string[];
 }
-
-const TRIGGER_LABELS: Record<string, string> = {
-  maturity: "Погашение",
-  put_offer: "Пут-оферта",
-  coupon_cash: "Купонный кэш",
-};
 
 function candidateToOption(candidate: ReinvestmentSlotCandidate): ComboboxOption {
   return {

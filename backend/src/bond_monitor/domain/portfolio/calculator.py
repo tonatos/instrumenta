@@ -7,11 +7,11 @@ from datetime import date
 
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import PortfolioPosition
-from bond_monitor.domain.portfolio.planner import (
-    _coupon_dates_in_range,
-    _coupon_payment_per_event,
-    position_from_bond,
+from bond_monitor.domain.portfolio.coupon_schedule import (
+    coupon_dates_in_range,
+    coupon_payment_per_event,
 )
+from bond_monitor.domain.portfolio.position_factory import position_from_bond
 
 
 @dataclass(frozen=True)
@@ -52,10 +52,10 @@ def _redemption_amount_gross(position: PortfolioPosition, end_date: date) -> flo
 
 
 def _coupon_income_gross(position: PortfolioPosition, end_date: date) -> float:
-    payment = _coupon_payment_per_event(position)
+    payment = coupon_payment_per_event(position)
     if payment <= 0:
         return 0.0
-    dates = _coupon_dates_in_range(position, end_date)
+    dates = coupon_dates_in_range(position, end_date)
     return payment * len(dates)
 
 

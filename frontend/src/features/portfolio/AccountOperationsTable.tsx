@@ -3,56 +3,51 @@ import { Loader2, RefreshCw } from "lucide-react";
 import type { AccountOperation } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
+import { OPERATION_TYPE_LABELS } from "@/features/portfolio/labels";
 
-const TYPE_CONFIG: Record<
-  string,
-  { label: string; rowClass: string; badgeClass: string }
-> = {
+const TYPE_ROW_CLASSES: Record<string, { rowClass: string; badgeClass: string }> = {
   buy: {
-    label: "Покупка",
     rowClass: "bg-blue-500/5",
     badgeClass: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
   },
   sell: {
-    label: "Продажа",
     rowClass: "bg-orange-500/5",
     badgeClass: "bg-orange-500/15 text-orange-700 dark:text-orange-400",
   },
   coupon: {
-    label: "Купон",
     rowClass: "bg-green-500/5",
     badgeClass: "bg-green-500/15 text-green-700 dark:text-green-400",
   },
   repayment: {
-    label: "Погашение",
     rowClass: "bg-purple-500/5",
     badgeClass: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
   },
   input: {
-    label: "Пополнение",
     rowClass: "bg-teal-500/5",
     badgeClass: "bg-teal-500/15 text-teal-700 dark:text-teal-400",
   },
   output: {
-    label: "Вывод",
     rowClass: "bg-red-500/5",
     badgeClass: "bg-red-500/15 text-red-700 dark:text-red-400",
   },
   tax: {
-    label: "Налог",
     rowClass: "bg-amber-500/5",
     badgeClass: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
   },
   fee: {
-    label: "Комиссия",
     rowClass: "bg-slate-500/5",
     badgeClass: "bg-slate-500/15 text-slate-700 dark:text-slate-400",
   },
 };
 
 function getTypeConfig(type: string, typeLabel: string) {
-  const key = Object.keys(TYPE_CONFIG).find((k) => type.toLowerCase().includes(k));
-  if (key) return TYPE_CONFIG[key];
+  const key = Object.keys(TYPE_ROW_CLASSES).find((k) => type.toLowerCase().includes(k));
+  if (key) {
+    return {
+      label: OPERATION_TYPE_LABELS[key],
+      ...TYPE_ROW_CLASSES[key],
+    };
+  }
   return {
     label: typeLabel,
     rowClass: "",

@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from bond_monitor.domain.bonds.models import BondRecord
+from bond_monitor.domain.portfolio.invested_capital import invested_capital_rub
 from bond_monitor.domain.portfolio.models import Portfolio
 from bond_monitor.domain.portfolio.planner import PortfolioPlan
 from bond_monitor.domain.portfolio.position_status import open_positions, position_to_api_dict
@@ -17,7 +18,9 @@ from bond_monitor.infrastructure.tinvest.trading_client import OperationRecord
 from bond_monitor.interfaces.schemas.api import (
     AccountOperationResponse,
     BondResponse,
+    PendingOperationResponse,
     PlanResponse,
+    PortfolioDataResponse,
     PortfolioResponse,
 )
 
@@ -67,7 +70,14 @@ def portfolio_to_response(portfolio: Portfolio, *, today: date | None = None) ->
         for p in portfolio.positions
     ]
     open_count = len(open_positions(portfolio.positions))
-    d["closed_positions_count"] = len(portfolio.positions) - open_count
+    closed_count = len(portfolio.positions) - open_count
+    d["closed_positions_count"] = closed_count
+    d["pending_operations"] = [
+        PendingOperationResponse.model_validate(op.to_dict()).model_dump()
+        for op in portfolio.pending_operations
+    ]
+    data = PortfolioDataResponse.model_validate(d)
+    capital = invested_capital_rub(portfolio)
     return PortfolioResponse(
         id=portfolio.id,
         name=portfolio.name,
@@ -79,8 +89,9 @@ def portfolio_to_response(portfolio: Portfolio, *, today: date | None = None) ->
         account_id=portfolio.account_id,
         account_kind=portfolio.account_kind.value if portfolio.account_kind else None,
         positions_count=open_count,
-        closed_positions_count=len(portfolio.positions) - open_count,
-        data=d,
+        closed_positions_count=closed_count,
+        invested_capital_rub=capital,
+        data=data,
     )
 
 

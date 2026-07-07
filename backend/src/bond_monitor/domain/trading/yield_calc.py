@@ -26,12 +26,12 @@ from datetime import UTC, datetime
 
 from bond_monitor.domain.shared.money import Rub
 from bond_monitor.domain.portfolio.models import Portfolio
-from bond_monitor.infrastructure.tinvest.trading_client import AccountSnapshot, OperationRecord
+from bond_monitor.domain.trading.ports import BrokerOperation, BrokerSnapshot
 
 logger = logging.getLogger(__name__)
 
 
-# Имена `OPERATION_TYPE_*` (как строки из `OperationRecord.type`),
+# Имена `OPERATION_TYPE_*` (как строки из `BrokerOperation.type`),
 # которые входят в cashflow портфеля. Подбор не случайный: только то,
 # что напрямую связано с конкретной облигацией (BUY/SELL/COUPON/...).
 # INPUT/OUTPUT в cashflow XIRR не входят — это пополнения/выводы со
@@ -95,10 +95,10 @@ class ActualPerformance:
 
 
 def _filter_portfolio_operations(
-    operations: list[OperationRecord],
+    operations: list[BrokerOperation],
     *,
     figis: set[str],
-) -> list[OperationRecord]:
+) -> list[BrokerOperation]:
     """Отфильтровать операции, относящиеся к бумагам портфеля.
 
     Учитываем все операции с ``figi`` из ``figis`` (BUY/SELL/COUPON/...) +
@@ -109,7 +109,7 @@ def _filter_portfolio_operations(
     в ущерб» XIRR пропорционально, но для портфельной оценки этого
     хватает.
     """
-    result: list[OperationRecord] = []
+    result: list[BrokerOperation] = []
     for op in operations:
         if op.figi and op.figi in figis:
             result.append(op)
@@ -120,7 +120,7 @@ def _filter_portfolio_operations(
 
 
 def _to_xirr_cashflow(
-    operations: list[OperationRecord],
+    operations: list[BrokerOperation],
     *,
     as_of: datetime,
     current_value_rub: Rub,
@@ -145,7 +145,7 @@ def _to_xirr_cashflow(
 
 
 def calculate_portfolio_xirr(
-    operations: list[OperationRecord],
+    operations: list[BrokerOperation],
     *,
     figis: set[str],
     current_value_rub: Rub,
@@ -206,7 +206,7 @@ def calculate_portfolio_xirr(
 
 
 def _sum_payments(
-    operations: list[OperationRecord],
+    operations: list[BrokerOperation],
     *,
     types: frozenset[str],
     figis: set[str],
@@ -225,7 +225,7 @@ def _sum_payments(
 
 def _estimate_current_value(
     portfolio: Portfolio,
-    snapshot: AccountSnapshot,
+    snapshot: BrokerSnapshot,
 ) -> Rub:
     """Сумма ``dirty_price × quantity`` по позициям портфеля на снапшоте."""
     total: float = 0.0
@@ -251,8 +251,8 @@ def _estimate_current_value(
 
 def summarize_actual_performance(
     portfolio: Portfolio,
-    snapshot: AccountSnapshot,
-    operations: list[OperationRecord],
+    snapshot: BrokerSnapshot,
+    operations: list[BrokerOperation],
     *,
     as_of: datetime | None = None,
 ) -> ActualPerformance:

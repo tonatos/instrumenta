@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from bond_monitor.domain.portfolio.models import AccountKind
+from bond_monitor.domain.trading.models import AccountKind
 from bond_monitor.domain.shared.money import PriceUnitPct
 
 # Буфер к рыночной цене для пассивной лимитной покупки (last_price × (1 + buffer)).
