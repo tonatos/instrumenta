@@ -102,61 +102,6 @@ def test_attach_sets_top_up_watermark() -> None:
         assert body["data"]["last_top_up_processed_at"] == body["data"]["trading_started_at"]
 
 
-def test_cancel_top_up_batch_endpoint() -> None:
-    with portfolio_client("Top-up Sync") as (client, pid):
-        attach_trading_portfolio(client, pid)
-        with _sync_patches(200_000.0):
-            sync = client.post(f"/api/v1/portfolios/{pid}/sync").json()
-
-        batch_id = next(
-            op["top_up_batch_id"]
-            for op in sync["pending_operations"]
-            if op["kind"] == "top_up_buy"
-        )
-        portfolio_before = client.get(f"/api/v1/portfolios/{pid}").json()
-        acknowledged_before = portfolio_before["data"].get("acknowledged_top_ups_rub", 0.0)
-
-        with _sync_patches(200_000.0):
-            resp = client.post(f"/api/v1/portfolios/{pid}/top-up-batches/{batch_id}/cancel")
-
-        assert resp.status_code == 201, resp.text
-        body = resp.json()
-        top_up_ops = [op for op in body["pending_operations"] if op["kind"] == "top_up_buy"]
-        assert top_up_ops
-        assert all(op.get("top_up_batch_id") != batch_id for op in top_up_ops)
-        portfolio_after = client.get(f"/api/v1/portfolios/{pid}").json()
-        assert portfolio_after["data"].get("acknowledged_top_ups_rub", 0.0) <= acknowledged_before
-
-
-def test_cancel_top_up_batch_reapplies_on_follow_up_sync() -> None:
-    """После отмены партии повторный sync снова распределяет пополнение."""
-    with portfolio_client(
-        "Top-up re-apply",
-        initial_amount_rub=20_000.0,
-        horizon_date="2027-06-01",
-    ) as (client, pid):
-        attach_trading_portfolio(client, pid)
-        with _sync_patches(200_000.0):
-            sync = client.post(f"/api/v1/portfolios/{pid}/sync").json()
-
-        batch_id = next(
-            op["top_up_batch_id"]
-            for op in sync["pending_operations"]
-            if op["kind"] == "top_up_buy"
-        )
-
-        with _sync_patches(200_000.0):
-            after_cancel = client.post(
-                f"/api/v1/portfolios/{pid}/top-up-batches/{batch_id}/cancel"
-            ).json()
-
-        assert after_cancel["top_up_auto_applied"] is True
-        assert after_cancel["top_up_distributed_rub"] > 0
-        top_up_ops = [op for op in after_cancel["pending_operations"] if op["kind"] == "top_up_buy"]
-        assert top_up_ops
-        assert any(op.get("top_up_batch_id") != batch_id for op in top_up_ops)
-
-
 def test_sync_distributes_orphan_cash_without_fresh_input() -> None:
     """Кэш на счёте без свежего INPUT (watermark уже прошёл) — sync всё равно распределяет."""
     with portfolio_client(

@@ -52,11 +52,6 @@ export function useTradingSync(portfolio: Portfolio) {
     onSuccess: (data) => afterMutation(data),
   });
 
-  const cancelBatchMutation = useMutation({
-    mutationFn: (batchId: string) => api.cancelTopUpBatch(portfolio.id, batchId),
-    onSuccess: (data) => afterMutation(data),
-  });
-
   const putOfferMutation = useMutation({
     mutationFn: ({ isin, decision }: { isin: string; decision: "exercise" | "hold" }) =>
       api.setPutOfferDecision(portfolio.id, isin, decision),
@@ -71,7 +66,6 @@ export function useTradingSync(portfolio: Portfolio) {
   const isPending =
     confirmMutation.isPending ||
     cancelMutation.isPending ||
-    cancelBatchMutation.isPending ||
     putOfferMutation.isPending ||
     dismissMutation.isPending;
 
@@ -79,7 +73,6 @@ export function useTradingSync(portfolio: Portfolio) {
     ...syncQuery,
     confirmMutation,
     cancelMutation,
-    cancelBatchMutation,
     putOfferMutation,
     dismissMutation,
     isPending,

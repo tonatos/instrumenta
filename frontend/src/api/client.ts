@@ -201,11 +201,6 @@ export const api = {
       `/portfolios/${id}/pending-operations/${opId}/cancel-order`,
       { method: "POST" },
     ),
-  cancelTopUpBatch: (id: string, batchId: string) =>
-    request<TradingSyncResponse>(
-      `/portfolios/${id}/top-up-batches/${batchId}/cancel`,
-      { method: "POST" },
-    ),
   setPutOfferDecision: (id: string, isin: string, decision: "exercise" | "hold") =>
     request<TradingSyncResponse>(
       `/portfolios/${id}/positions/${isin}/put-offer-decision`,

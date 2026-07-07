@@ -20,7 +20,6 @@ from bond_monitor.domain.trading.models import (
 from bond_monitor.domain.portfolio.planner import TopUpAllocation
 from bond_monitor.domain.trading.top_up import (
     apply_top_up_distribution,
-    cancel_top_up_batch,
     has_active_top_up_batch,
 )
 
@@ -193,38 +192,3 @@ def test_has_active_top_up_batch() -> None:
         )
     ]
     assert has_active_top_up_batch(portfolio)
-
-
-def test_cancel_top_up_batch_rolls_back() -> None:
-    portfolio = _trading_portfolio()
-    portfolio.positions = [_position(lots=5)]
-    portfolio.last_top_up_processed_at = "2025-01-01T00:00:00+00:00"
-    bond = _bond()
-    apply_top_up_distribution(
-        portfolio,
-        [
-            TopUpAllocation(
-                isin="RU000A001",
-                figi="BBG_EXIST",
-                name="Existing",
-                lots=2,
-                suggested_price_pct=100.5,
-                estimated_amount_rub=2010.0,
-                is_existing_position=True,
-            )
-        ],
-        distributed_amount_rub=2010.0,
-        batch_id="batch-1",
-        processed_at_iso="2025-06-15T12:00:00+00:00",
-        universe_by_isin={bond.isin: bond},
-        today=date(2025, 6, 15),
-    )
-    assert portfolio.positions[0].lots == 7
-
-    cancel_top_up_batch(portfolio, "batch-1")
-
-    assert portfolio.positions[0].lots == 5
-    assert portfolio.acknowledged_top_ups_rub == 0.0
-    assert portfolio.last_top_up_processed_at == "2025-01-01T00:00:00+00:00"
-    assert not portfolio.pending_operations
-    assert "batch-1" not in portfolio.top_up_batch_meta

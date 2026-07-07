@@ -543,7 +543,15 @@ def test_pending_enrich_uses_broker_nkd_when_moex_aci_missing() -> None:
 def test_initial_buy_has_action_required_status() -> None:
     p = _trading_portfolio()
     p.positions = [_position(lots=5, actual_lots=0)]
-    pending = compute_pending_operations(p, _empty_snapshot(), date(2025, 6, 1))
+    snapshot = AccountSnapshot(
+        account_id="acc-1",
+        account_kind=AccountKind.SANDBOX,
+        money_rub=Rub(100_000.0),
+        bond_positions={},
+        other_instruments=[],
+        fetched_at=datetime.now(UTC).isoformat(timespec="seconds"),
+    )
+    pending = compute_pending_operations(p, snapshot, date(2025, 6, 1))
     assert pending[0].status == "action_required"
     assert pending[0].urgency == "normal"
     assert pending[0].estimated_amount_rub is not None
@@ -560,10 +568,10 @@ def test_initial_buy_blocked_without_figi() -> None:
     assert pending[0].block_reason is not None
 
 
-def test_initial_buy_in_progress_when_active_traderecord() -> None:
+def test_initial_buy_in_progress_when_active_order_covers_full_gap() -> None:
+    """Активная заявка на бирже — initial_buy в статусе in_progress."""
     p = _trading_portfolio()
     p.positions = [_position(lots=5, actual_lots=0, figi="BBG1")]
-    op_id = "test-op-id"
     p.trade_records = [
         TradeRecord(
             request_uid="uid1",
@@ -572,7 +580,6 @@ def test_initial_buy_in_progress_when_active_traderecord() -> None:
             figi="BBG1",
             direction="BUY",
             lots=5,
-            pending_op_id=op_id,
             order_id="order-123",
             price_pct=100.5,
             status="EXECUTION_REPORT_STATUS_NEW",
@@ -582,14 +589,114 @@ def test_initial_buy_in_progress_when_active_traderecord() -> None:
         )
     ]
     pending = compute_pending_operations(p, _empty_snapshot(), date(2025, 6, 1))
-    assert pending[0].status == "in_progress"
-    assert pending[0].active_order_id == "order-123"
-    assert pending[0].active_order_lots == 5
-    assert pending[0].active_order_price_pct == pytest.approx(100.5)
-    assert pending[0].active_order_total_rub == pytest.approx(5050.0)
-    assert pending[0].active_order_commission_rub == pytest.approx(10.0)
-    assert pending[0].active_order_lots_executed == 0
-    assert pending[0].active_order_bonds_count == 50
+    buys = [op for op in pending if op.kind == "initial_buy"]
+    assert len(buys) == 1
+    assert buys[0].lots == 5
+    assert buys[0].status == "in_progress"
+    assert buys[0].active_order_id == "order-123"
+
+
+def test_initial_buy_in_progress_when_partial_fill_on_exchange() -> None:
+    """Частичное исполнение + активная заявка — показываем остаток как in_progress."""
+    p = _trading_portfolio()
+    p.positions = [_position(lots=34, actual_lots=1, figi="BBG1")]
+    p.trade_records = [
+        TradeRecord(
+            request_uid="uid1",
+            account_id="acc-1",
+            account_kind=AccountKind.SANDBOX,
+            figi="BBG1",
+            direction="BUY",
+            lots=34,
+            order_id="order-456",
+            status="EXECUTION_REPORT_STATUS_PARTIALLYFILL",
+            total_order_amount_rub=33154.0,
+            lots_executed=1,
+        )
+    ]
+    pending = compute_pending_operations(p, _empty_snapshot(), date(2025, 6, 1))
+    buys = [op for op in pending if op.kind == "initial_buy"]
+    assert len(buys) == 1
+    assert buys[0].lots == 33
+    assert buys[0].status == "in_progress"
+    assert buys[0].active_order_id == "order-456"
+
+
+def test_active_buy_order_surfaces_without_position() -> None:
+    """Заявка на бирже без позиции в портфеле — синтетическая операция in_progress."""
+    p = _trading_portfolio()
+    bond = BondRecord(
+        secid="YN4",
+        isin="RU000A106YN4",
+        name="ГрупПро1P3",
+        maturity_date=date(2027, 1, 1),
+        last_price=100.0,
+        face_value=1000.0,
+        lot_size=1,
+        coupon_rate=10.0,
+        coupon_period_days=180,
+        volume_rub=1_000_000.0,
+        liquidity_flag=True,
+        credit_rating="ruAAA",
+        risk_level=RiskLevel.LOW,
+        ytm=12.0,
+        ytm_net=10.0,
+    )
+    bond.figi = "BBG2"
+    p.trade_records = [
+        TradeRecord(
+            request_uid="uid2",
+            account_id="acc-1",
+            account_kind=AccountKind.SANDBOX,
+            figi="BBG2",
+            direction="BUY",
+            lots=34,
+            order_id="order-yn4",
+            status="EXECUTION_REPORT_STATUS_NEW",
+            total_order_amount_rub=33643.0,
+            lots_executed=0,
+        )
+    ]
+    pending = compute_pending_operations(
+        p,
+        _empty_snapshot(),
+        date(2025, 6, 1),
+        universe=[bond],
+    )
+    buys = [op for op in pending if op.kind == "top_up_buy"]
+    assert len(buys) == 1
+    assert buys[0].status == "in_progress"
+    assert buys[0].active_order_id == "order-yn4"
+    assert buys[0].lots == 34
+
+
+def test_initial_buy_in_progress_when_active_order_covers_part_of_gap() -> None:
+    """Частичная заявка на бирже — в очереди только остаток лотов."""
+    p = _trading_portfolio()
+    p.positions = [_position(lots=10, actual_lots=0, figi="BBG1")]
+    p.trade_records = [
+        TradeRecord(
+            request_uid="uid1",
+            account_id="acc-1",
+            account_kind=AccountKind.SANDBOX,
+            figi="BBG1",
+            direction="BUY",
+            lots=3,
+            order_id="order-123",
+            price_pct=100.5,
+            status="EXECUTION_REPORT_STATUS_NEW",
+            total_order_amount_rub=3030.0,
+            initial_commission_rub=10.0,
+            lots_executed=0,
+        )
+    ]
+    pending = compute_pending_operations(p, _empty_snapshot(), date(2025, 6, 1))
+    buys = [op for op in pending if op.kind == "initial_buy"]
+    assert len(buys) == 1
+    assert buys[0].lots == 10
+    assert buys[0].status == "in_progress"
+    assert buys[0].active_order_id == "order-123"
+    assert buys[0].active_order_lots == 3
 
 
 def test_reinvest_buy_uses_universe_for_lots_and_figi() -> None:

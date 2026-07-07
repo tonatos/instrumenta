@@ -104,11 +104,11 @@ def queue_manual_sell(
     return op
 
 
-def dismiss_queued_manual_sell(portfolio: Portfolio, op_id: str) -> None:
-    """Убрать manual_sell из очереди до отправки на биржу."""
+def dismiss_queued_pending(portfolio: Portfolio, op_id: str) -> None:
+    """Убрать manual_sell или top_up_buy из очереди до отправки на биржу."""
     op = next((item for item in portfolio.pending_operations if item.id == op_id), None)
-    if op is None or op.kind != "manual_sell":
-        raise ValueError("Продажа в очереди не найдена")
+    if op is None or op.kind not in ("manual_sell", "top_up_buy"):
+        raise ValueError("Операция в очереди не найдена")
 
     for tr in portfolio.trade_records:
         if tr.pending_op_id == op_id and tr.is_active:
@@ -117,3 +117,8 @@ def dismiss_queued_manual_sell(portfolio: Portfolio, op_id: str) -> None:
     portfolio.pending_operations = [
         item for item in portfolio.pending_operations if item.id != op_id
     ]
+
+
+def dismiss_queued_manual_sell(portfolio: Portfolio, op_id: str) -> None:
+    """Убрать manual_sell из очереди до отправки на биржу."""
+    dismiss_queued_pending(portfolio, op_id)

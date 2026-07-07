@@ -80,6 +80,8 @@ class PositionSourceType(StrEnum):
     """Происхождение позиции в портфеле.
 
     * ``INITIAL`` — куплена на стартовый бюджет при создании портфеля.
+    * ``ADOPTED`` — принята со счёта при sync («реальность определяет»);
+      целевые лоты пере-выводятся при каждой синхронизации.
     * ``REINVEST_MATURITY`` — куплена за счёт возвращённого номинала
       погашённой ранее бумаги.
     * ``REINVEST_PUT_OFFER`` — куплена за счёт предъявления бумаги к
@@ -89,6 +91,7 @@ class PositionSourceType(StrEnum):
     """
 
     INITIAL = "initial"
+    ADOPTED = "adopted"
     REINVEST_MATURITY = "reinvest_maturity"
     REINVEST_PUT_OFFER = "reinvest_put_offer"
     REINVEST_COUPON_CASH = "reinvest_coupon_cash"

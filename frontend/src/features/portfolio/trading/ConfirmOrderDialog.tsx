@@ -6,6 +6,9 @@ import {
   previewMatchesForm,
   useOrderPreview,
 } from "@/features/portfolio/trading/hooks/useOrderPreview";
+import {
+  formatLotPriceHint,
+} from "@/features/portfolio/trading/pricing";
 import { Button } from "@/components/ui/button";
 import {
   DialogContent,
@@ -82,10 +85,33 @@ export function ConfirmOrderDialog({
 
   const isSellOp = op.kind === "manual_sell";
   const lotSize = op.lot_size ?? 1;
+  const faceValueRub = op.face_value_rub ?? 1000;
   const previewApplies =
     preview != null &&
     Number.isFinite(parsedPricePct) &&
     previewMatchesForm(preview, lots, parsedPricePct);
+  const aciRubPerBond =
+    (previewApplies ? preview?.aci_rub_per_bond : null) ??
+    op.aci_rub_per_bond ??
+    0;
+  const pricePerLotHint =
+    Number.isFinite(parsedPricePct) && parsedPricePct > 0
+      ? formatLotPriceHint({
+          pricePct: parsedPricePct,
+          faceValueRub,
+          lotSize,
+          aciRubPerBond,
+        })
+      : null;
+  const suggestedLotPriceHint =
+    op.suggested_price_pct != null
+      ? formatLotPriceHint({
+          pricePct: op.suggested_price_pct,
+          faceValueRub,
+          lotSize,
+          aciRubPerBond: op.aci_rub_per_bond ?? 0,
+        })
+      : null;
   const brokerPreview =
     previewApplies && preview?.preview_source === "broker" ? preview : null;
   const insufficientCash = isBuy && previewApplies && !preview!.sufficient_cash;
@@ -157,6 +183,11 @@ export function ConfirmOrderDialog({
                 value={pricePct}
                 onChange={(e) => setPricePct(e.target.value)}
               />
+              {pricePerLotHint && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  ≈ {pricePerLotHint} за лот
+                </p>
+              )}
             </div>
           </div>
 
@@ -168,7 +199,8 @@ export function ConfirmOrderDialog({
               className="h-7 px-2 text-xs"
               onClick={() => setPricePct(op.suggested_price_pct!.toFixed(4))}
             >
-              Сбросить к рекомендуемой ({op.suggested_price_pct.toFixed(4)}%)
+              Сбросить к рекомендуемой ({op.suggested_price_pct.toFixed(4)}%
+              {suggestedLotPriceHint ? ` · ≈ ${suggestedLotPriceHint}/лот` : ""})
             </Button>
           )}
 
@@ -242,8 +274,22 @@ function PreviewDetails({
   brokerPreview: OrderPreviewResponse | null;
   isSell?: boolean;
 }) {
+  const cleanTotal =
+    brokerPreview?.broker_clean_amount_rub ?? preview.clean_amount_rub;
+  const cleanPerLot = cleanTotal / preview.order_lots;
+  const dirtyPerLot = cleanPerLot + preview.aci_rub_per_bond * preview.lot_size;
+
   return (
     <div className="space-y-2">
+      <PricingRow
+        label="Цена за лот"
+        value={formatRub(cleanPerLot)}
+        hint={
+          preview.aci_rub_per_bond > 0
+            ? `${formatRub(dirtyPerLot)} с НКД · лимит ${formatPct(preview.order_price_pct)}`
+            : `лимит ${formatPct(preview.order_price_pct)} от номинала`
+        }
+      />
       <PricingRow
         label="Бумаг"
         value={`${preview.order_bonds} шт`}
@@ -253,7 +299,7 @@ function PreviewDetails({
         <PricingRow
           label="Чистая стоимость"
           value={formatRub(brokerPreview.broker_clean_amount_rub)}
-          hint={`лимит ${formatPct(preview.order_price_pct)} от номинала`}
+          hint={`${preview.order_lots} лот × ${formatRub(cleanPerLot)}`}
         />
       )}
       {brokerPreview?.broker_aci_amount_rub != null &&

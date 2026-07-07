@@ -105,6 +105,50 @@ def test_offer_schedule_regular_put_without_window_yet() -> None:
     assert schedule.offer_date == date(2027, 9, 3)
 
 
+def test_offer_schedule_put_with_exercised_history_offertype() -> None:
+    """Past exercised put-offer counts as window history (Samolet BO-P15)."""
+    columns, rows = _offers_block(
+        [
+            [
+                "RU000A109874",
+                "Самолет",
+                5_000_000_000,
+                "2025-02-05",
+                "2025-01-28",
+                "2025-02-03",
+                1000,
+                "RUB",
+                0,
+                None,
+                None,
+                "Оферта (состоялась)",
+                "RU000A109874",
+                "TQCB",
+            ],
+            [
+                "RU000A109874",
+                "Самолет",
+                5_000_000_000,
+                "2026-08-07",
+                None,
+                None,
+                1000,
+                "RUB",
+                100,
+                None,
+                None,
+                "Оферта",
+                "RU000A109874",
+                "TQCB",
+            ],
+        ]
+    )
+    schedule = _offer_schedule_from_rows(rows, columns, today=date(2026, 7, 8))
+    assert schedule is not None
+    assert schedule.is_issuer_call is False
+    assert schedule.offer_date == date(2026, 8, 7)
+
+
 def test_offer_schedule_issuer_call_one_off_without_window_history() -> None:
     """Issuer call: single future offer without submission window or history."""
     columns, rows = _offers_block(
@@ -199,3 +243,37 @@ def test_enrich_put_keeps_offer_date() -> None:
     assert bond.call_date is None
     assert bond.offer_date == date(2026, 8, 4)
     assert bond.effective_date == date(2026, 8, 4)
+
+
+def test_enrich_samolet_put_keeps_offer_horizon() -> None:
+    """Samolet BO-P15: put-offer horizon, not issuer-call maturity stretch."""
+    bond = BondRecord(
+        secid="RU000A109874",
+        isin="RU000A109874",
+        name="СамолетP15",
+        maturity_date=date(2027, 7, 30),
+        offer_date=date(2026, 8, 7),
+        effective_date=date(2026, 8, 7),
+        days_to_maturity=30,
+    )
+    schedule = PutOfferSchedule(
+        offer_date=date(2026, 8, 7),
+        submission_start=None,
+        submission_end=None,
+        offer_price_pct=100.0,
+        is_issuer_call=False,
+    )
+
+    import bond_monitor.infrastructure.moex.offers_client as offers_client
+
+    original = offers_client._load_schedules_for_isins
+    offers_client._load_schedules_for_isins = lambda *_a, **_k: {bond.isin: schedule}
+    try:
+        enrich_bonds_with_put_offers([bond], today=date(2026, 7, 8))
+    finally:
+        offers_client._load_schedules_for_isins = original
+
+    assert bond.call_date is None
+    assert bond.offer_date == date(2026, 8, 7)
+    assert bond.effective_date == date(2026, 8, 7)
+    assert bond.days_to_maturity == (date(2026, 8, 7) - date(2026, 7, 8)).days

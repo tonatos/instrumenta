@@ -201,11 +201,16 @@ class AccountSnapshot:
     # перехода в режим торговли (см. AGENTS.md → «strict attach»).
     other_instruments: list[OtherInstrument]
     fetched_at: str
+    blocked_money_rub: Rub = Rub(0.0)
 
     @property
     def has_foreign_instruments(self) -> bool:
         """True если на счёте есть что-то кроме RUB-кэша и облигаций."""
         return bool(self.other_instruments)
+
+    @property
+    def available_money_rub(self) -> Rub:
+        return Rub(max(0.0, float(self.money_rub) - float(self.blocked_money_rub)))
 
 
 @dataclass(frozen=True)
@@ -484,6 +489,26 @@ def _portfolio_money_rub(portfolio: PortfolioResponse) -> Rub:
     return Rub(estimated_rub)
 
 
+def _positions_blocked_rub(client: Any, account_id: str) -> Rub:
+    """Заблокированные под активные заявки средства (operations.get_positions)."""
+    from t_tech.invest.exceptions import RequestError
+
+    try:
+        resp = client.operations.get_positions(account_id=account_id)
+    except RequestError:
+        return Rub(0.0)
+
+    total = 0.0
+    for mv in resp.blocked:
+        currency = (getattr(mv, "currency", None) or "").lower()
+        if currency not in ("rub", "rur"):
+            continue
+        amount = money_value_to_rub(mv)
+        if amount is not None:
+            total += float(amount)
+    return Rub(total)
+
+
 def _fetch_bond_nominal_rub(client: Any, *, figi: str, instrument_uid: str) -> float | None:
     """Номинал облигации из ``instruments.bond_by`` (нужен для % ↔ ₽)."""
     from t_tech.invest import InstrumentIdType
@@ -600,6 +625,7 @@ def get_account_snapshot(
         with _open_client(token, account_kind) as client:
             portfolio = client.operations.get_portfolio(account_id=account_id)
             money_rub = _portfolio_money_rub(portfolio)
+            blocked_money_rub = _positions_blocked_rub(client, account_id)
             bond_nominals: dict[str, float] = {}
             for pos in portfolio.positions:
                 if (pos.instrument_type or "").lower() != "bond":
@@ -635,6 +661,7 @@ def get_account_snapshot(
         account_id=account_id,
         account_kind=account_kind,
         money_rub=money_rub,
+        blocked_money_rub=blocked_money_rub,
         bond_positions=bonds,
         other_instruments=others,
         fetched_at=datetime.now(UTC).isoformat(timespec="seconds"),

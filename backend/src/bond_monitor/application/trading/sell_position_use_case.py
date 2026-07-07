@@ -19,6 +19,7 @@ from bond_monitor.domain.trading.policies import (
 from bond_monitor.domain.trading.ports import BrokerSnapshot
 from bond_monitor.domain.trading.sell_position import (
     dismiss_queued_manual_sell,
+    dismiss_queued_pending,
     find_sellable_position,
     queue_manual_sell,
     validate_sell_request,
@@ -248,7 +249,7 @@ class SellPositionUseCase:
             today=today,
         )
 
-    async def dismiss_manual_sell(
+    async def dismiss_pending_operation(
         self,
         portfolio_id: str,
         op_id: str,
@@ -259,10 +260,29 @@ class SellPositionUseCase:
         today: date,
     ) -> TradingSyncResult:
         portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
-        dismiss_queued_manual_sell(portfolio, op_id)
+        dismiss_queued_pending(portfolio, op_id)
         await self._ctx.repo.save(portfolio)
         return await self._sync.sync_portfolio(
             portfolio_id,
+            universe,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            today=today,
+        )
+
+    async def dismiss_manual_sell(
+        self,
+        portfolio_id: str,
+        op_id: str,
+        universe: list[BondRecord],
+        *,
+        key_rate: float,
+        tax_rate: float,
+        today: date,
+    ) -> TradingSyncResult:
+        return await self.dismiss_pending_operation(
+            portfolio_id,
+            op_id,
             universe,
             key_rate=key_rate,
             tax_rate=tax_rate,

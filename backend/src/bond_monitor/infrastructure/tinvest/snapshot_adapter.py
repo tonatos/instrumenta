@@ -23,6 +23,7 @@ def broker_snapshot_from_infrastructure(snapshot: AccountSnapshot) -> BrokerSnap
         account_id=snapshot.account_id,
         account_kind=snapshot.account_kind,
         money_rub=snapshot.money_rub,
+        blocked_money_rub=snapshot.blocked_money_rub,
         bond_positions={
             figi: _bond_position_from_infrastructure(pos)
             for figi, pos in snapshot.bond_positions.items()

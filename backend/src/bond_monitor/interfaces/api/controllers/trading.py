@@ -60,6 +60,8 @@ def trading_sync_to_response(result: TradingSyncResult) -> TradingSyncResponse:
         pending_operations=result.pending_operations,
         drifts=result.drifts,
         money_rub=result.money_rub,
+        available_money_rub=result.available_money_rub,
+        blocked_money_rub=result.blocked_money_rub,
         last_synced_at=result.last_synced_at,
         has_pending_top_up=result.has_pending_top_up,
         pending_top_up_rub=result.pending_top_up_rub,
@@ -321,32 +323,6 @@ class TradingController(Controller):
             result = await trading_service.cancel_pending_order(
                 portfolio_id,
                 op_id,
-                universe,
-                key_rate=settings.key_rate,
-                tax_rate=settings.tax_rate_fraction,
-                today=date.today(),
-            )
-        except ValueError as exc:
-            message = str(exc)
-            if message == "Portfolio not found":
-                raise NotFoundException(detail=message)
-            raise ClientException(detail=message)
-        return trading_sync_to_response(result)
-
-    @post("/portfolios/{portfolio_id:str}/top-up-batches/{batch_id:str}/cancel")
-    async def cancel_top_up_batch(
-        self,
-        portfolio_id: str,
-        batch_id: str,
-        trading_service: TradingService,
-        bond_service: BondService,
-        settings: Settings,
-    ) -> TradingSyncResponse:
-        universe = bond_service.load_universe().bonds
-        try:
-            result = await trading_service.cancel_top_up_batch_operation(
-                portfolio_id,
-                batch_id,
                 universe,
                 key_rate=settings.key_rate,
                 tax_rate=settings.tax_rate_fraction,

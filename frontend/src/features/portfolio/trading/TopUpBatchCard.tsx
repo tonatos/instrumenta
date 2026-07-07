@@ -6,34 +6,6 @@ import { Input } from "@/components/ui/input";
 import { parseApiError } from "@/features/portfolio/trading/hooks/useOrderPreview";
 import { useState } from "react";
 
-export function TopUpBatchCard({
-  batchId,
-  onCancel,
-  isPending,
-}: {
-  batchId: string;
-  onCancel: (batchId: string) => void;
-  isPending: boolean;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-xs">
-      <span className="text-muted-foreground">
-        Партия пополнения · {batchId.slice(0, 8)}…
-      </span>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="h-7 text-destructive"
-        onClick={() => onCancel(batchId)}
-        disabled={isPending}
-      >
-        Отменить партию
-      </Button>
-    </div>
-  );
-}
-
 export function SandboxPayInPanel({
   portfolioId,
   onSuccess,

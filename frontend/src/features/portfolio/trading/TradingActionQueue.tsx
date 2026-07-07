@@ -19,7 +19,7 @@ import {
 } from "@/features/portfolio/trading/OperationGroups";
 import { parseApiError } from "@/features/portfolio/trading/hooks/useOrderPreview";
 import { useTradingSync } from "@/features/portfolio/trading/hooks/useTradingSync";
-import { SandboxPayInPanel, TopUpBatchCard } from "@/features/portfolio/trading/TopUpBatchCard";
+import { SandboxPayInPanel } from "@/features/portfolio/trading/TopUpBatchCard";
 
 interface Props {
   portfolio: Portfolio;
@@ -41,7 +41,6 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
     dataUpdatedAt,
     confirmMutation,
     cancelMutation,
-    cancelBatchMutation,
     putOfferMutation,
     dismissMutation,
     isPending,
@@ -49,17 +48,6 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
 
   const ops = data?.pending_operations ?? [];
   const groups = useMemo(() => groupOperations(ops), [ops]);
-  const topUpBatchIds = useMemo(
-    () =>
-      [
-        ...new Set(
-          ops
-            .filter((op) => op.kind === "top_up_buy" && op.top_up_batch_id)
-            .map((op) => op.top_up_batch_id as string),
-        ),
-      ],
-    [ops],
-  );
 
   const attentionCount = ops.filter(
     (op) => op.status === "action_required" || op.status === "overdue",
@@ -184,7 +172,13 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
               )}
             </p>
             <p className="text-xs text-muted-foreground">
-              На счёте {formatRub(data?.money_rub ?? portfolio.cash_balance_rub)}
+              Свободно{" "}
+              {formatRub(
+                data?.available_money_rub ??
+                  (data?.money_rub ?? portfolio.cash_balance_rub),
+              )}
+              {(data?.blocked_money_rub ?? 0) > 0 &&
+                ` · заблокировано ${formatRub(data!.blocked_money_rub)}`}
               {syncTime && ` · обновлено ${syncTime}`}
             </p>
           </div>
@@ -221,15 +215,6 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
             </ul>
           </div>
         )}
-
-        {topUpBatchIds.map((batchId) => (
-          <TopUpBatchCard
-            key={batchId}
-            batchId={batchId}
-            onCancel={(id) => cancelBatchMutation.mutate(id)}
-            isPending={cancelBatchMutation.isPending}
-          />
-        ))}
 
         <OperationSection title="Срочно" icon={<AlertTriangle className="h-3.5 w-3.5" />} ops={groups.urgent}>
           {groups.urgent.map(renderCard)}

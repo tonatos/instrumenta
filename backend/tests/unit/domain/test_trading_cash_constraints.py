@@ -17,6 +17,7 @@ from bond_monitor.domain.portfolio.models import (
 from bond_monitor.domain.trading.models import (
     AccountKind,
     PendingOperation,
+    TradeRecord,
 )
 from bond_monitor.domain.portfolio.planner import build_plan
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, Rub, order_amount_rub
@@ -109,11 +110,64 @@ def test_available_cash_reserves_only_top_up_pending() -> None:
     assert free == pytest.approx(10_000.0 * 0.995 - expected_reserved, rel=0.01)
 
 
+def test_available_cash_skips_top_up_with_active_broker_order() -> None:
+    """Заявка на бирже уже заблокировала кэш — не резервируем повторно."""
+    portfolio = _trading_portfolio(lots=11, actual_lots=0)
+    bond = _bond()
+    pending_op = PendingOperation(
+        id="pending-1",
+        kind="top_up_buy",
+        isin="RU000SAMO",
+        name="СамолетP13",
+        lots=3,
+        figi="FIGI_SAMO",
+        estimated_amount_rub=3000.0,
+        top_up_batch_id="batch-1",
+    )
+    portfolio.pending_operations = [pending_op]
+    portfolio.trade_records = [
+        TradeRecord(
+            request_uid="uid-1",
+            account_id="acc-1",
+            account_kind=AccountKind.SANDBOX,
+            figi="FIGI_SAMO",
+            direction="BUY",
+            lots=3,
+            pending_op_id=pending_op.id,
+            order_id="order-1",
+            status="EXECUTION_REPORT_STATUS_NEW",
+            total_order_amount_rub=3000.0,
+        )
+    ]
+    free = available_cash_for_new_purchases_rub(5000.0, portfolio, {bond.isin: bond})
+    assert free == pytest.approx(5000.0 * 0.995, rel=0.01)
+
+
 def test_available_cash_ignores_initial_buy_gap() -> None:
     """Недокупленная позиция не резервирует кэш — пользователь сам решает, что купить."""
     portfolio = _trading_portfolio(lots=11, actual_lots=0)
     free = available_cash_for_new_purchases_rub(4779.0, portfolio, {"RU000SAMO": _bond()})
     assert free == pytest.approx(4779.0 * 0.995, rel=0.01)
+
+
+from bond_monitor.domain.trading.top_up import has_open_buy_commitments
+
+
+def test_has_open_buy_commitments_when_active_order_on_broker() -> None:
+    portfolio = _trading_portfolio(lots=11, actual_lots=0)
+    portfolio.trade_records = [
+        TradeRecord(
+            request_uid="uid-1",
+            account_id="acc-1",
+            account_kind=AccountKind.SANDBOX,
+            figi="FIGI_SAMO",
+            direction="BUY",
+            lots=5,
+            order_id="order-1",
+            status="EXECUTION_REPORT_STATUS_NEW",
+        )
+    ]
+    assert has_open_buy_commitments(portfolio) is True
 
 
 def test_build_plan_trading_cashflow_never_drives_cash_below_zero() -> None:

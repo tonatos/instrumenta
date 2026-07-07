@@ -68,6 +68,10 @@ logger = logging.getLogger(__name__)
 PUT_OFFER_SUBMIT_URGENT_DAYS: int = 2
 REINVEST_OVERDUE_DAYS: int = 3
 
+_UNAFFORDABLE_BLOCK_REASON = (
+    "Недостаточно свободных средств — деньги заблокированы под активные заявки"
+)
+
 _KIND_SORT_ORDER: dict[str, int] = {
     "put_offer_submit": 0,
     "reinvest_buy": 1,
@@ -133,15 +137,38 @@ def _has_active_trade_record(
     return None
 
 
-def _find_active_for_op(portfolio: Portfolio, op: PendingOperation) -> TradeRecord | None:
-    """Найти активную заявку по pending_op_id или figi+direction."""
+def active_buy_unfilled_lots_for_figi(portfolio: Portfolio, figi: str) -> int:
+    """Лоты в активных BUY-заявках на бирже, ещё не исполненные."""
+    total = 0
+    for tr in portfolio.trade_records:
+        if tr.figi != figi or tr.direction != "BUY" or not tr.is_active:
+            continue
+        total += max(0, tr.lots - (tr.lots_executed or 0))
+    return total
+
+
+def active_trade_for_buy_pending_op(
+    portfolio: Portfolio,
+    op: PendingOperation,
+) -> TradeRecord | None:
+    """Активная заявка на бирже для сохранённого top_up_buy / initial_buy."""
     direction = "SELL" if op.kind == "manual_sell" else "BUY"
     for tr in portfolio.trade_records:
-        if tr.pending_op_id == op.id and tr.is_active:
+        if tr.pending_op_id == op.id and tr.direction == direction and tr.is_active:
             return tr
     if op.figi:
         return _has_active_trade_record(portfolio.trade_records, figi=op.figi, direction=direction)
     return None
+
+
+def has_active_buy_orders(portfolio: Portfolio) -> bool:
+    """Есть ли незавершённые BUY-заявки на брокерском счёте."""
+    return any(tr.direction == "BUY" and tr.is_active for tr in portfolio.trade_records)
+
+
+def _find_active_for_op(portfolio: Portfolio, op: PendingOperation) -> TradeRecord | None:
+    """Найти активную заявку по pending_op_id или figi+direction."""
+    return active_trade_for_buy_pending_op(portfolio, op)
 
 
 def _order_direction(op: PendingOperation) -> str:
@@ -333,6 +360,97 @@ def _enrich_and_sort(
         _enrich_operation(op, portfolio, today, universe_by_isin, snapshot)
     ops.sort(key=_sort_key)
     return ops
+
+
+def _pending_operation_cost_rub(
+    op: PendingOperation,
+    universe_by_isin: dict[str, BondRecord],
+) -> float:
+    if op.estimated_amount_rub is not None:
+        return op.estimated_amount_rub
+    bond = universe_by_isin.get(op.isin)
+    price_pct = op.suggested_price_pct or (bond.last_price if bond else None)
+    if price_pct is None:
+        return 0.0
+    return float(
+        order_amount_rub(
+            price_pct=PriceUnitPct(float(price_pct)),
+            face_value=bond.face_value if bond else 1000.0,
+            lot_size=bond.lot_size if bond else 1,
+            lots=Lots(op.lots),
+            aci_rub=(bond.accrued_interest or 0.0) if bond else 0.0,
+        )
+    )
+
+
+def _mark_unaffordable_buys_blocked(
+    ops: list[PendingOperation],
+    *,
+    available_rub: float,
+) -> None:
+    """Пометить покупки сверх доступного кэша как «Заблокировано»."""
+    from bond_monitor.domain.trading.reconciler import TOP_UP_COST_BUFFER
+
+    budget = max(0.0, available_rub * (1.0 - TOP_UP_COST_BUFFER))
+    for op in sorted(ops, key=_sort_key):
+        if op.kind not in ("initial_buy", "reinvest_buy", "top_up_buy"):
+            continue
+        if op.status in ("in_progress", "blocked"):
+            continue
+        cost = op.estimated_amount_rub
+        if cost is None or cost <= 0:
+            continue
+        if cost <= budget + 0.01:
+            budget -= cost
+            continue
+        op.status = "blocked"
+        op.block_reason = _UNAFFORDABLE_BLOCK_REASON
+        op.urgency = "normal"
+
+
+def sweep_unfunded_top_up_buys(
+    portfolio: Portfolio,
+    available_rub: float,
+    universe_by_isin: dict[str, BondRecord],
+) -> int:
+    """Удалить top_up_buy без заявки, которые не помещаются в доступный кэш."""
+    if not portfolio.pending_operations:
+        return 0
+
+    from bond_monitor.domain.trading.reconciler import TOP_UP_COST_BUFFER
+
+    budget = max(0.0, available_rub * (1.0 - TOP_UP_COST_BUFFER))
+    candidates = [
+        op
+        for op in portfolio.pending_operations
+        if op.kind == "top_up_buy"
+        and active_trade_for_buy_pending_op(portfolio, op) is None
+        and not _is_pending_op_fulfilled(op, portfolio.trade_records)
+    ]
+    candidates.sort(key=lambda op: (op.isin, op.id))
+
+    keep_ids: set[str] = set()
+    for op in candidates:
+        cost = _pending_operation_cost_rub(op, universe_by_isin)
+        if cost <= 0 or cost <= budget + 0.01:
+            if cost > 0:
+                budget -= cost
+            keep_ids.add(op.id)
+
+    keep: list[PendingOperation] = []
+    removed = 0
+    for op in portfolio.pending_operations:
+        if (
+            op.kind == "top_up_buy"
+            and op.id not in keep_ids
+            and active_trade_for_buy_pending_op(portfolio, op) is None
+            and not _is_pending_op_fulfilled(op, portfolio.trade_records)
+        ):
+            removed += 1
+            continue
+        keep.append(op)
+    portfolio.pending_operations = keep
+    return removed
 
 
 def pending_top_up_lots_for_isin(portfolio: Portfolio, isin: str) -> int:
@@ -568,6 +686,84 @@ def _gen_put_offer_submits(
     return result
 
 
+def _resolve_isin_name_for_figi(
+    figi: str,
+    portfolio: Portfolio,
+    universe_by_isin: dict[str, BondRecord],
+) -> tuple[str | None, str]:
+    for pos in portfolio.positions:
+        if pos.figi == figi:
+            return pos.isin, pos.name
+    for bond in universe_by_isin.values():
+        if bond.figi == figi:
+            return bond.isin, bond.name
+    return None, figi[:8]
+
+
+def _trade_covered_by_operations(tr: TradeRecord, ops: list[PendingOperation]) -> bool:
+    """Активная заявка уже отражена другой операцией в очереди."""
+    for op in ops:
+        if tr.pending_op_id and op.id == tr.pending_op_id:
+            return True
+        if tr.order_id and op.active_order_id == tr.order_id:
+            return True
+        if (
+            tr.figi
+            and op.figi == tr.figi
+            and op.kind in ("initial_buy", "reinvest_buy", "top_up_buy")
+        ):
+            return True
+    return False
+
+
+def _gen_active_order_ops(
+    portfolio: Portfolio,
+    existing_ops: list[PendingOperation],
+    *,
+    universe_by_isin: dict[str, BondRecord],
+) -> list[PendingOperation]:
+    """Показать активные BUY-заявки на бирже, даже без сохранённой pending-операции."""
+    result: list[PendingOperation] = []
+    for tr in portfolio.trade_records:
+        if tr.direction != "BUY" or not tr.is_active or not tr.figi or not tr.order_id:
+            continue
+        if _trade_covered_by_operations(tr, existing_ops):
+            continue
+        unfilled_lots = max(0, tr.lots - (tr.lots_executed or 0))
+        if unfilled_lots <= 0:
+            continue
+        isin, name = _resolve_isin_name_for_figi(tr.figi, portfolio, universe_by_isin)
+        if isin is None:
+            continue
+        bond = universe_by_isin.get(isin)
+        lot_size = bond.lot_size if bond else 1
+        op_id = tr.pending_op_id or stable_id(portfolio.id, "active_order", tr.order_id)
+        result.append(
+            PendingOperation(
+                id=op_id,
+                kind="top_up_buy",
+                isin=isin,
+                name=name,
+                lots=unfilled_lots,
+                figi=tr.figi,
+                suggested_price_pct=tr.price_pct,
+                due_date=None,
+                reason=f"Заявка на бирже — ожидает исполнения ({tr.order_id[:8]}…)",
+                status="in_progress",
+                active_order_id=tr.order_id,
+                active_order_status=tr.status,
+                submitted_request_uid=tr.request_uid,
+                active_order_lots=tr.lots,
+                active_order_price_pct=tr.price_pct,
+                active_order_total_rub=tr.total_order_amount_rub,
+                active_order_commission_rub=tr.initial_commission_rub,
+                active_order_lots_executed=tr.lots_executed,
+                active_order_bonds_count=tr.lots * lot_size if tr.lots > 0 else None,
+            )
+        )
+    return result
+
+
 def _filter_persisted_pending(
     portfolio: Portfolio,
     *,
@@ -628,7 +824,19 @@ def compute_pending_operations(
     )
     result.extend(_gen_put_offer_submits(portfolio, today))
     result.extend(_filter_persisted_pending(portfolio, universe_by_isin=universe_by_isin))
-    return _enrich_and_sort(result, portfolio, today, universe_by_isin, snapshot)
+    result.extend(
+        _gen_active_order_ops(
+            portfolio,
+            result,
+            universe_by_isin=universe_by_isin,
+        )
+    )
+    result = _enrich_and_sort(result, portfolio, today, universe_by_isin, snapshot)
+    _mark_unaffordable_buys_blocked(
+        result,
+        available_rub=float(snapshot.available_money_rub),
+    )
+    return result
 
 
 def sweep_non_api_tradable_pending(
@@ -715,4 +923,5 @@ __all__ = [
     "compute_pending_operations",
     "render_put_offer_chat_template",
     "sweep_completed_pending",
+    "sweep_unfunded_top_up_buys",
 ]

@@ -257,6 +257,8 @@ class TradingSyncResponse(BaseModel):
     drifts: list[PositionDriftResponse] = Field(default_factory=list)
     money_rub: float
     last_synced_at: str | None = None
+    available_money_rub: float = 0.0
+    blocked_money_rub: float = 0.0
     has_pending_top_up: bool = False
     pending_top_up_rub: float = 0.0
     top_up_auto_applied: bool = False

@@ -5,7 +5,10 @@ from __future__ import annotations
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio, PortfolioPosition
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, order_amount_rub
-from bond_monitor.domain.trading.pending_operations import pending_top_up_lots_for_isin
+from bond_monitor.domain.trading.pending_operations import (
+    active_trade_for_buy_pending_op,
+    pending_top_up_lots_for_isin,
+)
 from bond_monitor.domain.trading.reconciler import TOP_UP_COST_BUFFER
 
 
@@ -14,13 +17,19 @@ def available_cash_for_new_purchases_rub(
     portfolio: Portfolio,
     universe_by_isin: dict[str, BondRecord],
 ) -> float:
-    """Кэш для авто-распределения top-up: остаток на счёте минус уже созданные top_up_buy."""
+    """Кэш для авто-распределения top-up.
+
+    ``money_rub`` — свободный кэш (уже за вычетом blocked под активные заявки).
+    Резервируем только top_up_buy без выставленной заявки (action_required).
+    """
     if not portfolio.is_trading:
         return max(0.0, money_rub)
 
     reserved = 0.0
     for op in portfolio.pending_operations:
         if op.kind != "top_up_buy":
+            continue
+        if active_trade_for_buy_pending_op(portfolio, op) is not None:
             continue
         if op.estimated_amount_rub is not None:
             reserved += op.estimated_amount_rub

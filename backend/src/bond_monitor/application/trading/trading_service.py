@@ -304,25 +304,6 @@ class TradingService:
             today=today,
         )
 
-    async def cancel_top_up_batch_operation(
-        self,
-        portfolio_id: str,
-        batch_id: str,
-        universe: list[BondRecord],
-        *,
-        key_rate: float,
-        tax_rate: float,
-        today: date,
-    ) -> TradingSyncResult:
-        return await self._order.cancel_top_up_batch_operation(
-            portfolio_id,
-            batch_id,
-            universe,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-            today=today,
-        )
-
     async def get_performance(self, portfolio_id: str) -> dict | None:
         return await self._sync.get_performance(portfolio_id)
 

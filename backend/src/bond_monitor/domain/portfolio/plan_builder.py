@@ -63,6 +63,21 @@ from bond_monitor.domain.trading.cash_constraints import initial_buy_gap_lots
 
 logger = logging.getLogger(__name__)
 
+_PHANTOM_REINVEST_SOURCES = frozenset(
+    {
+        PositionSourceType.REINVEST_MATURITY,
+        PositionSourceType.REINVEST_PUT_OFFER,
+        PositionSourceType.REINVEST_COUPON_CASH,
+    }
+)
+
+_ON_ACCOUNT_SOURCES = frozenset(
+    {
+        PositionSourceType.INITIAL,
+        PositionSourceType.ADOPTED,
+    }
+)
+
 _MAX_PLAN_XIRR_PCT = 200.0
 
 
@@ -130,7 +145,7 @@ def _calculate_plan_expected_xirr(
     if account_snapshot_money_rub is not None:
         deployed_outflow = 0.0
         for position in open_positions(portfolio.positions):
-            if position.source != PositionSourceType.INITIAL:
+            if position.source not in _ON_ACCOUNT_SOURCES:
                 continue
             if position.is_closed:
                 continue
@@ -614,7 +629,7 @@ def _emit_position_events(
     position_id = id(position)
     bonds_count = position.bonds_count
     is_future_purchase = position.purchase_date > today
-    is_reinvestment = position.source != PositionSourceType.INITIAL
+    is_reinvestment = position.source in _PHANTOM_REINVEST_SOURCES
     emit_initial_purchase = (
         not plan.portfolio.is_trading
         and position.source == PositionSourceType.INITIAL
@@ -1021,7 +1036,7 @@ def _finalize_plan_totals(
             if position.is_closed:
                 continue
             if (
-                position.source != PositionSourceType.INITIAL
+                position.source not in _ON_ACCOUNT_SOURCES
                 or position.purchase_date > portfolio.horizon_date
             ):
                 continue

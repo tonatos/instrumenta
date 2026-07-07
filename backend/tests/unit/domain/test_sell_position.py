@@ -13,10 +13,11 @@ from bond_monitor.domain.portfolio.models import (
     PositionSourceType,
     RiskProfile,
 )
-from bond_monitor.domain.trading.models import AccountKind, TradeRecord
+from bond_monitor.domain.trading.models import AccountKind, PendingOperation, TradeRecord
 from bond_monitor.domain.trading.sell_position import (
     SANDBOX_ONLY_MSG,
     dismiss_queued_manual_sell,
+    dismiss_queued_pending,
     find_sellable_position,
     queue_manual_sell,
     validate_sell_request,
@@ -201,3 +202,49 @@ def test_dismiss_rejects_when_order_in_progress() -> None:
 
     with pytest.raises(ValueError, match="уже на бирже"):
         dismiss_queued_manual_sell(p, op.id)
+
+
+def test_dismiss_queued_top_up_buy_removes_from_queue() -> None:
+    p = _trading_portfolio()
+    op = PendingOperation(
+        id="top-up-1",
+        kind="top_up_buy",
+        isin="RU000A1",
+        name="Test",
+        lots=5,
+        top_up_batch_id="batch-1",
+    )
+    p.pending_operations = [op]
+
+    dismiss_queued_pending(p, op.id)
+
+    assert p.pending_operations == []
+
+
+def test_dismiss_top_up_buy_rejects_when_order_on_exchange() -> None:
+    p = _trading_portfolio()
+    op = PendingOperation(
+        id="top-up-2",
+        kind="top_up_buy",
+        isin="RU000A1",
+        name="Test",
+        lots=5,
+        figi="BBG1",
+        top_up_batch_id="batch-1",
+    )
+    p.pending_operations = [op]
+    p.trade_records = [
+        TradeRecord(
+            request_uid="u1",
+            account_id="acc-1",
+            account_kind=AccountKind.SANDBOX,
+            figi="BBG1",
+            direction="BUY",
+            lots=5,
+            pending_op_id=op.id,
+            status="EXECUTION_REPORT_STATUS_NEW",
+        )
+    ]
+
+    with pytest.raises(ValueError, match="уже на бирже"):
+        dismiss_queued_pending(p, op.id)

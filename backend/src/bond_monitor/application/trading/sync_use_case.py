@@ -18,15 +18,25 @@ from bond_monitor.domain.trading.pending_operations import (
     compute_pending_operations,
     sweep_completed_pending,
     sweep_non_api_tradable_pending,
+    sweep_unfunded_top_up_buys,
 )
 from bond_monitor.domain.trading.position_lifecycle import (
     apply_filled_reinvest_buys,
     close_matured_positions,
 )
-from bond_monitor.domain.trading.reconciler import detect_top_up, reconcile_positions, top_up_amount_to_distribute
+from bond_monitor.domain.trading.reconciler import (
+    adopt_orphan_holdings,
+    collect_position_drifts,
+    detect_top_up,
+    migrate_legacy_adopted_holdings,
+    reconcile_held_position_targets,
+    reconcile_positions,
+    sweep_phantom_top_up_positions,
+    top_up_amount_to_distribute,
+)
 from bond_monitor.domain.trading.top_up import (
     apply_top_up_distribution,
-    has_active_top_up_batch,
+    has_open_buy_commitments,
     new_top_up_batch_id,
 )
 from bond_monitor.domain.trading.yield_calc import summarize_actual_performance
@@ -159,6 +169,19 @@ class SyncUseCase:
         universe_by_isin = {b.isin: b for b in universe}
 
         reconciliation = reconcile_positions(portfolio, snapshot, operations)
+        migration_notes = migrate_legacy_adopted_holdings(
+            portfolio,
+            snapshot,
+            universe_by_isin,
+        )
+        phantom_notes = sweep_phantom_top_up_positions(portfolio, snapshot)
+        adoption_notes = adopt_orphan_holdings(
+            portfolio,
+            snapshot,
+            universe_by_isin,
+            today=today,
+        )
+        target_notes = reconcile_held_position_targets(portfolio, snapshot)
         self._import_active_broker_orders(portfolio, token, universe_by_isin=universe_by_isin)
         self._refresh_trade_record_states(portfolio, token)
         apply_filled_reinvest_buys(portfolio, universe_by_isin, today)
@@ -172,9 +195,9 @@ class SyncUseCase:
         top_up_distributed_rub = 0.0
         top_up_notes: list[str] = []
 
-        if not has_active_top_up_batch(portfolio) and not skip_auto_top_up:
+        if not has_open_buy_commitments(portfolio) and not skip_auto_top_up:
             free_cash = available_cash_for_new_purchases_rub(
-                float(snapshot.money_rub),
+                float(snapshot.available_money_rub),
                 portfolio,
                 universe_by_isin,
             )
@@ -231,6 +254,12 @@ class SyncUseCase:
             tax_rate=tax_rate,
         )
 
+        sweep_unfunded_top_up_buys(
+            portfolio,
+            float(snapshot.available_money_rub),
+            universe_by_isin,
+        )
+
         pending = compute_pending_operations(
             portfolio,
             snapshot,
@@ -247,6 +276,8 @@ class SyncUseCase:
         portfolio.touch()
         await self._ctx.repo.save(portfolio)
 
+        final_drifts = collect_position_drifts(portfolio, snapshot)
+
         return TradingSyncResult(
             pending_operations=_pending_to_response(pending),
             drifts=[
@@ -258,16 +289,18 @@ class SyncUseCase:
                     "severity": d.severity,
                     "message": d.message,
                 }
-                for d in reconciliation.drifts
+                for d in final_drifts
             ],
             money_rub=float(snapshot.money_rub),
+            available_money_rub=float(snapshot.available_money_rub),
+            blocked_money_rub=float(snapshot.blocked_money_rub),
             last_synced_at=portfolio.last_synced_at,
             has_pending_top_up=top_up_after.has_pending_top_up,
             pending_top_up_rub=float(top_up_after.pending_top_up_rub),
             top_up_auto_applied=top_up_auto_applied,
             top_up_distributed_rub=top_up_distributed_rub,
             top_up_notes=top_up_notes,
-            notes=[*plan.notes, *top_up_notes, *api_trade_warnings],
+            notes=[*plan.notes, *migration_notes, *phantom_notes, *adoption_notes, *target_notes, *top_up_notes, *api_trade_warnings],
         )
 
     async def get_pending_operations(

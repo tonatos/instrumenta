@@ -318,7 +318,8 @@ export function OperationCard({
           </Button>
         ) : (
           <>
-            {op.kind === "manual_sell" && op.status === "action_required" && (
+            {(op.kind === "manual_sell" || op.kind === "top_up_buy") &&
+              op.status === "action_required" && (
               <Button
                 type="button"
                 size="sm"

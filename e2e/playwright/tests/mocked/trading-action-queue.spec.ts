@@ -82,6 +82,8 @@ function syncResponse(pending = [pendingBuy], overrides: Record<string, unknown>
     pending_operations: pending,
     drifts: [],
     money_rub: 100_000,
+    available_money_rub: 100_000,
+    blocked_money_rub: 0,
     last_synced_at: new Date().toISOString(),
     has_pending_top_up: false,
     pending_top_up_rub: 0,
@@ -251,6 +253,7 @@ test.describe("Очередь действий (торговля)", () => {
     });
     const confirmDialog = page.getByRole("dialog", { name: "Подтвердить покупку" });
     await expect(confirmDialog.getByText(/чистой.*цене/i)).toBeVisible();
+    await expect(confirmDialog.getByText(/≈.*1.*005.*чистая.*1.*010.*с НКД за лот/)).toBeVisible();
     await expect(confirmDialog.getByText("Расчёт брокера")).toBeVisible({ timeout: 10_000 });
     await expect(confirmDialog.getByText("Итого к списанию")).toBeVisible();
     await expect(confirmDialog.getByText(/5[\s\u00a0]060/)).toBeVisible();
@@ -285,7 +288,6 @@ test.describe("Очередь действий (торговля)", () => {
     await expect(page.getByText(/капитал.*200/)).toBeVisible();
     await expect(page.getByText(/Обнаружено пополнение/)).toBeVisible();
     await expect(page.getByText("Покупка (пополнение)")).toBeVisible();
-    await expect(page.getByText("Отменить партию")).toBeVisible();
   });
 
   test("модалка покупки показывает грязную сумму с НКД по расчёту брокера", async ({ page }) => {
@@ -332,7 +334,9 @@ test.describe("Очередь действий (торговля)", () => {
     const confirmDialog = page.getByRole("dialog", { name: "Подтвердить покупку" });
     await expect(confirmDialog).toBeVisible({ timeout: 10_000 });
     await expect(confirmDialog.getByText("Лимит (чистая цена), %")).toBeVisible();
-    await expect(confirmDialog.getByText("НКД")).toBeVisible({ timeout: 10_000 });
+    await expect(confirmDialog.getByText(/≈.*1.*004.*чистая.*1.*289.*с НКД за лот/)).toBeVisible();
+    await expect(confirmDialog.getByText("Цена за лот")).toBeVisible({ timeout: 10_000 });
+    await expect(confirmDialog.getByText("НКД", { exact: true })).toBeVisible({ timeout: 10_000 });
     await expect(confirmDialog.getByText(/1[\s\u00a0]294/)).toBeVisible({ timeout: 10_000 });
     await expect(confirmDialog.getByText("Расчёт брокера")).toBeVisible();
   });
@@ -398,5 +402,34 @@ test.describe("Очередь действий (торговля)", () => {
     await page.getByRole("button", { name: "Добавить средства" }).click();
     await expect(page.getByText(/Обнаружено пополнение/)).toBeVisible({ timeout: 10_000 });
     expect(syncCalls).toBeGreaterThanOrEqual(1);
+  });
+
+  test("показывает свободный и заблокированный кэш; покупки сверх доступного — «Заблокировано»", async ({
+    page,
+  }) => {
+    const blockedBuy = {
+      ...pendingBuy,
+      status: "blocked",
+      block_reason:
+        "Недостаточно свободных средств — деньги заблокированы под активные заявки",
+    };
+
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sync`, async (route) => {
+      await route.fulfill({
+        json: syncResponse([blockedBuy], {
+          money_rub: 50_000,
+          available_money_rub: 2_000,
+          blocked_money_rub: 48_000,
+        }),
+      });
+    });
+
+    await page.goto(`/portfolio/${PORTFOLIO_ID}`);
+
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Свободно/)).toBeVisible();
+    await expect(page.getByText(/заблокировано/)).toBeVisible();
+    await expect(page.getByText("Заблокировано", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Подтвердить покупку" })).toBeDisabled();
   });
 });

@@ -25,12 +25,19 @@ from bond_monitor.domain.trading.models import (
 from bond_monitor.domain.shared.money import PriceUnitPct, Rub
 from bond_monitor.domain.trading.reconciler import (
     TopUpDetection,
+    adopt_orphan_holdings,
     detect_top_up,
+    migrate_legacy_adopted_holdings,
     reconcile_acknowledged_top_ups,
+    reconcile_held_position_targets,
     reconcile_positions,
+    sweep_phantom_top_up_positions,
     top_up_amount_to_distribute,
     validate_account_for_attach,
 )
+from bond_monitor.domain.trading.ports import BrokerBondPosition, BrokerSnapshot
+from bond_monitor.domain.trading.models import PendingOperation, TradeRecord
+from bond_monitor.domain.bonds.models import BondRecord, RiskLevel
 from bond_monitor.infrastructure.tinvest.trading_client import (
     AccountSnapshot,
     BondPosition,
@@ -205,10 +212,10 @@ def test_reconcile_detects_missing_position() -> None:
     assert any(d.severity == "warning" for d in result.drifts)
 
 
-def test_reconcile_detects_unknown_broker_bond() -> None:
-    """Бумага на счёте не из портфеля — critical drift."""
+def test_reconcile_ignores_unknown_broker_bond_in_reverse_pass() -> None:
+    """Обратная сверка больше не помечает чужие бумаги как critical — adoption отдельно."""
     portfolio = _portfolio()
-    portfolio.positions = []  # портфель пуст
+    portfolio.positions = []
     snapshot = AccountSnapshot(
         account_id="acc",
         account_kind=AccountKind.SANDBOX,
@@ -230,7 +237,7 @@ def test_reconcile_detects_unknown_broker_bond() -> None:
         fetched_at="2026-01-01T00:00:00+00:00",
     )
     result = reconcile_positions(portfolio, snapshot)
-    assert any(d.severity == "critical" for d in result.drifts)
+    assert not any(d.severity == "critical" for d in result.drifts)
 
 
 # ── detect_top_up ────────────────────────────────────────────────────────────
@@ -342,6 +349,446 @@ def test_top_up_amount_to_distribute_orphan_cash_without_input() -> None:
     assert amount == pytest.approx(182_000.0)
     assert note is not None
     assert "Свободный кэш" in note
+
+
+def test_adopt_orphan_holdings_creates_position_from_account() -> None:
+    portfolio = _portfolio()
+    portfolio.mode = PortfolioMode.TRADING
+    bond = BondRecord(
+        secid="TG2",
+        isin="RU000A109TG2",
+        name="iКарРус1P4",
+        maturity_date=date(2027, 1, 1),
+        last_price=100.0,
+        face_value=1000.0,
+        lot_size=1,
+        coupon_rate=10.0,
+        coupon_period_days=180,
+        volume_rub=1_000_000.0,
+        liquidity_flag=True,
+        credit_rating="ruAAA",
+        risk_level=RiskLevel.LOW,
+        ytm=12.0,
+        ytm_net=10.0,
+    )
+    bond.figi = "BBG0TG2"
+    snapshot = BrokerSnapshot(
+        account_id="acc",
+        account_kind=AccountKind.SANDBOX,
+        money_rub=Rub(50_000.0),
+        bond_positions={
+            "BBG0TG2": BrokerBondPosition(
+                figi="BBG0TG2",
+                instrument_uid="uid",
+                ticker="TG2",
+                quantity=6,
+                lots=6,
+                blocked=0,
+                current_price_pct=PriceUnitPct(100.0),
+                current_nkd_rub=Rub(0.0),
+                average_price_pct=PriceUnitPct(100.0),
+            )
+        },
+        other_instruments=[],
+        fetched_at="2026-01-01T00:00:00+00:00",
+    )
+    portfolio.trade_records = [
+        TradeRecord(
+            request_uid="uid-1",
+            account_id="acc",
+            account_kind=AccountKind.SANDBOX,
+            figi="BBG0TG2",
+            direction="BUY",
+            lots=28,
+            order_id="order-tg2",
+            status="EXECUTION_REPORT_STATUS_NEW",
+            lots_executed=0,
+        )
+    ]
+    notes = adopt_orphan_holdings(
+        portfolio,
+        snapshot,
+        {bond.isin: bond},
+        today=date(2026, 7, 8),
+    )
+    assert len(portfolio.positions) == 1
+    assert portfolio.positions[0].isin == "RU000A109TG2"
+    assert portfolio.positions[0].lots == 34
+    assert portfolio.positions[0].actual_lots == 6
+    assert portfolio.positions[0].source == PositionSourceType.ADOPTED
+    assert notes
+
+
+def test_adopt_orphan_holdings_resyncs_adopted_lots_when_order_cancelled() -> None:
+    portfolio = _portfolio()
+    portfolio.mode = PortfolioMode.TRADING
+    bond = BondRecord(
+        secid="TG2",
+        isin="RU000A109TG2",
+        name="iКарРус1P4",
+        maturity_date=date(2027, 1, 1),
+        last_price=100.0,
+        face_value=1000.0,
+        lot_size=1,
+        coupon_rate=10.0,
+        coupon_period_days=180,
+        volume_rub=1_000_000.0,
+        liquidity_flag=True,
+        credit_rating="ruAAA",
+        risk_level=RiskLevel.LOW,
+        ytm=12.0,
+        ytm_net=10.0,
+    )
+    bond.figi = "BBG0TG2"
+    portfolio.positions = [
+        PortfolioPosition(
+            isin="RU000A109TG2",
+            secid="TG2",
+            name="iКарРус1P4",
+            lots=34,
+            lot_size=1,
+            purchase_clean_price_pct=100.0,
+            purchase_dirty_price_rub=1000.0,
+            purchase_aci_rub=0.0,
+            purchase_date=date(2026, 7, 8),
+            purchase_amount_rub=34_000.0,
+            coupon_rate=10.0,
+            face_value=1000.0,
+            maturity_date=date(2027, 1, 1),
+            offer_date=None,
+            coupon_period_days=180,
+            source=PositionSourceType.ADOPTED,
+            figi="BBG0TG2",
+            actual_lots=6,
+        )
+    ]
+    portfolio.trade_records = [
+        TradeRecord(
+            request_uid="uid-1",
+            account_id="acc",
+            account_kind=AccountKind.SANDBOX,
+            figi="BBG0TG2",
+            direction="BUY",
+            lots=28,
+            order_id="order-tg2",
+            status="EXECUTION_REPORT_STATUS_CANCELLED",
+            lots_executed=0,
+        )
+    ]
+    snapshot = BrokerSnapshot(
+        account_id="acc",
+        account_kind=AccountKind.SANDBOX,
+        money_rub=Rub(2_000.0),
+        bond_positions={
+            "BBG0TG2": BrokerBondPosition(
+                figi="BBG0TG2",
+                instrument_uid="uid",
+                ticker="TG2",
+                quantity=6,
+                lots=6,
+                blocked=0,
+                current_price_pct=PriceUnitPct(100.0),
+                current_nkd_rub=Rub(0.0),
+                average_price_pct=PriceUnitPct(100.0),
+            )
+        },
+        other_instruments=[],
+        fetched_at="2026-01-01T00:00:00+00:00",
+    )
+
+    adopt_orphan_holdings(
+        portfolio,
+        snapshot,
+        {bond.isin: bond},
+        today=date(2026, 7, 8),
+    )
+
+    assert portfolio.positions[0].lots == 6
+    assert portfolio.positions[0].actual_lots == 6
+
+
+def test_migrate_legacy_adopted_collapses_inflated_initial_position() -> None:
+    """Легаси: adopt_orphan_holdings пометил позицию как INITIAL с lots=held+cancelled."""
+    portfolio = _portfolio()
+    portfolio.mode = PortfolioMode.TRADING
+    portfolio.positions = [
+        PortfolioPosition(
+            isin="RU000A109TG2",
+            secid="TG2",
+            name="iКарРус1P4",
+            lots=36,
+            lot_size=1,
+            purchase_clean_price_pct=100.0,
+            purchase_dirty_price_rub=1000.0,
+            purchase_aci_rub=0.0,
+            purchase_date=date(2026, 7, 7),
+            purchase_amount_rub=36_000.0,
+            coupon_rate=10.0,
+            face_value=1000.0,
+            maturity_date=date(2027, 1, 1),
+            offer_date=None,
+            coupon_period_days=180,
+            source=PositionSourceType.INITIAL,
+            figi="BBG0TG2",
+            actual_lots=8,
+        )
+    ]
+    portfolio.pending_operations = [
+        PendingOperation(
+            kind="top_up_buy",
+            isin="RU000A109TG2",
+            name="iКарРус1P4",
+            lots=16,
+            figi="BBG0TG2",
+            top_up_batch_id="batch-1",
+        )
+    ]
+    portfolio.trade_records = [
+        TradeRecord(
+            request_uid="uid-fill",
+            account_id="acc",
+            account_kind=AccountKind.SANDBOX,
+            figi="BBG0TG2",
+            direction="BUY",
+            lots=6,
+            order_id="order-fill",
+            status="EXECUTION_REPORT_STATUS_FILL",
+            lots_executed=6,
+        ),
+        TradeRecord(
+            request_uid="uid-cancel",
+            account_id="acc",
+            account_kind=AccountKind.SANDBOX,
+            figi="BBG0TG2",
+            direction="BUY",
+            lots=28,
+            order_id="order-cancel",
+            status="EXECUTION_REPORT_STATUS_CANCELLED",
+            lots_executed=0,
+        ),
+    ]
+    snapshot = BrokerSnapshot(
+        account_id="acc",
+        account_kind=AccountKind.SANDBOX,
+        money_rub=Rub(2_000.0),
+        bond_positions={
+            "BBG0TG2": BrokerBondPosition(
+                figi="BBG0TG2",
+                instrument_uid="uid",
+                ticker="TG2",
+                quantity=8,
+                lots=8,
+                blocked=0,
+                current_price_pct=PriceUnitPct(100.0),
+                current_nkd_rub=Rub(0.0),
+                average_price_pct=PriceUnitPct(100.0),
+            )
+        },
+        other_instruments=[],
+        fetched_at="2026-01-01T00:00:00+00:00",
+    )
+
+    notes = migrate_legacy_adopted_holdings(portfolio, snapshot, {})
+
+    assert portfolio.positions[0].source == PositionSourceType.ADOPTED
+    assert portfolio.positions[0].lots == 8
+    assert notes
+
+
+def test_migrate_legacy_skips_legitimate_partial_initial_buy() -> None:
+    portfolio = _portfolio()
+    portfolio.mode = PortfolioMode.TRADING
+    portfolio.positions = [
+        PortfolioPosition(
+            isin="RU000A1",
+            secid="TST",
+            name="Test bond",
+            lots=10,
+            lot_size=10,
+            purchase_clean_price_pct=100.0,
+            purchase_dirty_price_rub=1000.0,
+            purchase_aci_rub=0.0,
+            purchase_date=date(2026, 1, 1),
+            purchase_amount_rub=10_000.0,
+            coupon_rate=10.0,
+            face_value=1000.0,
+            maturity_date=date(2027, 1, 1),
+            offer_date=None,
+            coupon_period_days=180,
+            source=PositionSourceType.INITIAL,
+            figi="BBG1",
+            actual_lots=5,
+        )
+    ]
+    portfolio.trade_records = [
+        TradeRecord(
+            request_uid="uid-fill",
+            account_id="acc",
+            account_kind=AccountKind.SANDBOX,
+            figi="BBG1",
+            direction="BUY",
+            lots=5,
+            order_id="order-fill",
+            status="EXECUTION_REPORT_STATUS_FILL",
+            lots_executed=5,
+        )
+    ]
+    snapshot = BrokerSnapshot(
+        account_id="acc",
+        account_kind=AccountKind.SANDBOX,
+        money_rub=Rub(50_000.0),
+        bond_positions={
+            "BBG1": BrokerBondPosition(
+                figi="BBG1",
+                instrument_uid="uid",
+                ticker="TST",
+                quantity=50,
+                lots=5,
+                blocked=0,
+                current_price_pct=PriceUnitPct(100.0),
+                current_nkd_rub=Rub(0.0),
+                average_price_pct=PriceUnitPct(100.0),
+            )
+        },
+        other_instruments=[],
+        fetched_at="2026-01-01T00:00:00+00:00",
+    )
+
+    migrate_legacy_adopted_holdings(portfolio, snapshot, {})
+
+    assert portfolio.positions[0].source == PositionSourceType.INITIAL
+    assert portfolio.positions[0].lots == 10
+
+
+def test_sweep_phantom_top_up_removes_unmaterialized_new_position() -> None:
+    portfolio = _portfolio()
+    portfolio.mode = PortfolioMode.TRADING
+    portfolio.top_up_batch_meta = {
+        "batch-phantom": {
+            "previous_watermark": "2026-07-07T19:00:00+00:00",
+            "distributed_amount_rub": 30_000.0,
+            "allocations": [
+                {"isin": "RU000A107BH2", "lots": 30, "is_new_position": True},
+            ],
+        }
+    }
+    portfolio.positions = [
+        PortfolioPosition(
+            isin="RU000A107BH2",
+            secid="BH2",
+            name="ИЛСБО-1-1Р",
+            lots=30,
+            lot_size=1,
+            purchase_clean_price_pct=97.5,
+            purchase_dirty_price_rub=983.33,
+            purchase_aci_rub=8.33,
+            purchase_date=date(2026, 7, 8),
+            purchase_amount_rub=29_499.9,
+            coupon_rate=19.0,
+            face_value=1000.0,
+            maturity_date=date(2027, 1, 1),
+            offer_date=None,
+            coupon_period_days=30,
+            source=PositionSourceType.INITIAL,
+            figi="FIGI_BH2",
+            actual_lots=0,
+        )
+    ]
+    snapshot = BrokerSnapshot(
+        account_id="acc",
+        account_kind=AccountKind.SANDBOX,
+        money_rub=Rub(2_000.0),
+        bond_positions={},
+        other_instruments=[],
+        fetched_at="2026-01-01T00:00:00+00:00",
+    )
+
+    notes = sweep_phantom_top_up_positions(portfolio, snapshot)
+
+    assert portfolio.positions == []
+    assert notes
+
+
+def test_reconcile_held_position_targets_collapses_inflated_lots() -> None:
+    portfolio = _portfolio()
+    portfolio.mode = PortfolioMode.TRADING
+    portfolio.positions = [
+        PortfolioPosition(
+            isin="RU000A109TG2",
+            secid="TG2",
+            name="iКарРус1P4",
+            lots=36,
+            lot_size=1,
+            purchase_clean_price_pct=100.0,
+            purchase_dirty_price_rub=1000.0,
+            purchase_aci_rub=0.0,
+            purchase_date=date(2026, 7, 7),
+            purchase_amount_rub=36_000.0,
+            coupon_rate=10.0,
+            face_value=1000.0,
+            maturity_date=date(2027, 1, 1),
+            offer_date=None,
+            coupon_period_days=180,
+            source=PositionSourceType.INITIAL,
+            figi="BBG0TG2",
+            actual_lots=8,
+        )
+    ]
+    snapshot = BrokerSnapshot(
+        account_id="acc",
+        account_kind=AccountKind.SANDBOX,
+        money_rub=Rub(2_000.0),
+        bond_positions={
+            "BBG0TG2": BrokerBondPosition(
+                figi="BBG0TG2",
+                instrument_uid="uid",
+                ticker="TG2",
+                quantity=8,
+                lots=8,
+                blocked=0,
+                current_price_pct=PriceUnitPct(100.0),
+                current_nkd_rub=Rub(0.0),
+                average_price_pct=PriceUnitPct(100.0),
+            )
+        },
+        other_instruments=[],
+        fetched_at="2026-01-01T00:00:00+00:00",
+    )
+
+    notes = reconcile_held_position_targets(portfolio, snapshot)
+
+    assert portfolio.positions[0].lots == 8
+    assert portfolio.positions[0].source == PositionSourceType.ADOPTED
+    assert notes
+
+
+def test_adopt_orphan_holdings_unknown_bond_returns_note_only() -> None:
+    portfolio = _portfolio()
+    portfolio.mode = PortfolioMode.TRADING
+    snapshot = BrokerSnapshot(
+        account_id="acc",
+        account_kind=AccountKind.SANDBOX,
+        money_rub=Rub(50_000.0),
+        bond_positions={
+            "BBG_UNKNOWN": BrokerBondPosition(
+                figi="BBG_UNKNOWN",
+                instrument_uid="uid",
+                ticker="WTF",
+                quantity=10,
+                lots=10,
+                blocked=0,
+                current_price_pct=None,
+                current_nkd_rub=None,
+                average_price_pct=None,
+            )
+        },
+        other_instruments=[],
+        fetched_at="2026-01-01T00:00:00+00:00",
+    )
+    notes = adopt_orphan_holdings(portfolio, snapshot, {}, today=date(2026, 7, 8))
+    assert not portfolio.positions
+    assert notes
+    assert "universe" in notes[0].lower() or "не найдена" in notes[0]
 
 
 def test_reconcile_acknowledged_top_ups_from_positions() -> None:

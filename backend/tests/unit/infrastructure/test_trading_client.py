@@ -130,6 +130,38 @@ def test_get_account_snapshot_fetches_nominal_for_bond_prices() -> None:
     assert snapshot.money_rub == Rub(100_000.0)
 
 
+def test_get_account_snapshot_reads_blocked_money_from_positions() -> None:
+    portfolio = MagicMock()
+    portfolio.total_amount_currencies = SimpleNamespace(units=50_000, nano=0, currency="rub")
+    portfolio.positions = [
+        SimpleNamespace(
+            instrument_type="currency",
+            ticker="RUB000UTSTOM",
+            quantity=_quotation(50_000),
+            current_price=_quotation(1),
+        )
+    ]
+
+    positions_resp = MagicMock()
+    positions_resp.blocked = [
+        SimpleNamespace(currency="rub", units=45_641, nano=500_000_000)
+    ]
+
+    mock_client = MagicMock()
+    mock_client.operations.get_portfolio.return_value = portfolio
+    mock_client.operations.get_positions.return_value = positions_resp
+
+    with patch(
+        "bond_monitor.infrastructure.tinvest.trading_client._open_client"
+    ) as open_client:
+        open_client.return_value.__enter__.return_value = mock_client
+        snapshot = get_account_snapshot("token", AccountKind.PRODUCTION, "acc-1")
+
+    assert snapshot.money_rub == Rub(50_000.0)
+    assert float(snapshot.blocked_money_rub) == pytest.approx(45_641.5)
+    mock_client.operations.get_positions.assert_called_once_with(account_id="acc-1")
+
+
 # ── post_order ────────────────────────────────────────────────────────────────
 
 

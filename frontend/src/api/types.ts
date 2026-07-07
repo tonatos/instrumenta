@@ -309,6 +309,8 @@ export interface TradingSyncResponse {
   pending_operations: PendingOperation[];
   drifts: PositionDrift[];
   money_rub: number;
+  available_money_rub: number;
+  blocked_money_rub: number;
   last_synced_at: string | null;
   has_pending_top_up: boolean;
   pending_top_up_rub: number;

@@ -38,10 +38,15 @@ class BrokerSnapshot:
     bond_positions: dict[str, BrokerBondPosition]
     other_instruments: list[BrokerOtherInstrument]
     fetched_at: str
+    blocked_money_rub: Rub = Rub(0.0)
 
     @property
     def has_foreign_instruments(self) -> bool:
         return bool(self.other_instruments)
+
+    @property
+    def available_money_rub(self) -> Rub:
+        return Rub(max(0.0, float(self.money_rub) - float(self.blocked_money_rub)))
 
 
 @dataclass(frozen=True)

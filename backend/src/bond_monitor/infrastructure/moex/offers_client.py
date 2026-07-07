@@ -12,7 +12,8 @@ Fields used:
     offerdatestart   — first day investors may submit exercise requests
     offerdateend     — last day to submit (often ~2 weeks before execution)
     price            — redemption price as % of face value (often ≠ 100)
-    offertype        — «Оферта» on MOEX (both investor puts and issuer calls)
+    offertype        — «Оферта» on MOEX (both investor puts and issuer calls);
+                       past exercised puts may appear as «Оферта (состоялась)»
 
 We only fetch for bonds that already have ``offer_date`` in the MOEX
 snapshot (~400 instruments, not the full ≈3 000 universe). Results are
@@ -51,8 +52,13 @@ _CACHE_FILE: Path = _CACHE_DIR / "moex_put_offers.json"
 _MAX_WORKERS: int = 10
 _HTTP_TIMEOUT = httpx.Timeout(connect=10.0, read=20.0, write=10.0, pool=10.0)
 
-# MOEX offertype label shared by investor puts and issuer calls.
-_PUT_OFFER_TYPE = "Оферта"
+# Bump when offer-type parsing / issuer-call heuristics change (invalidates disk cache).
+_CLASSIFIER_VERSION: int = 2
+
+
+def _is_moex_offer_row(offer_type: Any) -> bool:
+    """True for MOEX offer rows («Оферта», «Оферта (состоялась)», …)."""
+    return isinstance(offer_type, str) and offer_type.startswith("Оферта")
 
 
 @dataclass(frozen=True)
@@ -106,7 +112,7 @@ def _offer_schedule_from_rows(
 
     for row in rows:
         offer_type = row[col_idx["offertype"]] if "offertype" in col_idx else None
-        if offer_type != _PUT_OFFER_TYPE:
+        if not _is_moex_offer_row(offer_type):
             continue
         face_unit = row[col_idx["faceunit"]] if "faceunit" in col_idx else None
         if face_unit and face_unit != "RUB":
@@ -249,8 +255,11 @@ def _load_schedules_for_isins(
             sched_data = entry.get("schedule")
             if sched_data is None:
                 continue
-            # Re-fetch schedules cached before issuer-call detection was added.
+            # Re-fetch schedules cached before issuer-call detection or classifier bumps.
             if "is_issuer_call" not in sched_data:
+                to_fetch.append((isin, secid))
+                continue
+            if entry.get("_classifier_v", 1) < _CLASSIFIER_VERSION:
                 to_fetch.append((isin, secid))
                 continue
             result[isin] = _schedule_from_dict(sched_data)
@@ -275,6 +284,7 @@ def _load_schedules_for_isins(
         for isin, schedule in fetched.items():
             cache[isin] = {
                 "_fetched_at": now,
+                "_classifier_v": _CLASSIFIER_VERSION,
                 "schedule": _schedule_to_dict(schedule) if schedule else None,
             }
             if schedule:

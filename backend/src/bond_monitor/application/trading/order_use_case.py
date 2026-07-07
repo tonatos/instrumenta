@@ -20,7 +20,6 @@ from bond_monitor.domain.trading.position_lifecycle import (
     find_reinvest_slot_for_op,
     reinvest_source_for_slot,
 )
-from bond_monitor.domain.trading.top_up import cancel_top_up_batch
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import broker_snapshot_from_infrastructure
 from bond_monitor.application.trading import broker
 from bond_monitor.infrastructure.tinvest.trading_client import (
@@ -522,9 +521,16 @@ class OrderUseCase:
         token = self._ctx.token(portfolio.account_kind)  # type: ignore[arg-type]
         account_id = portfolio.account_id  # type: ignore[assignment]
 
+        from bond_monitor.domain.trading.ids import stable_id
+
         active: TradeRecord | None = None
         for tr in portfolio.trade_records:
-            if tr.pending_op_id == op_id and tr.is_active and tr.order_id:
+            if not tr.is_active or not tr.order_id:
+                continue
+            if tr.pending_op_id == op_id or tr.order_id == op_id:
+                active = tr
+                break
+            if tr.order_id and op_id == stable_id(portfolio.id, "active_order", tr.order_id):
                 active = tr
                 break
         if active is None:
@@ -568,29 +574,6 @@ class OrderUseCase:
                 break
         if not found:
             raise ValueError(f"Position {isin} not found")
-        portfolio.touch()
-        await self._ctx.repo.save(portfolio)
-        return await self._sync.sync_portfolio(
-            portfolio_id,
-            universe,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-            today=today,
-            block_non_api_tradable_pending=block_non_api_tradable_pending,
-        )
-
-    async def cancel_top_up_batch_operation(
-        self,
-        portfolio_id: str,
-        batch_id: str,
-        universe: list[BondRecord],
-        *,
-        key_rate: float,
-        tax_rate: float,
-        today: date,
-    ) -> TradingSyncResult:
-        portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
-        cancel_top_up_batch(portfolio, batch_id)
         portfolio.touch()
         await self._ctx.repo.save(portfolio)
         return await self._sync.sync_portfolio(
