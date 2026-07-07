@@ -3,7 +3,7 @@
 
 Содержит чистые функции (без побочных эффектов и без зависимости от Streamlit):
 
-* :func:`risk_profile_filter` — фильтр универса под выбранный риск-профиль.
+* :func:`domain.portfolio.selection.risk_profile_filter` — фильтр универса под профиль.
 * :func:`auto_compose` — диверсифицированный автосостав начального портфеля.
 * :func:`select_replacement` — подбор бумаги-замены для слота реинвестиции.
 * :func:`build_plan` — моделирование cashflow и заполнение слотов
@@ -20,7 +20,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-from bond_monitor.domain.bonds.models import RATING_ORDER, BondRecord, RiskLevel
+from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import (
     Portfolio,
     PortfolioPosition,
@@ -30,7 +30,30 @@ from bond_monitor.domain.portfolio.models import (
     ReinvestmentTriggerReason,
     RiskProfile,
 )
-from bond_monitor.domain.screening.scorer import score_bonds_for_profile
+from bond_monitor.domain.portfolio.policies import (
+    DEFAULT_BOND_SELECTION_POLICY,
+    DEFAULT_PLANNING_POLICY,
+    DEFAULT_PORTFOLIO_ALLOCATION_POLICY,
+    BondSelectionContext,
+)
+from bond_monitor.domain.portfolio.selection import (
+    api_tradable_filter,
+    explain_selection_failure,
+    has_usable_price,
+    portfolio_universe_filter,
+    put_offer_buy_blocked,
+    risk_profile_filter,
+    select_best_bond,
+    select_ranked_bonds,
+)
+
+__all__ = [
+    "api_tradable_filter",
+    "auto_compose",
+    "portfolio_universe_filter",
+    "risk_profile_filter",
+    "select_replacement",
+]
 from bond_monitor.domain.shared.money import Rub
 from bond_monitor.domain.trading.cash_constraints import initial_buy_gap_lots
 from bond_monitor.domain.trading.policies import (
@@ -43,58 +66,25 @@ logger = logging.getLogger(__name__)
 
 # ── Constants ────────────────────────────────────────────────────────────────
 
-# Сеттлмент T+2 на MOEX + день на принятие решения = 2 рабочих дня. Считаем в
-# календарных днях, чтобы не зависеть от производственного календаря.
-REINVESTMENT_GAP_DAYS: int = 2
+# Planning / allocation / selection — see ``domain.portfolio.policies``.
+_planning = DEFAULT_PLANNING_POLICY
+_alloc = DEFAULT_PORTFOLIO_ALLOCATION_POLICY
+_selection = DEFAULT_BOND_SELECTION_POLICY
 
-# За сколько дней до пут-оферты UI начинает показывать напоминание с выбором
-# «предъявить» / «держать».
-PUT_OFFER_REMINDER_DAYS: int = 30
+REINVESTMENT_GAP_DAYS: int = _planning.reinvestment_gap_days
+PUT_OFFER_REMINDER_DAYS: int = _planning.put_offer_reminder_days
+MAX_REINVEST_DEPTH: int = _planning.max_reinvest_depth
+COUPON_CASH_REINVEST_INTERVAL_DAYS: int = _planning.coupon_cash_reinvest_interval_days
 
-# Максимальная доля одной позиции в стартовом портфеле — жёсткий потолок
-# для диверсификации. 0.30 = не более 30% бюджета в одну бумагу. Если у
-# топ-кандидата лот дорогой и не помещается в целевую долю, мы можем
-# временно увеличить долю до этого потолка, но не выше.
-MAX_POSITION_SHARE: float = 0.30
+MAX_POSITION_SHARE: float = _alloc.max_position_share
+TARGET_POSITION_SHARE: float = _alloc.target_position_share
+MAX_AUTO_POSITIONS: int = _alloc.max_auto_positions
+MIN_AUTO_POSITIONS: int = _alloc.min_auto_positions
+MIN_POSITION_AMOUNT_RUB: float = _alloc.min_position_amount_rub
+MIN_POSITION_SHARE: float = _alloc.min_position_share
 
-# Желаемая доля одной позиции — ориентир алгоритма по диверсификации.
-# 0.18 = ~5–6 позиций при достаточном бюджете. Алгоритм старается
-# распределить деньги +/- равномерно вокруг этой доли.
-TARGET_POSITION_SHARE: float = 0.18
-
-# Сколько разных бумаг максимум подбирать в автосоставе. Ограничение чисто
-# UX-овое: больше десятка позиций пользователю тяжело обозревать.
-MAX_AUTO_POSITIONS: int = 10
-
-# Минимальное число позиций, к которому стремимся (если хватает бюджета и
-# подходящих бумаг). Меньше четырёх — это уже не диверсификация, а ставка.
-MIN_AUTO_POSITIONS: int = 4
-
-# Минимальная сумма одной позиции в рублях — отсекаем «огрызки» вроде
-# одного лота на 1 000 ₽ при бюджете в 400 000 ₽. Реальный минимум —
-# max(MIN_POSITION_AMOUNT_RUB, MIN_POSITION_SHARE × бюджет).
-MIN_POSITION_AMOUNT_RUB: float = 5_000.0
-MIN_POSITION_SHARE: float = 0.03
-
-# Минимальная глубина оставшегося горизонта (в днях), при которой ещё имеет
-# смысл подбирать замену в слоте — иначе купим бумагу, которая едва успеет
-# прокрутить один купон.
-MIN_REPLACEMENT_HORIZON_DAYS: int = 10
-
-# Сколько уровней реинвестиций глубиной обрабатывать в :func:`build_plan`.
-# Защита от теоретически бесконечной цепочки A → B → C → ... В реальной жизни
-# с горизонтом 1–3 года реинвестиций редко больше 3–4.
-MAX_REINVEST_DEPTH: int = 10
-
-# Минимальный интервал между «купонными» реинвестициями: реинвестируем
-# накопленный кэш не чаще чем раз в N дней, иначе план превратится в
-# бесконечную цепочку микро-покупок.
-COUPON_CASH_REINVEST_INTERVAL_DAYS: int = 30
-
-# Кредитные пороги по национальной шкале, см. ``core.bond_model.RATING_ORDER``.
-# `RATING_ORDER["ruA-"] == 6`, `RATING_ORDER["ruBB-"] == 0`.
-_NORMAL_MIN_RATING_ORDINAL: int = RATING_ORDER["ruA-"]
-_AGGRESSIVE_MIN_RATING_ORDINAL: int = RATING_ORDER["ruBB-"]
+MIN_REPLACEMENT_HORIZON_DAYS: int = _selection.min_replacement_horizon_days
+MIN_REINVEST_CLEAN_PRICE_PCT: float = _selection.min_clean_price_pct
 
 
 # ── Public types ─────────────────────────────────────────────────────────────
@@ -222,106 +212,28 @@ class PortfolioPlan:
     value_timeline: list[PortfolioValuePoint] = field(default_factory=list)
 
 
-# ── Risk profile filter ──────────────────────────────────────────────────────
-
-
-def api_tradable_filter(bonds: Sequence[BondRecord]) -> list[BondRecord]:
-    """Оставить только бумаги, доступные для торговли через T-Invest API."""
-    return [b for b in bonds if b.api_trade_available_flag is True]
-
-
-def portfolio_universe_filter(
-    bonds: Sequence[BondRecord],
-    portfolio: Portfolio,
-) -> list[BondRecord]:
-    """Универс под стратегию портфеля: профиль риска + опционально API-торгуемые."""
-    filtered = risk_profile_filter(bonds, portfolio.risk_profile)
-    if portfolio.api_trade_only:
-        filtered = api_tradable_filter(filtered)
-    return filtered
-
-
-def risk_profile_filter(
-    bonds: Sequence[BondRecord],
-    profile: RiskProfile,
-) -> list[BondRecord]:
-    """Отфильтровать универс под выбранный риск-профиль.
-
-    NORMAL — только LOW/MODERATE по шкале T-Invest, рейтинг ``≥ ruA-``,
-    без субординации, без явных дефолтов. «Только для квалов» НЕ
-    отсекаются — пользователь сам решает, может ли он их купить.
-
-    AGGRESSIVE — все уровни риска, рейтинг ``≥ ruBB-``, разрешены амортизация,
-    колл-оферта и субординация. Явные дефолты по-прежнему отсекаются —
-    это уже не риск, а свершившийся факт.
-
-    Бумаги без рейтинга в NORMAL отбрасываются (нельзя оценить риск
-    эмитента); в AGGRESSIVE пропускаются — пользователь сознательно идёт
-    на повышенный риск.
-
-    Note:
-        Раньше здесь стояло безусловное ``if bond.for_qual_investor_flag:
-        continue`` — оно фильтровало бумаги с пометкой «только для
-        квалифицированных инвесторов». Это убрано: статус «квал» — это
-        регуляторное ограничение доступа, а не свойство риска бумаги
-        как таковой. Если у пользователя есть статус квалифицированного
-        инвестора, он сможет торговать этими бумагами; если нет — он
-        просто их не увидит у брокера. Решать должен пользователь, а не
-        универсальный фильтр приложения.
-    """
-    result: list[BondRecord] = []
-    for bond in bonds:
-        if bond.has_default or bond.has_technical_default:
-            continue
-
-        rating_ordinal: int | None = (
-            RATING_ORDER.get(bond.credit_rating) if bond.credit_rating else None
-        )
-
-        if profile == RiskProfile.NORMAL:
-            if bond.subordinated_flag:
-                continue
-            if bond.risk_level == RiskLevel.HIGH:
-                continue
-            if rating_ordinal is None:
-                continue
-            if rating_ordinal < _NORMAL_MIN_RATING_ORDINAL:
-                continue
-        elif profile == RiskProfile.AGGRESSIVE:
-            if rating_ordinal is not None and rating_ordinal < _AGGRESSIVE_MIN_RATING_ORDINAL:
-                continue
-
-        result.append(bond)
-    return result
-
-
 # ── Selection helpers ────────────────────────────────────────────────────────
 
 
 def _has_usable_price(bond: BondRecord) -> bool:
-    """Бумага пригодна к покупке, если у неё есть положительная грязная цена."""
-    return bond.price_per_lot_rub is not None and bond.price_per_lot_rub > 0
+    """Backward-compatible alias for :func:`selection.has_usable_price`."""
+    return has_usable_price(bond)
 
 
-def put_offer_buy_blocked(bond: BondRecord, as_of_date: date) -> str | None:
-    """Проверить, можно ли покупать бумагу с учётом окна пут-оферты.
-
-    Возвращает ``None``, если покупка допустима; иначе — причину отсечения.
-
-    Типичный анти-паттерн: ``offer_date`` через неделю, а
-    ``offer_submission_end`` уже прошёл — купить «под оферту» нельзя,
-    YTM к оферте вводит в заблуждение, держать придётся до погашения.
-    """
-    if bond.offer_date is None or bond.offer_date <= as_of_date:
-        return None
-    if bond.offer_submission_end is None:
-        return None
-    if bond.offer_submission_end >= as_of_date:
-        return None
-    return (
-        f"окно подачи по пут-оферте закрыто "
-        f"{bond.offer_submission_end.isoformat()}, оферта "
-        f"{bond.offer_date.isoformat()} — предъявить уже нельзя"
+def _selection_context(
+    *,
+    profile: RiskProfile,
+    horizon_date: date,
+    purchase_date: date,
+    api_trade_only: bool,
+    budget_rub: float | None = None,
+) -> BondSelectionContext:
+    return BondSelectionContext(
+        profile=profile,
+        horizon_date=horizon_date,
+        purchase_date=purchase_date,
+        budget_rub=budget_rub,
+        api_trade_only=api_trade_only,
     )
 
 
@@ -434,68 +346,17 @@ def _explain_replacement_failure(
     profile: RiskProfile,
     amount: float,
     horizon_date: date,
+    api_trade_only: bool = False,
 ) -> str:
-    """Сформировать пояснение, почему :func:`select_replacement` не нашёл бумагу."""
-    profiles_tried = (
-        f"«{profile.value}», «{RiskProfile.NORMAL.value}» и любую без дефолта"
-        if profile != RiskProfile.NORMAL
-        else f"«{profile.value}» и любую без дефолта"
+    """Сформировать пояснение, почему подбор замены не нашёл бумагу."""
+    ctx = _selection_context(
+        profile=profile,
+        horizon_date=horizon_date,
+        purchase_date=target_date,
+        api_trade_only=api_trade_only,
+        budget_rub=amount,
     )
-
-    if amount <= 0:
-        return f"ожидаемый кэш {amount:,.0f} ₽ ≤ 0"
-
-    min_maturity_date = target_date + timedelta(days=MIN_REPLACEMENT_HORIZON_DAYS)
-    window = f"[{min_maturity_date.isoformat()}, {horizon_date.isoformat()}]"
-
-    if min_maturity_date > horizon_date:
-        return (
-            f"окно реинвестиции слишком узкое — покупка с {target_date.isoformat()}, "
-            f"но мин. срок удержания {MIN_REPLACEMENT_HORIZON_DAYS} дн. → "
-            f"погашение замены не ранее {min_maturity_date.isoformat()}, "
-            f"а горизонт плана {horizon_date.isoformat()}"
-        )
-
-    no_default = [b for b in universe if not b.has_default and not b.has_technical_default]
-    in_window: list[BondRecord] = []
-    too_expensive: list[tuple[BondRecord, float]] = []
-
-    for bond in no_default:
-        if put_offer_buy_blocked(bond, target_date) is not None:
-            continue
-        if not _has_usable_price(bond):
-            continue
-        end = bond.maturity_date or bond.offer_date
-        if end is None:
-            continue
-        if end < min_maturity_date or end > horizon_date:
-            continue
-        lot_cost = bond.price_per_lot_rub or 0.0
-        if lot_cost > amount:
-            too_expensive.append((bond, lot_cost))
-            continue
-        in_window.append(bond)
-
-    if in_window:
-        return (
-            f"пробовали {profiles_tried}: в окне {window} есть "
-            f"{len(in_window)} подходящих по сроку и бюджету бумаг(и), "
-            f"но выбрать не удалось"
-        )
-
-    if too_expensive:
-        min_lot = min(cost for _, cost in too_expensive)
-        return (
-            f"пробовали {profiles_tried}: в окне {window} есть "
-            f"{len(too_expensive)} бумаг(и), но мин. лот {min_lot:,.0f} ₽ "
-            f"больше доступных {amount:,.0f} ₽"
-        )
-
-    return (
-        f"пробовали {profiles_tried}: в окне {window} "
-        f"нет бумаг с погашением при доступных {amount:,.0f} ₽ "
-        f"(с учётом цены, лота и пут-оферт)"
-    )
+    return explain_selection_failure(universe, ctx)
 
 
 def select_replacement(
@@ -511,129 +372,20 @@ def select_replacement(
 ) -> tuple[BondRecord | None, str]:
     """Подобрать бумагу-замену для слота реинвестиции.
 
-    Условия базового отбора (независимы от профиля):
-        * есть рыночная цена;
-        * стоимость 1 лота помещается в ``amount``;
-        * дата погашения в окне ``[target_date + MIN_REPLACEMENT_HORIZON_DAYS,
-          horizon_date]``.
-
-    Профильные условия применяются с постепенным смягчением, чтобы деньги
-    не простаивали в кэше, когда в точном окне нет идеальных бумаг:
-
-    1. **Основной профиль** (``profile``): полный фильтр риска, рейтинга,
-       субординации — все ограничения в силе.
-    2. **Fallback → NORMAL**: если основной профиль не дал кандидатов,
-       пробуем консервативный NORMAL (рейтинг ≥ ruA-, без субординации,
-       без HIGH-риска). Применяется когда, например, в агрессивном портфеле
-       под конец горизонта остались только длинные бумаги, а все ВДО уже
-       погасились.
-    3. **Fallback → любая без дефолта**: если и NORMAL пуст — берём любую
-       пригодную по сроку бумагу без дефолта / тех.дефолта. Это крайняя
-       мера: деньги в облигациях всё равно лучше, чем 0% в кэше.
-
-    Во всех случаях скоринг проводится с весами *исходного* профиля:
-    приоритет YTM / риска / ликвидности пользователя сохраняется, меняется
-    только фильтр допустимых бумаг.
-
-    Returns:
-        ``(bond, note)`` — найденная бумага и строка-пометка для plan.notes
-        (пустая строка если использован основной профиль);
-        ``(None, reason)`` если кандидаты не нашлись — ``reason`` описывает причину.
+    Делегирует отбор и ранжирование в :mod:`domain.portfolio.selection`.
     """
-    if amount <= 0:
-        return None, _explain_replacement_failure(
-            universe,
-            target_date=target_date,
-            profile=profile,
-            amount=amount,
-            horizon_date=horizon_date,
-        )
-    min_maturity_date = target_date + timedelta(days=MIN_REPLACEMENT_HORIZON_DAYS)
-    if min_maturity_date > horizon_date:
-        return None, _explain_replacement_failure(
-            universe,
-            target_date=target_date,
-            profile=profile,
-            amount=amount,
-            horizon_date=horizon_date,
-        )
-
-    def _candidates_for(bonds: Sequence[BondRecord]) -> list[BondRecord]:
-        result: list[BondRecord] = []
-        for bond in bonds:
-            if put_offer_buy_blocked(bond, target_date) is not None:
-                continue
-            if not _has_usable_price(bond):
-                continue
-            lot_cost = bond.price_per_lot_rub or 0.0
-            if lot_cost > amount:
-                continue
-            end = bond.maturity_date or bond.offer_date
-            if end is None:
-                continue
-            if end < min_maturity_date or end > horizon_date:
-                continue
-            result.append(bond)
-        return result
-
-    def _filtered_universe(prof: RiskProfile) -> list[BondRecord]:
-        bonds = risk_profile_filter(universe, prof)
-        if api_trade_only:
-            bonds = api_tradable_filter(bonds)
-        return bonds
-
-    def _best(candidates: list[BondRecord]) -> BondRecord | None:
-        scored = score_bonds_for_profile(
-            candidates,
-            profile,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-        )
-        return scored[0] if scored else None
-
-    # Шаг 1: основной профиль
-    primary = _candidates_for(_filtered_universe(profile))
-    if primary:
-        bond = _best(primary)
-        if bond:
-            return bond, ""
-
-    # Шаг 2: fallback → NORMAL (только если основной профиль не NORMAL)
-    if profile != RiskProfile.NORMAL:
-        normal_candidates = _candidates_for(_filtered_universe(RiskProfile.NORMAL))
-        if normal_candidates:
-            bond = _best(normal_candidates)
-            if bond:
-                return bond, (
-                    f"профиль «{profile.value}» — нет кандидатов в окне "
-                    f"[{target_date.isoformat()}, {horizon_date.isoformat()}]; "
-                    f"выбрана бумага под NORMAL-профиль"
-                )
-
-    # Шаг 3: fallback → любая без дефолта
-    no_default = [b for b in universe if not b.has_default and not b.has_technical_default]
-    if api_trade_only:
-        no_default = api_tradable_filter(no_default)
-    any_candidates = _candidates_for(no_default)
-    if any_candidates:
-        bond = _best(any_candidates)
-        if bond:
-            profiles_tried = (
-                f"профиль «{profile.value}»"
-                if profile == RiskProfile.NORMAL
-                else f"профили «{profile.value}» и «{RiskProfile.NORMAL.value}»"
-            )
-            return bond, (
-                f"{profiles_tried} не дали кандидатов в окне; "
-                "выбрана лучшая по скору бумага без профильных ограничений"
-            )
-
-    return None, _explain_replacement_failure(
-        universe,
-        target_date=target_date,
+    ctx = _selection_context(
         profile=profile,
-        amount=amount,
         horizon_date=horizon_date,
+        purchase_date=target_date,
+        api_trade_only=api_trade_only,
+        budget_rub=amount,
+    )
+    return select_best_bond(
+        universe,
+        ctx,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
     )
 
 
@@ -685,18 +437,20 @@ def auto_compose(
     if initial_amount <= 0:
         return [], 0.0, ["Бюджет ≤ 0 — нечего распределять"]
 
-    filtered = risk_profile_filter(universe, profile)
-    if api_trade_only:
-        filtered = api_tradable_filter(filtered)
-    candidates = [
-        b
-        for b in filtered
-        if _has_usable_price(b)
-        and b.maturity_date
-        and b.maturity_date <= horizon_date
-        and put_offer_buy_blocked(b, today) is None
-    ]
-    if not candidates:
+    selection_ctx = _selection_context(
+        profile=profile,
+        horizon_date=horizon_date,
+        purchase_date=today,
+        api_trade_only=api_trade_only,
+    )
+    selection = select_ranked_bonds(
+        universe,
+        selection_ctx,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+    )
+    scored = selection.bonds
+    if not scored:
         notes.append(
             "Под выбранный профиль и горизонт не нашлось ни одной подходящей бумаги. "
             + (
@@ -707,13 +461,8 @@ def auto_compose(
             )
         )
         return [], initial_amount, notes
-
-    scored = score_bonds_for_profile(
-        candidates,
-        profile,
-        key_rate=key_rate,
-        tax_rate=tax_rate,
-    )
+    if selection.fallback_note:
+        notes.append(selection.fallback_note)
 
     target_count = max(
         MIN_AUTO_POSITIONS,
@@ -2366,25 +2115,22 @@ def distribute_top_up(
     if top_up_amount_rub <= 0:
         return [], ["Сумма top-up ≤ 0 — нечего распределять."]
 
-    filtered = portfolio_universe_filter(universe, portfolio)
-    candidates = [
-        b
-        for b in filtered
-        if _has_usable_price(b)
-        and b.maturity_date
-        and b.maturity_date <= portfolio.horizon_date
-        and put_offer_buy_blocked(b, today) is None
-    ]
-    if not candidates:
+    selection_ctx = _selection_context(
+        profile=portfolio.risk_profile,
+        horizon_date=portfolio.horizon_date,
+        purchase_date=today,
+        api_trade_only=portfolio.api_trade_only,
+    )
+    scored = select_ranked_bonds(
+        universe,
+        selection_ctx,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+    ).bonds
+    if not scored:
         return [], [
             "Под текущий профиль и горизонт нет ни одной подходящей бумаги — top-up не распределён."
         ]
-    scored = score_bonds_for_profile(
-        candidates,
-        portfolio.risk_profile,
-        key_rate=key_rate,
-        tax_rate=tax_rate,
-    )
 
     total_budget = (
         portfolio.initial_amount_rub + portfolio.acknowledged_top_ups_rub + top_up_amount_rub

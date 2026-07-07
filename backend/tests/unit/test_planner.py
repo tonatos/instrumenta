@@ -108,6 +108,40 @@ def test_auto_compose_diversifies() -> None:
     assert cash >= 0
 
 
+def test_auto_compose_excludes_distressed_bonds() -> None:
+    """Distressed (<85% clean) bonds must not appear in initial auto-compose."""
+    today = date(2026, 1, 1)
+    horizon = date(2027, 1, 1)
+    distressed = _bond(
+        isin="RU000DST",
+        name="EuroTrans distressed",
+        maturity=date(2026, 9, 1),
+        price=75.0,
+        ytm=35.0,
+        score=95.0,
+    )
+    quality = _bond(
+        isin="RU000QAL",
+        name="Quality bond",
+        maturity=date(2026, 9, 1),
+        price=99.0,
+        ytm=16.0,
+        score=70.0,
+    )
+    positions, _cash, _notes = auto_compose(
+        initial_amount=200_000,
+        universe=[distressed, quality],
+        profile=RiskProfile.AGGRESSIVE,
+        horizon_date=horizon,
+        today=today,
+        key_rate=14.5,
+        tax_rate=0.13,
+        api_trade_only=False,
+    )
+    assert positions
+    assert all(p.isin != distressed.isin for p in positions)
+
+
 def test_auto_compose_api_trade_only_excludes_non_tradable() -> None:
     today = date(2026, 1, 1)
     horizon = date(2027, 1, 1)

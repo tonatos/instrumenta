@@ -52,6 +52,7 @@ def _portfolio(initial: float = 100_000.0) -> Portfolio:
         initial_amount_rub=initial,
         horizon_date=date(2026, 12, 31),
         risk_profile=RiskProfile.NORMAL,
+        api_trade_only=False,
     )
 
 

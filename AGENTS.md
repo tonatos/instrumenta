@@ -149,14 +149,16 @@ API client: `frontend/src/api/client.ts` — прокси через Vite dev se
 
 ## Портфель — бизнес-правила
 
-См. прежнюю документацию по алгоритмам (актуально в `domain/portfolio/planner.py`):
+Отбор бумаг для `auto_compose`, `select_replacement`, `distribute_top_up` и купонного реинвеста — единый модуль `domain/portfolio/selection.py` (eligibility, fallback aggressive→normal→без профиля, ранжирование).
+
+См. также `domain/portfolio/planner.py`:
 
 - `auto_compose` — диверсификация (TARGET/MAX/MIN position share)
 - `build_plan` — cashflow, реинвест-цепочки, put-offer, held at horizon
 - `validate_replacement_bond` — guard от «денег из воздуша»
 - `distribute_top_up` — распределение пополнения
 
-Константы → `PlanningPolicy` в `domain/portfolio/policies.py`.
+Константы → `PlanningPolicy`, `PortfolioAllocationPolicy`, `BondSelectionPolicy` в `domain/portfolio/policies.py`.
 
 ---
 
