@@ -1,34 +1,54 @@
 services:
-  bond-monitor:
+  api:
     build:
       context: .
-      dockerfile: Dockerfile
-    image: bond-monitor:latest
-    container_name: bond-monitor
+      dockerfile: backend/Dockerfile
+    image: bond-monitor-api:latest
+    container_name: bond-monitor-api
     ports:
-      # IPv4 loopback + LAN
-      - "0.0.0.0:8501:8501"
-      # IPv6 loopback — нужно, потому что macOS резолвит localhost в ::1
-      - "[::1]:8501:8501"
+      - "8000:8000"
     env_file:
-      # Copy .env.example → .env and fill TINKOFF_TOKEN before running
       - path: .env
         required: false
     environment:
-      # These can also be set here directly (overrides .env values)
-      # KEY_RATE: "14.5"
-      # MAX_DAYS: "120"
-      # MIN_VOLUME_RUB: "500000"
       PYTHONUNBUFFERED: "1"
+      CACHE_DIR: "/app/cache"
     volumes:
-      # Mount ratings.json so it can be updated without rebuilding the image
       - ./data/ratings.json:/app/data/ratings.json:ro
-      # Persist MOEX disk cache across container restarts (avoids re-fetching on restart)
       - ./cache:/app/cache
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "--fail", "http://localhost:8501/_stcore/health"]
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: bond-monitor-web:latest
+    container_name: bond-monitor-web
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: bond-monitor-db
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: bondmonitor
+      POSTGRES_PASSWORD: bondmonitor
+      POSTGRES_DB: bondmonitor
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata:

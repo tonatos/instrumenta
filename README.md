@@ -1,144 +1,62 @@
 # Bond Monitor — краткосрочные облигации РФ
 
-Streamlit-приложение для скрининга краткосрочных рублёвых облигаций (0–4 месяца до погашения/оферты)
-с составным скором риск/доходность.
+Монорепозиторий: **Litestar API** (Python) + **React SPA** (TypeScript).
 
 ## Возможности
 
-- **Скринер** — таблица всех ликвидных бумаг с фильтрами по сроку, типу купона, объёму, минимальному YTM
-- **Детали бумаги** — карточка с предупреждениями по флагам риска и купонным графиком (через T-Invest API)
-- **Калькулятор** — расчёт чистой прибыли и доходности с учётом НДФЛ, НКД и лотности
-
-Данные: **MOEX ISS API** (бесплатно, задержка 15 мин) + **T-Invest API** (опционально, для флагов риска и купонных графиков).
-
----
+- **Скринер** — таблица ликвидных бумаг со скорингом YTM/риск/ликвидность
+- **Избранное** — отслеживание выбранных ISIN
+- **Портфель** — автосостав, прогноз cashflow, планирование до горизонта
+- **Калькулятор** — расчёт доходности с учётом НДФЛ
+- **Торговля** (TRADING mode) — интеграция T-Invest API (sandbox/production)
 
 ## Быстрый старт
 
-### Вариант 1: Docker (рекомендуется)
+### Docker
 
 ```bash
-# 1. Клонировать репозиторий
-git clone <repo-url>
-cd bond-monitor
-
-# 2. Создать файл конфигурации
 cp .env.example .env
-# При необходимости отредактируйте .env — укажите TINKOFF_TOKEN
-
-# 3. Запустить
 docker compose up --build
-
-# Приложение откроется по адресу http://localhost:8501
 ```
 
-Для обновления данных нажмите кнопку **«Обновить данные»** в боковой панели.
+- Web UI: http://localhost:3000
+- API: http://localhost:8000/health
 
-### Вариант 2: Локально (Python 3.12+)
+### Локальная разработка
 
 ```bash
-# 1. Создать виртуальное окружение
-python -m venv .venv
-source .venv/bin/activate   # Linux/macOS
-# .venv\Scripts\activate    # Windows
-
-# 2. Установить зависимости
-pip install -r requirements.txt
-
-# 3. Настроить окружение
+# Backend
 cp .env.example .env
-# Отредактируйте .env при необходимости
+uv sync --directory backend --extra dev --python 3.12
+uv run --directory backend uvicorn bond_monitor.main:app --reload --port 8000
 
-# 4. Запустить
-streamlit run app.py
+# Frontend (другой терминал)
+cd frontend && npm install && npm run dev
 ```
 
----
+- Web UI: http://localhost:5173 (прокси `/api` → `:8000`)
 
-## Конфигурация (файл `.env`)
+### Тесты
 
-| Переменная | Описание | Значение по умолчанию |
-|---|---|---|
-| `TINKOFF_TOKEN` | Токен T-Invest API (read-only) | *(пусто — приложение работает без него)* |
-| `KEY_RATE` | Ключевая ставка ЦБ РФ, % | `14.5` |
-| `TAX_RATE` | Ставка НДФЛ, % (применяется к YTM, купонам и приросту цены) | `13` |
-| `MAX_DAYS` | Макс. дней до погашения/оферты | `120` |
-| `MIN_VOLUME_RUB` | Мин. суточный объём торгов, ₽ | `500000` |
+```bash
+# Backend unit tests
+uv run --directory backend pytest tests/unit -m "not sandbox"
 
-`KEY_RATE` и `TAX_RATE` можно также менять прямо в сайдбаре без перезапуска.
+# Sandbox integration (требует T_TRADING_TOKEN_SANDBOX)
+T_TRADING_TOKEN_SANDBOX=t.xxx uv run --directory backend pytest tests/integration/sandbox -m sandbox
 
-Токен T-Invest API (read-only) получить здесь: https://www.tbank.ru/invest/settings/api/
-
----
-
-## Как работает скоринговая модель
-
-```
-Скор = YTM_скор × 40% + Риск_скор × 40% + Ликвидность_скор × 20%
+# Playwright e2e (нужен запущенный frontend + API)
+cd e2e/playwright && npm install && npx playwright test
 ```
 
-| Компонент | Логика |
-|---|---|
-| **YTM_скор** | Нормированный спред нетто-доходности над `КС × (1 − TAX_RATE)` (безрисковая после НДФЛ). Лидер вселенной = 100. |
-| **Риск_скор** | База от уровня риска T-Invest: Низкий→80, Умеренный→55, Высокий→25. Штрафы за амортизацию, флоатер, субординацию и т.д. Бонус от кредитного рейтинга. |
-| **Ликвидность_скор** | Логарифм объёма торгов, нормированный на максимум в выборке. |
-
-Скор — это инструмент первичного отсева, а не инвестиционная рекомендация.
-
----
-
-## Обновление рейтингов
-
-Кредитные рейтинги хранятся в `data/ratings.json`. Формат:
-
-```json
-{
-  "isin_ratings": {
-    "RU000AXXXXXX": "ruAAA"
-  },
-  "name_ratings": {
-    "Газпром": "ruAA+"
-  }
-}
-```
-
-- `isin_ratings` — точный матч по ISIN (приоритет)
-- `name_ratings` — поиск подстроки в SHORTNAME от MOEX (регистронезависимо)
-
-Источники рейтингов: [Эксперт РА](https://raexpert.ru/ratings/credits/current/) | [АКРА](https://www.acra-ratings.ru/ratings/issuers/)
-
-В Docker `ratings.json` монтируется как read-only volume — обновляйте файл на хосте, затем нажмите «Обновить данные» в UI.
-
----
-
-## Структура проекта
+## Структура
 
 ```
-bond-monitor/
-├── app.py                    # Streamlit точка входа (3 вкладки)
-├── core/
-│   ├── bond_model.py         # BondRecord dataclass, CouponType, RiskLevel
-│   └── scorer.py             # Скоринговая модель
-├── data/
-│   ├── moex_client.py        # MOEX ISS API: fetch + filter + deduplicate
-│   ├── tinvest_client.py     # T-Invest gRPC: флаги, купонный график
-│   ├── ratings_loader.py     # Загрузка и применение рейтингов
-│   └── ratings.json          # Сид-файл кредитных рейтингов
-├── ui/
-│   └── components.py         # Переиспользуемые Streamlit-компоненты
-├── Dockerfile
-├── docker-compose.yml
-├── pyproject.toml            # ruff + mypy config
-├── requirements.txt
-├── .env.example
-└── AGENTS.md                 # Гайд для AI-агентов
+backend/src/bond_monitor/   # Litestar API, DDD layers
+frontend/src/               # React + Tailwind + shadcn-style UI
+e2e/playwright/             # Webapp e2e tests
+data/ratings.json           # Vendored credit ratings (read-only)
+cache/                      # MOEX cache, SQLite DB, portfolios migration
 ```
 
----
-
-## Известные ограничения
-
-- **MOEX задержка 15 мин** — данные MOEX ISS для неавторизованных пользователей обновляются с задержкой 15 минут. Для алертов в реальном времени нужна авторизация через `MOEX Passport`.
-- **YTM на неликвидных бумагах** — YIELDATWAP рассчитывается по цене последней сделки. Если бумага не торговалась несколько дней — YTM может быть нерелевантным. Фильтр по объёму минимизирует, но не устраняет риск.
-- **Амортизация** — расчёт в Калькуляторе не учитывает промежуточные погашения номинала. Для точного расчёта нужно купонное расписание через T-Invest API.
-- **Флоатеры в Калькуляторе** — будущий купон флоатера зависит от КС/RUONIA и неизвестен; расчёт использует текущую купонную ставку.
+Подробная архитектура — в [AGENTS.md](AGENTS.md).

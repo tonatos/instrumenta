@@ -1,36 +1,22 @@
-[build-system]
-requires = ["setuptools>=70"]
-build-backend = "setuptools.backends.legacy:build"
-
 [project]
 name = "bond-monitor"
-version = "0.1.0"
-description = "Short-term Russian bond screener with risk/reward scoring"
+version = "0.2.0"
+description = "Short-term Russian bond screener with portfolio planning"
 requires-python = ">=3.12"
+
+[tool.uv.workspace]
+members = ["backend"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = [
-    "E",   # pycodestyle errors
-    "F",   # pyflakes
-    "I",   # isort
-    "UP",  # pyupgrade
-    "B",   # flake8-bugbear
-    "SIM", # flake8-simplify
-    "N",   # pep8-naming
-]
-ignore = [
-    "B008",  # do not perform function calls in default arguments
-    "N803",  # argument name should be lowercase (uppercase used for MOEX field names)
-    "N806",  # variable in function should be lowercase (same reason)
-    "E501",  # line too long — not enforced for Russian UI/markdown strings
-]
+select = ["E", "F", "I", "UP", "B", "SIM", "N"]
+ignore = ["B008", "N803", "N806", "E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["core", "data", "ui"]
+known-first-party = ["bond_monitor"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -40,3 +26,9 @@ indent-style = "space"
 python_version = "3.12"
 strict = true
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+markers = [
+    "sandbox: e2e тест, использующий sandbox T-Invest API (требует T_TRADING_TOKEN_SANDBOX)",
+]
+testpaths = ["backend/tests"]

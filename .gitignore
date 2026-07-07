@@ -10,3 +10,7 @@ build/
 venv/
 *.log
 cache/
+node_modules/
+frontend/dist/
+e2e/playwright/test-results/
+e2e/playwright/playwright-report/
