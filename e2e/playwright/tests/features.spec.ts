@@ -142,7 +142,7 @@ test.describe("Карточка бумаги", () => {
       liquidity_score: 80,
       is_favorite: false,
       has_warnings: true,
-      warnings: ["Колл-оферта 2026-09-15: эмитент может досрочно выкупить облигацию"],
+      warnings: ["Колл-оферта 15 сентября: эмитент может досрочно выкупить облигацию"],
       tinvest_enriched: true,
     };
 
@@ -161,7 +161,68 @@ test.describe("Карточка бумаги", () => {
 
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByText("Дата колл-оферты")).toBeVisible({ timeout: 5000 });
-    await expect(sheet.getByText("2026-09-15")).toBeVisible();
+    await expect(sheet.locator('dt:has-text("Дата колл-оферты") + dd')).toHaveText("15 сентября");
+  });
+
+  test("sheet показывает эмитента и описание", async ({ page }) => {
+    const bond = {
+      secid: "ISSUERTEST",
+      isin: "RU000AISSU1",
+      name: "Газпром001",
+      issuer_name: "ПАО Газпром",
+      instrument_full_name: "Газпром БО-001Р-02",
+      description: "Корпоративная облигация с фиксированным купоном.",
+      sector: "Энергетика",
+      figi: "FIGI_ISSUER",
+      maturity_date: "2028-01-01",
+      offer_date: null,
+      call_date: null,
+      effective_date: "2026-09-15",
+      days_to_maturity: 70,
+      ytm: 14.0,
+      ytm_net: 12.0,
+      coupon_rate: 12.0,
+      coupon_type: "fixed",
+      last_price: 98.5,
+      face_value: 1000,
+      lot_size: 1,
+      volume_rub: 1_000_000,
+      prev_volume_rub: 900_000,
+      credit_rating: "ruA",
+      risk_level: 2,
+      score: 70,
+      ytm_score: 75,
+      risk_score: 65,
+      liquidity_score: 80,
+      is_favorite: false,
+      has_warnings: false,
+      warnings: [],
+      tinvest_enriched: true,
+    };
+
+    await page.route("**/api/v1/bonds/?*", async (route) => {
+      await route.fulfill({
+        json: { bonds: [bond], source: "mock", count: 1 },
+      });
+    });
+    await page.route("**/api/v1/bonds/ISSUERTEST", async (route) => {
+      await route.fulfill({ json: { bond, coupons: [] } });
+    });
+
+    await page.goto("/");
+    await expect(page.getByText("1 из 1")).toBeVisible({ timeout: TIMEOUT });
+    await page.getByRole("button", { name: "Газпром001" }).click();
+
+    const sheet = page.getByRole("dialog");
+    await expect(sheet.getByRole("heading", { name: "ПАО Газпром" })).toBeVisible({
+      timeout: 5000,
+    });
+    await expect(sheet.getByText("Газпром БО-001Р-02")).toBeVisible();
+    await expect(sheet.getByText("Эмитент")).toBeVisible();
+    await expect(sheet.getByText("Энергетика")).toBeVisible();
+    await expect(
+      sheet.getByText("Корпоративная облигация с фиксированным купоном."),
+    ).toBeVisible();
   });
 });
 

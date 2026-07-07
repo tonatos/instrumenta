@@ -13,6 +13,8 @@ Enrichment adds to existing BondRecord:
   - for_qual_investor_flag, perpetual_flag, call_date
   - risk_level, figi (needed for GetBondCoupons)
   - coupon_type (via GetBondCoupons for floating/variable bonds)
+  - instrument_full_name, sector, asset_uid (from bonds())
+  - issuer_name, description (lazy via GetAssetBy on bond detail)
 
 The enrichment is optional: if the token is absent or the API call fails,
 the screener still works with reduced risk scoring.
@@ -20,14 +22,30 @@ the screener still works with reduced risk scoring.
 
 from __future__ import annotations
 
+import json
 import logging
+import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Literal
 
 from bond_monitor.domain.bonds.models import BondRecord, CouponType, RiskLevel
+from bond_monitor.infrastructure.paths import get_cache_dir
 
 logger = logging.getLogger(__name__)
+
+_CACHE_DIR: Path = get_cache_dir()
+_METADATA_CACHE_FILE: Path = _CACHE_DIR / "tinvest_asset_metadata.json"
+_ASSET_INDEX_CACHE_FILE: Path = _CACHE_DIR / "tinvest_asset_index.json"
+_METADATA_CACHE_TTL_SECONDS: int = 7 * 24 * 60 * 60
+
+
+@dataclass
+class AssetMetadata:
+    issuer_name: str = ""
+    description: str = ""
+    sector: str = ""
 
 
 @dataclass
@@ -42,6 +60,9 @@ class _TInvestBondData:
     api_trade_available_flag: bool
     call_date: date | None
     risk_level: RiskLevel
+    instrument_full_name: str = ""
+    sector: str = ""
+    asset_uid: str = ""
 
 
 @dataclass
@@ -128,6 +149,9 @@ def _fetch_all_bonds_from_api(token: str) -> dict[str, _TInvestBondData]:
                 api_trade_available_flag=bool(bond.api_trade_available_flag),
                 call_date=_ts_to_date(getattr(bond, "call_date", None)),
                 risk_level=risk_level,
+                instrument_full_name=getattr(bond, "name", "") or "",
+                sector=getattr(bond, "sector", "") or "",
+                asset_uid=getattr(bond, "asset_uid", "") or "",
             )
 
     logger.info("T-Invest: loaded %d bonds from API", len(result))
@@ -164,6 +188,9 @@ def enrich_bonds_from_tinvest(bonds: list[BondRecord], token: str) -> list[BondR
         bond.api_trade_available_flag = data.api_trade_available_flag
         bond.call_date = data.call_date
         bond.risk_level = data.risk_level
+        bond.instrument_full_name = data.instrument_full_name
+        bond.sector = data.sector
+        bond.asset_uid = data.asset_uid
         bond.tinvest_enriched = True
 
         # Derive coupon type from floating flag if not yet set
@@ -179,6 +206,205 @@ def enrich_bonds_from_tinvest(bonds: list[BondRecord], token: str) -> list[BondR
         len(bonds) - matched,
     )
     return bonds
+
+
+def _first_non_empty(*values: str) -> str:
+    for value in values:
+        if value:
+            return value
+    return ""
+
+
+def choose_issuer_name(
+    *,
+    borrow_name: str = "",
+    brand_company: str = "",
+    brand_name: str = "",
+    instrument_full_name: str = "",
+    fallback_name: str = "",
+) -> str:
+    return _first_non_empty(
+        borrow_name,
+        brand_company,
+        brand_name,
+        instrument_full_name,
+        fallback_name,
+    )
+
+
+def _parse_asset_metadata(asset: object) -> AssetMetadata:
+    description = getattr(asset, "description", "") or ""
+    sector = ""
+    borrow_name = ""
+    brand_company = ""
+    brand_description = ""
+    brand_name = ""
+
+    security = getattr(asset, "security", None)
+    bond = getattr(security, "bond", None) if security is not None else None
+    if bond is not None:
+        borrow_name = getattr(bond, "borrow_name", "") or ""
+
+    brand = getattr(asset, "brand", None)
+    if brand is not None:
+        brand_company = getattr(brand, "company", "") or ""
+        brand_description = getattr(brand, "description", "") or ""
+        brand_name = getattr(brand, "name", "") or ""
+        sector = getattr(brand, "sector", "") or ""
+
+    return AssetMetadata(
+        issuer_name=choose_issuer_name(
+            borrow_name=borrow_name,
+            brand_company=brand_company,
+            brand_name=brand_name,
+        ),
+        description=_first_non_empty(description, brand_description),
+        sector=sector,
+    )
+
+
+def _load_json_cache(path: Path) -> dict[str, dict]:
+    if not path.exists():
+        return {}
+    try:
+        with path.open("r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        logger.warning("Failed to read cache %s", path)
+        return {}
+
+
+def _save_json_cache(path: Path, data: dict[str, dict]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=2)
+
+
+def _metadata_cache_get(isin: str) -> AssetMetadata | None:
+    entry = _load_json_cache(_METADATA_CACHE_FILE).get(isin.upper())
+    if not isinstance(entry, dict):
+        return None
+    cached_at = float(entry.get("cached_at", 0))
+    if time.time() - cached_at > _METADATA_CACHE_TTL_SECONDS:
+        return None
+    return AssetMetadata(
+        issuer_name=str(entry.get("issuer_name", "")),
+        description=str(entry.get("description", "")),
+        sector=str(entry.get("sector", "")),
+    )
+
+
+def _metadata_cache_put(isin: str, metadata: AssetMetadata) -> None:
+    cache = _load_json_cache(_METADATA_CACHE_FILE)
+    cache[isin.upper()] = {
+        "issuer_name": metadata.issuer_name,
+        "description": metadata.description,
+        "sector": metadata.sector,
+        "cached_at": time.time(),
+    }
+    _save_json_cache(_METADATA_CACHE_FILE, cache)
+
+
+def _asset_index_cache_get(isin: str) -> str | None:
+    entry = _load_json_cache(_ASSET_INDEX_CACHE_FILE).get(isin.upper())
+    if not isinstance(entry, dict):
+        return None
+    cached_at = float(entry.get("cached_at", 0))
+    if time.time() - cached_at > _METADATA_CACHE_TTL_SECONDS:
+        return None
+    asset_uid = str(entry.get("asset_uid", ""))
+    return asset_uid or None
+
+
+def _asset_index_cache_put(isin: str, asset_uid: str) -> None:
+    cache = _load_json_cache(_ASSET_INDEX_CACHE_FILE)
+    cache[isin.upper()] = {
+        "asset_uid": asset_uid,
+        "cached_at": time.time(),
+    }
+    _save_json_cache(_ASSET_INDEX_CACHE_FILE, cache)
+
+
+def _fetch_asset_metadata_from_api(token: str, asset_uid: str) -> AssetMetadata:
+    if not asset_uid:
+        return AssetMetadata()
+    try:
+        from t_tech.invest import Client
+    except ImportError:
+        logger.error("t-tech-investments is not installed")
+        return AssetMetadata()
+
+    try:
+        with Client(token) as client:
+            response = client.instruments.get_asset_by(id=asset_uid)
+    except Exception:
+        logger.exception("get_asset_by failed for asset_uid=%s", asset_uid)
+        return AssetMetadata()
+
+    asset = getattr(response, "asset", None)
+    if asset is None:
+        return AssetMetadata()
+    return _parse_asset_metadata(asset)
+
+
+def _resolve_asset_uid_by_isin(token: str, isin: str) -> str:
+    cached = _asset_index_cache_get(isin)
+    if cached:
+        return cached
+
+    try:
+        from t_tech.invest import Client, InstrumentStatus
+    except ImportError:
+        logger.error("t-tech-investments is not installed")
+        return ""
+
+    try:
+        with Client(token) as client:
+            response = client.instruments.bonds(
+                instrument_status=InstrumentStatus.INSTRUMENT_STATUS_BASE,
+            )
+            for bond in response.instruments:
+                if (bond.isin or "").upper() == isin.upper():
+                    asset_uid = getattr(bond, "asset_uid", "") or ""
+                    if asset_uid:
+                        _asset_index_cache_put(isin, asset_uid)
+                    return asset_uid
+    except Exception:
+        logger.exception("Failed to resolve asset_uid for ISIN=%s", isin)
+    return ""
+
+
+def fetch_bond_asset_metadata(token: str, asset_uid: str, *, isin: str = "") -> AssetMetadata:
+    if isin:
+        cached = _metadata_cache_get(isin)
+        if cached is not None:
+            return cached
+
+    metadata = _fetch_asset_metadata_from_api(token, asset_uid)
+    if isin and any((metadata.issuer_name, metadata.description, metadata.sector)):
+        _metadata_cache_put(isin, metadata)
+    return metadata
+
+
+def enrich_bond_detail_metadata(bond: BondRecord, token: str) -> None:
+    """Lazy issuer/description enrichment for bond detail card."""
+    if not token:
+        return
+
+    asset_uid = bond.asset_uid or _resolve_asset_uid_by_isin(token, bond.isin)
+    if not asset_uid:
+        return
+
+    metadata = fetch_bond_asset_metadata(token, asset_uid, isin=bond.isin)
+    bond.issuer_name = _first_non_empty(
+        metadata.issuer_name,
+        bond.instrument_full_name,
+        bond.name,
+    )
+    bond.description = metadata.description
+    if metadata.sector and not bond.sector:
+        bond.sector = metadata.sector
 
 
 def get_bond_coupon_schedule(
@@ -394,13 +620,11 @@ def ensure_order_instrument(
         )
     if direction == "BUY" and not trade.buy_available_flag:
         raise TradingNotAvailableError(
-            f"Покупка {isin or trade.figi} сейчас недоступна через API "
-            f"(buy_available_flag=false)."
+            f"Покупка {isin or trade.figi} сейчас недоступна через API (buy_available_flag=false)."
         )
     if direction == "SELL" and not trade.sell_available_flag:
         raise TradingNotAvailableError(
-            f"Продажа {isin or trade.figi} сейчас недоступна через API "
-            f"(sell_available_flag=false)."
+            f"Продажа {isin or trade.figi} сейчас недоступна через API (sell_available_flag=false)."
         )
     return trade
 

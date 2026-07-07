@@ -19,6 +19,7 @@ import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from typing import Any
 
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import (
@@ -27,6 +28,7 @@ from bond_monitor.domain.portfolio.models import (
     PositionSourceType,
     PutOfferDecision,
     ReinvestmentSlot,
+    ReinvestmentSlotStatus,
     ReinvestmentTriggerReason,
     RiskProfile,
 )
@@ -38,6 +40,7 @@ from bond_monitor.domain.portfolio.policies import (
 )
 from bond_monitor.domain.portfolio.selection import (
     api_tradable_filter,
+    bond_eligibility_reason,
     explain_selection_failure,
     has_usable_price,
     portfolio_universe_filter,
@@ -54,6 +57,7 @@ __all__ = [
     "risk_profile_filter",
     "select_replacement",
 ]
+from bond_monitor.domain.shared.formatting import format_date
 from bond_monitor.domain.shared.money import Rub
 from bond_monitor.domain.trading.cash_constraints import initial_buy_gap_lots
 from bond_monitor.domain.trading.policies import (
@@ -85,6 +89,7 @@ MIN_POSITION_SHARE: float = _alloc.min_position_share
 
 MIN_REPLACEMENT_HORIZON_DAYS: int = _selection.min_replacement_horizon_days
 MIN_REINVEST_CLEAN_PRICE_PCT: float = _selection.min_clean_price_pct
+SLOT_CANDIDATES_LIMIT: int = 30
 
 
 # ── Public types ─────────────────────────────────────────────────────────────
@@ -190,6 +195,8 @@ class PortfolioPlan:
     final_portfolio_value_rub: float = 0.0
     total_net_profit_rub: float = 0.0
     total_net_profit_with_held_rub: float = 0.0
+    # База вложенного капитала для расчёта прибыли и доходности (старт + top-up).
+    invested_capital_rub: float = 0.0
     # «Чистая YTM» текущих INITIAL-позиций, взвешенная по сумме покупки.
     # Это годовая доходность ТЕКУЩИХ позиций к их собственному
     # погашению, она НЕ описывает ожидаемую доходность всего портфеля
@@ -201,10 +208,8 @@ class PortfolioPlan:
     # горизонт». Если она существенно ниже weighted_ytm_net_pct —
     # значит реинвестиции «разбавляют» доходность.
     weighted_ytm_net_full_pct: float | None = None
-    # Эффективная ГОДОВАЯ доходность портфеля за весь горизонт, рассчитанная
-    # из реализованного результата (cash + удерживаемые бумаги).
-    # Формула: (final_portfolio_value / initial_amount) ^ (365 / horizon_days) − 1.
-    # Это самая корректная цифра «сколько реально дал портфель в год».
+    # Эффективная ГОДОВАЯ доходность портфеля за весь горизонт: plan-XIRR
+    # по датам внешних вложений и итоговой стоимости на горизонте.
     effective_annual_return_pct: float | None = None
     # Срок плана (для пересчёта эффективной доходности и формул в UI).
     horizon_days: int = 0
@@ -289,13 +294,13 @@ def validate_replacement_bond(
         return "у бумаги нет даты погашения"
     if bond.maturity_date <= slot_purchase_date:
         return (
-            f"бумага гасится {bond.maturity_date.isoformat()}, что НЕ позже "
-            f"даты покупки {slot_purchase_date.isoformat()}"
+            f"бумага гасится {format_date(bond.maturity_date)}, что НЕ позже "
+            f"даты покупки {format_date(slot_purchase_date)}"
         )
     days_remaining = (bond.maturity_date - slot_purchase_date).days
     if days_remaining < MIN_REPLACEMENT_HORIZON_DAYS:
         return (
-            f"до погашения {bond.maturity_date.isoformat()} осталось "
+            f"до погашения {format_date(bond.maturity_date)} осталось "
             f"всего {days_remaining} дн. (< MIN_REPLACEMENT_HORIZON_DAYS = "
             f"{MIN_REPLACEMENT_HORIZON_DAYS})"
         )
@@ -305,8 +310,8 @@ def validate_replacement_bond(
         # реинвест должен иметь чёткую дату возврата в кэш в пределах
         # плана, иначе цепочка обрывается.
         return (
-            f"погашение {bond.maturity_date.isoformat()} позже горизонта "
-            f"{horizon.isoformat()} — реинвест прервётся"
+            f"погашение {format_date(bond.maturity_date)} позже горизонта "
+            f"{format_date(horizon)} — реинвест прервётся"
         )
     if bond.has_default or bond.has_technical_default:
         return "у бумаги статус дефолта / тех.дефолта"
@@ -314,6 +319,194 @@ def validate_replacement_bond(
     if blocked is not None:
         return blocked
     return None
+
+
+def _slot_candidate_dict(bond: BondRecord) -> dict[str, Any]:
+    return {
+        "isin": bond.isin,
+        "name": bond.name,
+        "score": bond.score,
+        "ytm_net": bond.ytm_net,
+    }
+
+
+def enrich_reinvestment_slot(
+    slot: ReinvestmentSlot,
+    *,
+    portfolio: Portfolio,
+    universe: Sequence[BondRecord],
+    key_rate: float,
+    tax_rate: float,
+) -> ReinvestmentSlot:
+    """Return a copy of *slot* with plan-response metadata for the UI."""
+    universe_by_isin = {b.isin: b for b in universe}
+    ctx = _selection_context(
+        profile=portfolio.risk_profile,
+        horizon_date=portfolio.horizon_date,
+        purchase_date=slot.purchase_date,
+        api_trade_only=portfolio.api_trade_only,
+        budget_rub=slot.expected_cash_rub,
+    )
+    ranked = select_ranked_bonds(
+        universe,
+        ctx,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+    )
+    candidates = [_slot_candidate_dict(b) for b in ranked.bonds[:SLOT_CANDIDATES_LIMIT]]
+
+    status = ReinvestmentSlotStatus.OK
+    failure_reason: str | None = None
+    target_isin = slot.effective_isin
+
+    if target_isin is None:
+        status = ReinvestmentSlotStatus.NO_CANDIDATE
+        failure_reason = explain_selection_failure(universe, ctx)
+    else:
+        target_bond = universe_by_isin.get(target_isin)
+        if target_bond is None or not _has_usable_price(target_bond):
+            status = ReinvestmentSlotStatus.INVALID_SELECTION
+            failure_reason = (
+                f"бумага {target_isin} отсутствует в актуальном универсе "
+                f"или нет рыночной цены"
+            )
+        else:
+            invalid_reason = validate_replacement_bond(
+                target_bond,
+                slot_purchase_date=slot.purchase_date,
+                horizon=portfolio.horizon_date,
+            )
+            if invalid_reason is not None:
+                status = ReinvestmentSlotStatus.INVALID_SELECTION
+                failure_reason = invalid_reason
+            else:
+                lot_cost = target_bond.price_per_lot_rub or 0.0
+                if lot_cost > 0 and slot.expected_cash_rub < lot_cost:
+                    status = ReinvestmentSlotStatus.INSUFFICIENT_CASH
+                    failure_reason = (
+                        f"ожидаемого кэша ({slot.expected_cash_rub:.0f} ₽) не хватает "
+                        f"на 1 лот {target_bond.name} ({lot_cost:.0f} ₽)"
+                    )
+
+    return ReinvestmentSlot(
+        trigger_date=slot.trigger_date,
+        trigger_reason=slot.trigger_reason,
+        expected_cash_rub=slot.expected_cash_rub,
+        suggested_isin=slot.suggested_isin,
+        suggested_name=slot.suggested_name,
+        confirmed_isin=slot.confirmed_isin,
+        gap_days=slot.gap_days,
+        source_position_isin=slot.source_position_isin,
+        status=status,
+        failure_reason=failure_reason,
+        eligible_candidates=candidates,
+    )
+
+
+def validate_slot_replacement(
+    portfolio: Portfolio,
+    universe: Sequence[BondRecord],
+    *,
+    slot: ReinvestmentSlot,
+    confirmed_isin: str,
+    key_rate: float,
+    tax_rate: float,
+) -> str | None:
+    """Validate manual replacement before persisting override."""
+    universe_by_isin = {b.isin: b for b in universe}
+    bond = universe_by_isin.get(confirmed_isin)
+    if bond is None:
+        return f"облигация {confirmed_isin} не найдена в универсе MOEX"
+
+    ctx = _selection_context(
+        profile=portfolio.risk_profile,
+        horizon_date=portfolio.horizon_date,
+        purchase_date=slot.purchase_date,
+        api_trade_only=portfolio.api_trade_only,
+        budget_rub=slot.expected_cash_rub,
+    )
+    eligibility = bond_eligibility_reason(
+        bond,
+        ctx,
+        DEFAULT_BOND_SELECTION_POLICY,
+        check_budget=True,
+    )
+    if eligibility is not None:
+        return eligibility
+
+    invalid_reason = validate_replacement_bond(
+        bond,
+        slot_purchase_date=slot.purchase_date,
+        horizon=portfolio.horizon_date,
+    )
+    if invalid_reason is not None:
+        return invalid_reason
+
+    lot_cost = bond.price_per_lot_rub or 0.0
+    if lot_cost > 0 and slot.expected_cash_rub < lot_cost:
+        return (
+            f"ожидаемого кэша ({slot.expected_cash_rub:.0f} ₽) не хватает "
+            f"на 1 лот ({lot_cost:.0f} ₽)"
+        )
+    return None
+
+
+def prune_stale_slot_overrides(
+    portfolio: Portfolio,
+    resolved_slots: Sequence[ReinvestmentSlot],
+) -> bool:
+    """Drop persisted slot overrides that no longer belong to the current plan.
+
+    ``portfolio.slots`` stores only user overrides (``confirmed_isin``) keyed by
+    ``source_position_isin``. When the planning horizon changes, downstream
+    phantom sources may disappear from :func:`build_plan` output — those stale
+    entries must be removed so forecast reinvestment chains stay in sync with
+    the new horizon without touching factual ``portfolio.positions``.
+    """
+    active_sources = {
+        slot.source_position_isin
+        for slot in resolved_slots
+        if slot.source_position_isin
+    }
+    before = len(portfolio.slots)
+    portfolio.slots = [
+        slot for slot in portfolio.slots if slot.source_position_isin in active_sources
+    ]
+    return len(portfolio.slots) != before
+
+
+def clear_downstream_slot_overrides(
+    portfolio: Portfolio,
+    source_position_isin: str,
+    resolved_slots: Sequence[ReinvestmentSlot],
+) -> bool:
+    """Clear manual overrides for slots downstream of *source_position_isin*."""
+    ordered = sorted(resolved_slots, key=_slot_sort_key)
+    slot_index = next(
+        (
+            i
+            for i, slot in enumerate(ordered)
+            if slot.source_position_isin == source_position_isin
+        ),
+        None,
+    )
+    if slot_index is None:
+        return False
+
+    downstream_sources = {
+        slot.source_position_isin
+        for slot in ordered[slot_index + 1 :]
+        if slot.source_position_isin
+    }
+    changed = False
+    for persisted in portfolio.slots:
+        if (
+            persisted.source_position_isin in downstream_sources
+            and persisted.confirmed_isin is not None
+        ):
+            persisted.confirmed_isin = None
+            changed = True
+    return changed
 
 
 def _clear_slot_override(portfolio: Portfolio, source_position_isin: str | None) -> bool:
@@ -760,6 +953,135 @@ def _price_gain_total(position: PortfolioPosition) -> float:
     return diff * position.bonds_count
 
 
+def _position_cost_basis(position: PortfolioPosition) -> float:
+    """Себестоимость позиции в ₽ (по фактически купленным лотам)."""
+    if position.actual_lots is not None and position.actual_lots > 0:
+        return position.purchase_dirty_price_rub * position.actual_lots * position.lot_size
+    if position.purchase_amount_rub > 0:
+        return position.purchase_amount_rub
+    return position.purchase_dirty_price_rub * position.lots * position.lot_size
+
+
+def _invested_capital_baseline(
+    portfolio: Portfolio,
+    *,
+    account_snapshot_money_rub: Rub | None,
+) -> float:
+    """Единая база вложенного капитала для прибыли и прогнозной доходности."""
+    if account_snapshot_money_rub is None:
+        return portfolio.initial_amount_rub
+
+    deployed = sum(_position_cost_basis(position) for position in portfolio.positions)
+    # Факт на счёте: купленные бумаги + свободный кэш. Это и есть вложенный
+    # капитал; метаданные acknowledged_top_ups могут завышаться (отменённые
+    # batch, частичное исполнение) или отставать (покупки вне batch).
+    return deployed + float(account_snapshot_money_rub)
+
+
+_MAX_PLAN_XIRR_PCT = 200.0
+
+
+def _plan_xirr_cagr_fallback(
+    *,
+    final_portfolio_value_rub: float,
+    invested_baseline: float,
+    horizon_days: int,
+) -> float | None:
+    if horizon_days <= 0 or invested_baseline <= 0 or final_portfolio_value_rub <= 0:
+        return None
+    growth = final_portfolio_value_rub / invested_baseline
+    try:
+        annual_return = growth ** (365.0 / horizon_days) - 1.0
+    except (OverflowError, ValueError):
+        return None
+    return round(annual_return * 100.0, 2)
+
+
+def _calculate_plan_expected_xirr(
+    plan: PortfolioPlan,
+    *,
+    today: date,
+    invested_baseline: float,
+    account_snapshot_money_rub: Rub | None,
+    horizon_days: int,
+) -> float | None:
+    """Plan-XIRR: вложения по датам покупок + терминальная стоимость на горизонте."""
+    portfolio = plan.portfolio
+    horizon = portfolio.horizon_date
+
+    if horizon_days <= 0 or invested_baseline <= 0 or plan.final_portfolio_value_rub <= 0:
+        return None
+
+    cashflow: list[tuple[date, float]] = []
+
+    if account_snapshot_money_rub is not None:
+        for position in portfolio.positions:
+            if position.source != PositionSourceType.INITIAL:
+                continue
+            cost = _position_cost_basis(position)
+            if cost > 0 and position.purchase_date <= horizon:
+                cashflow.append((position.purchase_date, -cost))
+    else:
+        cashflow.append((today, -invested_baseline))
+
+    # Промежуточные и будущие покупки (реинвест) не включаем: они
+    # финансируются из купонов/погашений внутри плана, а итог уже
+    # отражён в ``final_portfolio_value_rub``.
+
+    cashflow.append((horizon, plan.final_portfolio_value_rub))
+
+    if len(cashflow) < 2:
+        return _plan_xirr_cagr_fallback(
+            final_portfolio_value_rub=plan.final_portfolio_value_rub,
+            invested_baseline=invested_baseline,
+            horizon_days=horizon_days,
+        )
+
+    has_positive = any(amount > 0 for _, amount in cashflow)
+    has_negative = any(amount < 0 for _, amount in cashflow)
+    if not (has_positive and has_negative):
+        return _plan_xirr_cagr_fallback(
+            final_portfolio_value_rub=plan.final_portfolio_value_rub,
+            invested_baseline=invested_baseline,
+            horizon_days=horizon_days,
+        )
+
+    try:
+        from pyxirr import InvalidPaymentsError, xirr
+    except ImportError:
+        logger.error("pyxirr is not installed — plan XIRR calculation unavailable")
+        return _plan_xirr_cagr_fallback(
+            final_portfolio_value_rub=plan.final_portfolio_value_rub,
+            invested_baseline=invested_baseline,
+            horizon_days=horizon_days,
+        )
+
+    dates = [flow_date for flow_date, _ in cashflow]
+    amounts = [amount for _, amount in cashflow]
+    try:
+        rate = xirr(dates, amounts)
+    except (InvalidPaymentsError, ValueError, OverflowError) as exc:
+        logger.warning("plan xirr() failed: %s", exc)
+        rate = None
+
+    if rate is None:
+        return _plan_xirr_cagr_fallback(
+            final_portfolio_value_rub=plan.final_portfolio_value_rub,
+            invested_baseline=invested_baseline,
+            horizon_days=horizon_days,
+        )
+
+    xirr_pct = float(rate) * 100.0
+    if abs(xirr_pct) > _MAX_PLAN_XIRR_PCT:
+        plan.notes.append(
+            f"Прогнозная годовая доходность ({xirr_pct:.1f}%) выходит за разумные "
+            f"пределы — метрика скрыта. Проверьте вложенный капитал и горизонт."
+        )
+        return None
+
+    return round(xirr_pct, 2)
+
+
 def _plan_initial_cash(
     portfolio: Portfolio,
     account_snapshot_money_rub: Rub | None,
@@ -925,9 +1247,9 @@ def build_plan(
             plan.notes.append(
                 f"{position.name}: решение «Предъявить» невозможно — окно подачи "
                 f"по пут-оферте "
-                f"{position.offer_submission_end.isoformat() if position.offer_submission_end else '—'} "
+                f"{format_date(position.offer_submission_end)} "
                 f"уже закрыто. Расчёт идёт до погашения "
-                f"{position.maturity_date.isoformat() if position.maturity_date else '—'}."
+                f"{format_date(position.maturity_date)}."
             )
 
         end_date = _position_end_date(
@@ -1003,7 +1325,7 @@ def build_plan(
             if suggested:
                 if selection_note:
                     plan.notes.append(
-                        f"Слот {slot_purchase_date.isoformat()} ({position.name}): {selection_note}."
+                        f"Слот {format_date(slot_purchase_date)} ({position.name}): {selection_note}."
                     )
             else:
                 replacement_failure_reason = selection_note
@@ -1045,7 +1367,7 @@ def build_plan(
                     slot.suggested_name = suggested.name
                     if selection_note:
                         plan.notes.append(
-                            f"Слот {slot_purchase_date.isoformat()} ({position.name}): {selection_note}."
+                            f"Слот {format_date(slot_purchase_date)} ({position.name}): {selection_note}."
                         )
                 else:
                     replacement_failure_reason = selection_note
@@ -1056,7 +1378,7 @@ def build_plan(
         if not target_isin:
             detail = replacement_failure_reason or "замена не подобрана"
             plan.notes.append(
-                f"{position.name}: на дату {end_date.isoformat()} "
+                f"{position.name}: на дату {format_date(end_date)} "
                 f"не нашлось подходящей замены — {detail}. "
                 f"Деньги останутся в кэш-балансе."
             )
@@ -1065,7 +1387,7 @@ def build_plan(
         target_bond = universe_by_isin.get(target_isin)
         if target_bond is None or not _has_usable_price(target_bond):
             plan.notes.append(
-                f"Слот {end_date.isoformat()}: бумага {target_isin} нет в "
+                f"Слот {format_date(end_date)}: бумага {target_isin} нет в "
                 f"актуальном универсе MOEX или нет рыночной цены."
             )
             continue
@@ -1089,14 +1411,14 @@ def build_plan(
                 # поэтому отдельно ``slot.confirmed_isin = None``
                 # выставлять не нужно.
                 plan.notes.append(
-                    f"Слот {end_date.isoformat()}: ваш override "
+                    f"Слот {format_date(end_date)}: ваш override "
                     f"«{cleared_confirmed}» отклонён ({invalid_reason}). "
                     f"Override сброшен. Выберите другую бумагу или "
                     f"оставьте автозамену."
                 )
             else:
                 plan.notes.append(
-                    f"Слот {end_date.isoformat()}: подобранная замена "
+                    f"Слот {format_date(end_date)}: подобранная замена "
                     f"{target_bond.name} непригодна ({invalid_reason})."
                 )
             continue
@@ -1105,7 +1427,7 @@ def build_plan(
         max_lots = int(net_at_end // lot_cost) if lot_cost > 0 else 0
         if max_lots < 1:
             plan.notes.append(
-                f"Слот {end_date.isoformat()}: ожидаемого кэша "
+                f"Слот {format_date(end_date)}: ожидаемого кэша "
                 f"({net_at_end:.0f} ₽) не хватает на 1 лот {target_bond.name} "
                 f"({lot_cost:.0f} ₽)."
             )
@@ -1137,6 +1459,16 @@ def build_plan(
 
     plan.resolved_slots = _merge_reinvestment_slots(plan.resolved_slots)
     plan.resolved_slots.sort(key=_slot_sort_key)
+    plan.resolved_slots = [
+        enrich_reinvestment_slot(
+            slot,
+            portfolio=portfolio,
+            universe=universe,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+        )
+        for slot in plan.resolved_slots
+    ]
 
     initial_cash = _plan_initial_cash(portfolio, account_snapshot_money_rub)
     _cap_purchase_events_to_cash(
@@ -1160,6 +1492,8 @@ def build_plan(
         assume_best_put_outcome=assume_best_put_outcome,
         account_snapshot_money_rub=account_snapshot_money_rub,
     )
+    if prune_stale_slot_overrides(portfolio, plan.resolved_slots):
+        portfolio.touch()
     return plan
 
 
@@ -1849,7 +2183,11 @@ def _finalize_plan_totals(
     plan.final_portfolio_value_rub = round(final_portfolio_value, 2)
     # Реализованная прибыль = только то, что превратилось в кэш к
     # горизонту, без учёта оценочной стоимости ещё не погашенных бумаг.
-    invested_baseline = portfolio.initial_amount_rub + portfolio.acknowledged_top_ups_rub
+    invested_baseline = _invested_capital_baseline(
+        portfolio,
+        account_snapshot_money_rub=account_snapshot_money_rub,
+    )
+    plan.invested_capital_rub = round(invested_baseline, 2)
     plan.total_net_profit_rub = round(
         plan.final_cash_balance_rub - invested_baseline,
         2,
@@ -1900,19 +2238,17 @@ def _finalize_plan_totals(
         )
 
     # Эффективная годовая доходность портфеля за весь горизонт —
-    # рассчитывается из фактического результата плана (cash +
-    # удерживаемые бумаги). Это единственная цифра, которую можно
-    # сравнивать с депозитом / другими инструментами «по сумме сверху».
+    # plan-XIRR по датам вложений и итоговой стоимости; fallback — CAGR
+    # на полный вложенный капитал.
     horizon_days = (portfolio.horizon_date - today).days if today else 0
     plan.horizon_days = max(horizon_days, 0)
-    if horizon_days > 0 and portfolio.initial_amount_rub > 0 and plan.final_portfolio_value_rub > 0:
-        growth = plan.final_portfolio_value_rub / portfolio.initial_amount_rub
-        # (1 + r)^(days/365) = growth → r = growth^(365/days) − 1
-        try:
-            annual_return = growth ** (365.0 / horizon_days) - 1.0
-            plan.effective_annual_return_pct = round(annual_return * 100, 2)
-        except (OverflowError, ValueError):
-            plan.effective_annual_return_pct = None
+    plan.effective_annual_return_pct = _calculate_plan_expected_xirr(
+        plan,
+        today=today,
+        invested_baseline=invested_baseline,
+        account_snapshot_money_rub=account_snapshot_money_rub,
+        horizon_days=plan.horizon_days,
+    )
 
 
 def _position_redemption_gross_value(position: PortfolioPosition, *, is_put: bool) -> float:
@@ -2148,7 +2484,12 @@ def distribute_top_up(
             unit_cost = (
                 p.purchase_dirty_price_rub * p.lot_size if p.purchase_dirty_price_rub else 0.0
             )
-        market_value = p.lots * unit_cost if unit_cost > 0 else p.purchase_amount_rub
+        lots_basis = (
+            p.actual_lots
+            if p.actual_lots is not None and portfolio.is_trading
+            else p.lots
+        )
+        market_value = lots_basis * unit_cost if unit_cost > 0 else p.purchase_amount_rub
         current_value_by_isin[p.isin] = current_value_by_isin.get(p.isin, 0.0) + market_value
 
     allocations: list[TopUpAllocation] = []

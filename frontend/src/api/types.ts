@@ -27,6 +27,10 @@ export interface Bond {
   has_warnings: boolean;
   warnings: string[];
   tinvest_enriched: boolean;
+  issuer_name: string;
+  instrument_full_name: string;
+  sector: string;
+  description: string;
 }
 
 export interface BondsListResponse {
@@ -66,6 +70,21 @@ export interface PortfolioPosition {
   actual_lots: number | null;
 }
 
+export interface ReinvestmentSlotCandidate {
+  isin: string;
+  name: string;
+  score: number | null;
+  ytm_net: number | null;
+}
+
+export type ReinvestmentSlotStatus =
+  | "ok"
+  | "no_candidate"
+  | "invalid_selection"
+  | "insufficient_cash";
+
+export type ReinvestmentSelectionMode = "strategy" | "manual";
+
 export interface ReinvestmentSlot {
   trigger_date: string;
   trigger_reason: string;
@@ -75,6 +94,10 @@ export interface ReinvestmentSlot {
   confirmed_isin: string | null;
   gap_days: number;
   source_position_isin: string | null;
+  selection_mode: ReinvestmentSelectionMode;
+  status: ReinvestmentSlotStatus;
+  failure_reason: string | null;
+  eligible_candidates: ReinvestmentSlotCandidate[];
 }
 
 export interface PortfolioData {
@@ -85,6 +108,7 @@ export interface PortfolioData {
   horizon_date: string;
   mode: string;
   api_trade_only?: boolean;
+  acknowledged_top_ups_rub?: number;
   account_id: string | null;
   account_kind: string | null;
   frozen_forecast: {
@@ -126,6 +150,8 @@ export interface Portfolio {
 export interface PlanResponse {
   total_net_profit_rub: number;
   total_net_profit_with_held_rub: number;
+  invested_capital_rub: number;
+  total_invested_rub: number;
   final_cash_balance: number;
   final_portfolio_value: number;
   expected_xirr_pct: number | null;
@@ -284,6 +310,32 @@ export interface TradingSyncResponse {
   top_up_distributed_rub: number;
   top_up_notes: string[];
   notes: string[];
+}
+
+export interface SandboxPayInResponse {
+  amount_added_rub: number;
+  money_rub: number;
+}
+
+export interface AccountOperation {
+  id: string;
+  type: string;
+  type_label: string;
+  state: string;
+  state_label: string;
+  date: string;
+  figi: string;
+  instrument_type: string;
+  isin: string | null;
+  name: string | null;
+  payment_rub: number | null;
+  quantity: number;
+  price_pct: number | null;
+  commission_rub: number | null;
+}
+
+export interface AccountOperationsResponse {
+  operations: AccountOperation[];
 }
 
 export interface OrderPreviewResponse {

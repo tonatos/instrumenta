@@ -14,6 +14,7 @@ from bond_monitor.domain.portfolio.policies import (
     BondSelectionPolicy,
 )
 from bond_monitor.domain.screening.scorer import score_bonds_for_profile
+from bond_monitor.domain.shared.formatting import format_date
 
 _NORMAL_MIN_RATING_ORDINAL: int = RATING_ORDER["ruA-"]
 _AGGRESSIVE_MIN_RATING_ORDINAL: int = RATING_ORDER["ruBB-"]
@@ -90,8 +91,8 @@ def put_offer_buy_blocked(bond: BondRecord, as_of_date: date) -> str | None:
         return None
     return (
         f"окно подачи по пут-оферте закрыто "
-        f"{bond.offer_submission_end.isoformat()}, оферта "
-        f"{bond.offer_date.isoformat()} — предъявить уже нельзя"
+        f"{format_date(bond.offer_submission_end)}, оферта "
+        f"{format_date(bond.offer_date)} — предъявить уже нельзя"
     )
 
 
@@ -113,7 +114,7 @@ def _min_maturity_date(ctx: BondSelectionContext, policy: BondSelectionPolicy) -
 
 def _maturity_window(ctx: BondSelectionContext, policy: BondSelectionPolicy) -> str:
     min_date = _min_maturity_date(ctx, policy)
-    return f"[{min_date.isoformat()}, {ctx.horizon_date.isoformat()}]"
+    return f"[{format_date(min_date)}, {format_date(ctx.horizon_date)}]"
 
 
 def bond_eligibility_reason(
@@ -144,9 +145,9 @@ def bond_eligibility_reason(
 
     min_maturity = _min_maturity_date(ctx, policy)
     if end < min_maturity:
-        return f"погашение {end.isoformat()} раньше окна (не ранее {min_maturity.isoformat()})"
+        return f"погашение {format_date(end)} раньше окна (не ранее {format_date(min_maturity)})"
     if end > ctx.horizon_date:
-        return f"погашение {end.isoformat()} позже горизонта {ctx.horizon_date.isoformat()}"
+        return f"погашение {format_date(end)} позже горизонта {format_date(ctx.horizon_date)}"
 
     if check_budget and ctx.budget_rub is not None:
         lot_cost = bond.price_per_lot_rub or 0.0
@@ -212,7 +213,7 @@ def _fallback_note(
     if effective_step == RiskProfile.NORMAL:
         return (
             f"профиль «{ctx.profile.value}» — нет кандидатов в окне "
-            f"[{ctx.purchase_date.isoformat()}, {ctx.horizon_date.isoformat()}]; "
+            f"[{format_date(ctx.purchase_date)}, {format_date(ctx.horizon_date)}]; "
             f"выбрана бумага под NORMAL-профиль"
         )
     if effective_step is None:
@@ -244,10 +245,10 @@ def explain_selection_failure(
 
     if min_maturity_date > ctx.horizon_date:
         return (
-            f"окно реинвестиции слишком узкое — покупка с {ctx.purchase_date.isoformat()}, "
+            f"окно реинвестиции слишком узкое — покупка с {format_date(ctx.purchase_date)}, "
             f"но мин. срок удержания {policy.min_replacement_horizon_days} дн. → "
-            f"погашение замены не ранее {min_maturity_date.isoformat()}, "
-            f"а горизонт плана {ctx.horizon_date.isoformat()}"
+            f"погашение замены не ранее {format_date(min_maturity_date)}, "
+            f"а горизонт плана {format_date(ctx.horizon_date)}"
         )
 
     in_window: list[BondRecord] = []

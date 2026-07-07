@@ -8,7 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip } from "@/components/ui/tooltip";
-import { cn, formatPct, formatRub } from "@/lib/utils";
+import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
 
 interface Props {
   secid: string | null;
@@ -95,6 +95,14 @@ export function BondDetailSheet({ secid, onClose }: Props) {
       ? (bond.last_price / 100) * bond.face_value * bond.lot_size
       : null;
   const riskInfo = RISK_LABELS[bond?.risk_level ?? 0];
+  const issuerTitle = bond?.issuer_name || bond?.name || "";
+  const instrumentSubtitle =
+    bond?.instrument_full_name && bond.instrument_full_name !== issuerTitle
+      ? bond.instrument_full_name
+      : null;
+  const showIssuerSection = Boolean(
+    bond && (bond.issuer_name || bond.sector || bond.description),
+  );
 
   return (
     <Sheet open={!!secid} onOpenChange={(o) => !o && onClose()}>
@@ -109,7 +117,10 @@ export function BondDetailSheet({ secid, onClose }: Props) {
         {bond && (
           <div className="space-y-5 pb-8">
             <SheetHeader>
-              <SheetTitle className="pr-8 text-base leading-snug">{bond.name}</SheetTitle>
+              <SheetTitle className="pr-8 text-base leading-snug">{issuerTitle}</SheetTitle>
+              {instrumentSubtitle && (
+                <p className="pr-8 text-sm text-muted-foreground">{instrumentSubtitle}</p>
+              )}
             </SheetHeader>
 
             {/* Actions */}
@@ -150,6 +161,25 @@ export function BondDetailSheet({ secid, onClose }: Props) {
 
             <Separator />
 
+            {showIssuerSection && (
+              <>
+                <section>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Эмитент
+                  </h3>
+                  <dl className="divide-y divide-border/50">
+                    {bond.sector && <InfoRow label="Сектор" value={bond.sector} />}
+                  </dl>
+                  {bond.description && (
+                    <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                      {bond.description}
+                    </p>
+                  )}
+                </section>
+                <Separator />
+              </>
+            )}
+
             {/* Идентификаторы */}
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -172,21 +202,21 @@ export function BondDetailSheet({ secid, onClose }: Props) {
               <dl className="divide-y divide-border/50">
                 <InfoRow
                   label="Дата погашения"
-                  value={bond.maturity_date ?? "—"}
+                  value={formatDate(bond.maturity_date)}
                 />
                 <InfoRow
                   label="Дата пут-оферты"
-                  value={bond.offer_date ?? "—"}
+                  value={formatDate(bond.offer_date)}
                   tooltip="Пут-оферта — дата, когда инвестор может потребовать выкупа облигации по заранее оговорённой цене. Удобно, если ставки выросли."
                 />
                 <InfoRow
                   label="Дата колл-оферты"
-                  value={bond.call_date ?? "—"}
+                  value={formatDate(bond.call_date)}
                   tooltip="Колл-оферта — дата, когда эмитент может досрочно выкупить облигацию. После колла выплаты по купонам прекращаются."
                 />
                 <InfoRow
                   label="Эффективная дата"
-                  value={bond.effective_date ?? "—"}
+                  value={formatDate(bond.effective_date)}
                   tooltip="Ближайшая из дат погашения и оферты — именно по ней рассчитывается YTM."
                 />
                 <InfoRow

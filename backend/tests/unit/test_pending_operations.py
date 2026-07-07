@@ -248,10 +248,10 @@ def test_initial_buy_uses_universe_figi_over_stale_position_figi() -> None:
     assert pending[0].figi == "BBG_OK"
 
 
-def test_initial_buy_skipped_when_traderecord_fill() -> None:
-    """Если есть FILL TradeRecord на нужное кол-во — pending не нужен."""
+def test_initial_buy_skipped_when_position_fully_on_account() -> None:
+    """Если факт на счёте догнал план — pending не нужен."""
     p = _trading_portfolio()
-    p.positions = [_position(lots=5, actual_lots=0, figi="BBG1")]
+    p.positions = [_position(lots=5, actual_lots=5, figi="BBG1")]
     p.trade_records = [
         TradeRecord(
             request_uid="uid1",
@@ -399,10 +399,59 @@ def test_persisted_top_up_buy_filtered_when_filled() -> None:
             direction="BUY",
             lots=2,
             status="EXECUTION_REPORT_STATUS_FILL",
+            pending_op_id=persisted.id,
         )
     ]
     pending = compute_pending_operations(p, _empty_snapshot(), date(2025, 6, 1))
     assert not any(op.kind == "top_up_buy" for op in pending)
+
+
+def test_top_up_buy_kept_after_prior_initial_fill_on_same_figi() -> None:
+    """Top-up на ту же бумагу не исчезает из-за стартового FILL."""
+    p = _trading_portfolio()
+    p.positions = [_position(lots=82, actual_lots=66, figi="BBG_VIS", isin="RU000VIS")]
+    top_up = PendingOperation(
+        kind="top_up_buy",
+        isin="RU000VIS",
+        name="ВИС Ф БП07",
+        lots=16,
+        figi="BBG_VIS",
+        suggested_price_pct=PriceUnitPct(100.5),
+        top_up_batch_id="batch-2",
+    )
+    p.pending_operations = [top_up]
+    p.trade_records = [
+        TradeRecord(
+            request_uid="u-initial",
+            account_id="acc-1",
+            account_kind=AccountKind.SANDBOX,
+            figi="BBG_VIS",
+            direction="BUY",
+            lots=66,
+            status="EXECUTION_REPORT_STATUS_FILL",
+        )
+    ]
+    pending = compute_pending_operations(p, _empty_snapshot(), date(2025, 6, 1))
+    assert any(op.kind == "top_up_buy" and op.lots == 16 for op in pending)
+
+
+def test_initial_buy_shown_when_top_up_gap_after_prior_fill() -> None:
+    """Если top_up_buy уже снят, но gap остался — показываем догоняющую покупку."""
+    p = _trading_portfolio()
+    p.positions = [_position(lots=82, actual_lots=66, figi="BBG_VIS", isin="RU000VIS")]
+    p.trade_records = [
+        TradeRecord(
+            request_uid="u-initial",
+            account_id="acc-1",
+            account_kind=AccountKind.SANDBOX,
+            figi="BBG_VIS",
+            direction="BUY",
+            lots=66,
+            status="EXECUTION_REPORT_STATUS_FILL",
+        )
+    ]
+    pending = compute_pending_operations(p, _empty_snapshot(), date(2025, 6, 1))
+    assert any(op.kind == "initial_buy" and op.lots == 16 for op in pending)
 
 
 def test_sweep_completed_pending_removes_filled() -> None:
@@ -432,6 +481,7 @@ def test_sweep_completed_pending_removes_filled() -> None:
             direction="SELL",
             lots=2,
             status="EXECUTION_REPORT_STATUS_FILL",
+            pending_op_id=op_filled.id,
         )
     ]
     removed = sweep_completed_pending(p)

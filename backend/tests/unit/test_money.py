@@ -8,6 +8,7 @@ from bond_monitor.domain.shared.money import (
     Lots,
     PriceUnitPct,
     Rub,
+    bond_clean_price_pct_from_rub,
     bond_clean_price_quotation,
     lot_cost_rub,
     money_value_to_rub,
@@ -16,6 +17,12 @@ from bond_monitor.domain.shared.money import (
     quotation_to_float,
     quotation_to_pct,
 )
+
+
+def test_bond_clean_price_pct_from_rub() -> None:
+    assert float(bond_clean_price_pct_from_rub(clean_price_rub=1009.9245, face_value=1000.0)) == pytest.approx(
+        100.99245
+    )
 
 
 def test_bond_clean_price_quotation_converts_pct_to_rub() -> None:

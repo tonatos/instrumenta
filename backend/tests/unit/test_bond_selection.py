@@ -221,7 +221,7 @@ def test_explain_selection_failure_narrow_window() -> None:
     )
     reason = explain_selection_failure([], ctx)
     assert "окно реинвестиции слишком узкое" in reason
-    assert "2027-07-16" in reason
+    assert "16 июля 2027" in reason
 
 
 def test_eligible_bonds_unified_for_compose_and_reinvest() -> None:

@@ -115,6 +115,43 @@ def test_apply_bumps_existing_position_lots() -> None:
     assert notes
 
 
+def test_apply_does_not_bump_underweight_position_lots() -> None:
+    """Top-up на недокупленную позицию — только заявка, план не раздуваем."""
+    portfolio = _trading_portfolio()
+    pos = _position(lots=82, isin="RU000VIS")
+    pos.actual_lots = 66
+    pos.name = "ВИС Ф БП07"
+    portfolio.positions = [pos]
+    bond = _bond("RU000VIS")
+    bond.api_trade_available_flag = True
+    allocations = [
+        TopUpAllocation(
+            isin="RU000VIS",
+            figi="BBG_EXIST",
+            name="ВИС Ф БП07",
+            lots=16,
+            suggested_price_pct=100.5,
+            estimated_amount_rub=16_104.0,
+            is_existing_position=True,
+        )
+    ]
+
+    apply_top_up_distribution(
+        portfolio,
+        allocations,
+        distributed_amount_rub=16_104.0,
+        batch_id="batch-vis",
+        processed_at_iso="2025-06-15T12:00:00+00:00",
+        universe_by_isin={bond.isin: bond},
+        today=date(2025, 6, 15),
+    )
+
+    assert portfolio.positions[0].lots == 82
+    assert len(portfolio.pending_operations) == 1
+    assert portfolio.pending_operations[0].kind == "top_up_buy"
+    assert portfolio.pending_operations[0].lots == 16
+
+
 def test_apply_adds_new_position_for_new_isin() -> None:
     portfolio = _trading_portfolio()
     bond = _bond("RU000A002")

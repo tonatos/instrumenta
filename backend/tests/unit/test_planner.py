@@ -8,7 +8,9 @@ import pytest
 
 from bond_monitor.domain.bonds.models import BondRecord, RiskLevel
 from bond_monitor.domain.portfolio.models import (
+    FrozenForecast,
     Portfolio,
+    PortfolioMode,
     PortfolioPosition,
     PositionSourceType,
     ReinvestmentSlot,
@@ -22,6 +24,7 @@ from bond_monitor.domain.portfolio.planner import (
     _net_redemption_amount,
     auto_compose,
     build_plan,
+    prune_stale_slot_overrides,
     select_replacement,
     validate_replacement_bond,
 )
@@ -243,7 +246,7 @@ def test_select_replacement_failure_explains_narrow_window() -> None:
 
     assert bond is None
     assert "окно реинвестиции слишком узкое" in reason
-    assert "2027-07-16" in reason
+    assert "16 июля 2027" in reason
 
 
 def test_select_replacement_failure_explains_lot_too_expensive() -> None:
@@ -1084,3 +1087,118 @@ def test_merge_cashflow_events_sums_bonds_count() -> None:
     assert len(merged) == 1
     assert merged[0].bonds_count == 11
     assert merged[0].description == "Погашение iКарРус1P4 (11 шт.)"
+
+
+def test_horizon_extension_rebuilds_reinvestment_chain_for_trading_portfolio() -> None:
+    """Extending horizon must add forecast reinvestment slots; facts stay intact."""
+    today = date(2026, 7, 7)
+    portfolio = _aa19dfd_portfolio()
+    portfolio.mode = PortfolioMode.TRADING
+    portfolio.frozen_forecast = FrozenForecast(
+        expected_xirr_pct=18.0,
+        expected_total_net_profit_rub=5_000.0,
+        expected_final_value_rub=25_000.0,
+        frozen_initial_amount_rub=20_000.0,
+        horizon_date=date(2027, 1, 1),
+    )
+    for pos in portfolio.positions:
+        pos.actual_lots = pos.lots
+    positions_snapshot = [
+        (p.isin, p.lots, p.actual_lots, p.purchase_amount_rub) for p in portfolio.positions
+    ]
+    frozen_snapshot = portfolio.frozen_forecast
+
+    plan_short = build_plan(
+        portfolio,
+        _aa19dfd_universe(),
+        today=today,
+        key_rate=16.0,
+        tax_rate=0.13,
+        account_snapshot_money_rub=portfolio.cash_balance_rub,
+        assume_best_put_outcome=False,
+    )
+    portfolio.horizon_date = date(2028, 1, 1)
+    plan_long = build_plan(
+        portfolio,
+        _aa19dfd_universe(),
+        today=today,
+        key_rate=16.0,
+        tax_rate=0.13,
+        account_snapshot_money_rub=portfolio.cash_balance_rub,
+        assume_best_put_outcome=False,
+    )
+
+    assert len(plan_long.resolved_slots) > len(plan_short.resolved_slots)
+    assert [(p.isin, p.lots, p.actual_lots, p.purchase_amount_rub) for p in portfolio.positions] == (
+        positions_snapshot
+    )
+    assert portfolio.frozen_forecast == frozen_snapshot
+
+
+def test_prune_stale_slot_overrides_drops_phantom_sources_beyond_horizon() -> None:
+    today = date(2026, 7, 7)
+    portfolio = _aa19dfd_portfolio()
+    portfolio.slots = [
+        ReinvestmentSlot(
+            trigger_date=date(2026, 12, 31),
+            trigger_reason=ReinvestmentTriggerReason.MATURITY,
+            expected_cash_rub=10_000.0,
+            source_position_isin="RU000A107KR2",
+            confirmed_isin="RU000A107KR2",
+        ),
+        ReinvestmentSlot(
+            trigger_date=date(2026, 7, 28),
+            trigger_reason=ReinvestmentTriggerReason.MATURITY,
+            expected_cash_rub=5_000.0,
+            source_position_isin="RU000A100PB0",
+            confirmed_isin="RU000A107BH2",
+        ),
+    ]
+    plan = build_plan(
+        portfolio,
+        _aa19dfd_universe(),
+        today=today,
+        key_rate=16.0,
+        tax_rate=0.13,
+    )
+    active_sources = {s.source_position_isin for s in plan.resolved_slots if s.source_position_isin}
+    assert "RU000A107KR2" not in active_sources
+    assert all(slot.source_position_isin in active_sources for slot in portfolio.slots)
+    assert any(slot.source_position_isin == "RU000A100PB0" for slot in portfolio.slots)
+
+
+def test_prune_stale_slot_overrides_helper() -> None:
+    portfolio = Portfolio(
+        id="p1",
+        name="Test",
+        initial_amount_rub=100_000,
+        horizon_date=date(2027, 6, 1),
+        risk_profile=RiskProfile.NORMAL,
+        slots=[
+            ReinvestmentSlot(
+                trigger_date=date(2026, 6, 1),
+                trigger_reason=ReinvestmentTriggerReason.MATURITY,
+                expected_cash_rub=10_000,
+                source_position_isin="KEEP",
+                confirmed_isin="RU0001",
+            ),
+            ReinvestmentSlot(
+                trigger_date=date(2026, 12, 1),
+                trigger_reason=ReinvestmentTriggerReason.MATURITY,
+                expected_cash_rub=10_000,
+                source_position_isin="DROP",
+                confirmed_isin="RU0002",
+            ),
+        ],
+    )
+    resolved = [
+        ReinvestmentSlot(
+            trigger_date=date(2026, 6, 1),
+            trigger_reason=ReinvestmentTriggerReason.MATURITY,
+            expected_cash_rub=10_000,
+            source_position_isin="KEEP",
+        ),
+    ]
+    changed = prune_stale_slot_overrides(portfolio, resolved)
+    assert changed
+    assert [s.source_position_isin for s in portfolio.slots] == ["KEEP"]

@@ -233,10 +233,8 @@ def _estimate_current_value(
     for figi, broker_pos in snapshot.bond_positions.items():
         if figi not in portfolio_figis:
             continue
-        # current_price в `BondPosition` уже в % от номинала (см.
-        # `_classify_position` в trading_client). Чтобы посчитать
-        # стоимость в ₽, нужно знать face_value — берём из локальной
-        # позиции (по figi).
+        # current_price_pct в `BondPosition` — чистая цена в % от номинала
+        # (конвертируется из ₽ в trading_client при разборе getPortfolio).
         position = next((p for p in portfolio.positions if p.figi == figi), None)
         if position is None:
             continue

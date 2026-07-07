@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import date
 from enum import Enum, StrEnum
 
+from bond_monitor.domain.shared.formatting import format_date
+
 
 class CouponType(StrEnum):
     FIXED = "fixed"
@@ -159,6 +161,13 @@ class BondRecord:
     risk_score: float | None = None
     liquidity_score: float | None = None
 
+    # --- Issuer metadata (T-Invest) ---
+    issuer_name: str = ""
+    instrument_full_name: str = ""
+    sector: str = ""
+    description: str = ""
+    asset_uid: str = ""
+
     # --- Enrichment metadata ---
     tinvest_enriched: bool = False
     # T-Invest: можно ли торговать через Invest API (PostOrder).
@@ -236,6 +245,6 @@ class BondRecord:
             warnings.append("Только для квалифицированных инвесторов")
         if self.call_date is not None:
             warnings.append(
-                f"Колл-оферта {self.call_date}: эмитент может досрочно выкупить облигацию"
+                f"Колл-оферта {format_date(self.call_date)}: эмитент может досрочно выкупить облигацию"
             )
         return warnings

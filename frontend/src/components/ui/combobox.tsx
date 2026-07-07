@@ -20,6 +20,7 @@ interface ComboboxProps {
   className?: string;
   disabled?: boolean;
   emptyText?: string;
+  allowDeselect?: boolean;
 }
 
 export function Combobox({
@@ -31,6 +32,7 @@ export function Combobox({
   className,
   disabled,
   emptyText = "Ничего не найдено",
+  allowDeselect = true,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -77,7 +79,7 @@ export function Combobox({
           />
         </div>
         <div className="max-h-60 overflow-y-auto">
-          {value && (
+          {allowDeselect && value && (
             <button
               type="button"
               className="flex w-full items-center px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50"
@@ -102,7 +104,11 @@ export function Combobox({
                   value === opt.value && "bg-accent",
                 )}
                 onClick={() => {
-                  onChange(opt.value === value ? null : opt.value);
+                  if (allowDeselect && opt.value === value) {
+                    onChange(null);
+                  } else {
+                    onChange(opt.value);
+                  }
                   setOpen(false);
                   setSearch("");
                 }}

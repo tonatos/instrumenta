@@ -112,6 +112,13 @@ def pct_to_quotation(price_pct: PriceUnitPct) -> Quotation:
     return decimal_to_quotation(quantized)
 
 
+def bond_clean_price_pct_from_rub(*, clean_price_rub: float, face_value: float) -> PriceUnitPct:
+    """Чистая цена облигации в % от номинала по рублёвой цене за 1 бумагу."""
+    if face_value <= 0:
+        raise ValueError("face_value must be positive")
+    return PriceUnitPct(clean_price_rub / face_value * 100.0)
+
+
 def bond_clean_price_quotation(*, price_pct: PriceUnitPct, face_value: float) -> Quotation:
     """Чистая цена одной облигации в ₽ для `PostOrder` / `GetOrderPrice`.
 

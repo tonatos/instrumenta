@@ -51,6 +51,7 @@ from bond_monitor.domain.portfolio.models import (
     TradeRecord,
 )
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, order_amount_rub
+from bond_monitor.domain.shared.formatting import format_date
 from bond_monitor.domain.trading.policies import (
     buy_limit_price_buffer,
     format_buy_limit_buffer_label,
@@ -99,8 +100,26 @@ def _has_fulfilled_trade_record(
         if tr.figi != figi or tr.direction != direction:
             continue
         if tr.status == "EXECUTION_REPORT_STATUS_FILL":
-            fulfilled += tr.lots
+            fulfilled += tr.lots_executed or tr.lots
     return fulfilled >= lots_needed
+
+
+def _is_pending_op_fulfilled(op: PendingOperation, records: list[TradeRecord]) -> bool:
+    """Закрыта ли конкретная persisted-операция (top_up_buy / manual_sell).
+
+    Сопоставление только по ``pending_op_id`` — сумма всех FILL по figi
+    не используется, иначе стартовая покупка ошибочно закрывает top-up.
+    """
+    direction = _order_direction(op)
+    fulfilled = 0
+    for tr in records:
+        if tr.pending_op_id != op.id:
+            continue
+        if tr.direction != direction:
+            continue
+        if tr.status == "EXECUTION_REPORT_STATUS_FILL":
+            fulfilled += tr.lots_executed or tr.lots
+    return fulfilled >= op.lots
 
 
 def _has_active_trade_record(
@@ -258,7 +277,7 @@ def _enrich_operation(
         if not op.figi:
             block_reason = "Не удалось определить FIGI — обновите счёт или проверьте ISIN"
         elif op.lots <= 0:
-            block_reason = "Недостаточно средств для покупки хотя бы 1 лота"
+            block_reason = "Нет лотов для покупки"
         elif op.suggested_price_pct is None:
             block_reason = "Нет рыночной цены для расчёта лимитной заявки"
     if block_reason:
@@ -326,12 +345,7 @@ def pending_top_up_lots_for_isin(portfolio: Portfolio, isin: str) -> int:
     for op in portfolio.pending_operations:
         if op.kind != "top_up_buy" or op.isin != isin:
             continue
-        if op.figi and _has_fulfilled_trade_record(
-            portfolio.trade_records,
-            figi=op.figi,
-            direction="BUY",
-            lots_needed=op.lots,
-        ):
+        if _is_pending_op_fulfilled(op, portfolio.trade_records):
             continue
         total += op.lots
     return total
@@ -380,15 +394,10 @@ def _gen_initial_buys(
             continue
         figi = _effective_figi(position.isin, position.figi, universe_by_isin)
         actual = position.actual_lots if position.actual_lots is not None else 0
+        if actual >= position.lots:
+            continue
         remaining = position.lots - actual - pending_top_up_lots_for_isin(portfolio, position.isin)
         if remaining <= 0:
-            continue
-        if figi and _has_fulfilled_trade_record(
-            portfolio.trade_records,
-            figi=figi,
-            direction="BUY",
-            lots_needed=remaining,
-        ):
             continue
         active = (
             _has_active_trade_record(portfolio.trade_records, figi=figi, direction="BUY")
@@ -486,7 +495,7 @@ def _gen_reinvest_buys(
                         pos.purchase_clean_price_pct, buffer
                     )
                     break
-        name = bond.name if bond else f"Реинвест слота {slot.trigger_date.isoformat()}"
+        name = bond.name if bond else f"Реинвест слота {format_date(slot.trigger_date)}"
         result.append(
             PendingOperation(
                 id=_stable_id(
@@ -501,7 +510,7 @@ def _gen_reinvest_buys(
                 due_date=slot.trigger_date,
                 reason=(
                     f"Слот реинвестиции по {slot.trigger_reason.value} от "
-                    f"{slot.trigger_date.isoformat()}: ожидается "
+                    f"{format_date(slot.trigger_date)}: ожидается "
                     f"{slot.expected_cash_rub:,.0f} ₽"
                 ),
                 slot_id=_stable_id(
@@ -516,7 +525,7 @@ def _append_put_offer_submission_reminder(op: PendingOperation, *, days_left: in
     """Добавить явное напоминание предъявить бумаги в последние дни окна подачи."""
     if "предъявите бумаги" in op.reason.lower():
         return
-    due_str = op.due_date.isoformat() if op.due_date else "—"
+    due_str = format_date(op.due_date)
     if days_left == 0:
         deadline_hint = f"сегодня ({due_str})"
     elif days_left == 1:
@@ -563,7 +572,7 @@ def _gen_put_offer_submits(
                 ),
                 due_date=(position.offer_submission_end or position.offer_date),
                 reason=(
-                    f"Пут-оферта {position.offer_date.isoformat()}"
+                    f"Пут-оферта {format_date(position.offer_date)}"
                     + (
                         f" по цене {position.offer_price_pct:.2f}%"
                         if position.offer_price_pct is not None
@@ -590,12 +599,7 @@ def _filter_persisted_pending(
             continue
         figi = _effective_figi(op.isin, op.figi, universe_by_isin)
         direction = _order_direction(op)
-        if figi and _has_fulfilled_trade_record(
-            portfolio.trade_records,
-            figi=figi,
-            direction=direction,
-            lots_needed=op.lots,
-        ):
+        if _is_pending_op_fulfilled(op, portfolio.trade_records):
             continue
         if figi and figi != op.figi:
             op = replace(op, figi=figi)
@@ -692,12 +696,7 @@ def sweep_completed_pending(portfolio: Portfolio) -> int:
             keep.append(op)
             continue
         direction = _order_direction(op)
-        if op.figi and _has_fulfilled_trade_record(
-            portfolio.trade_records,
-            figi=op.figi,
-            direction=direction,
-            lots_needed=op.lots,
-        ):
+        if _is_pending_op_fulfilled(op, portfolio.trade_records):
             continue
         keep.append(op)
     removed = len(portfolio.pending_operations) - len(keep)
@@ -707,9 +706,9 @@ def sweep_completed_pending(portfolio: Portfolio) -> int:
 
 def render_put_offer_chat_template(position: PortfolioPosition) -> str:
     """Готовый текст для копирования в чат брокера — подача пут-оферты."""
-    offer_date = position.offer_date.isoformat() if position.offer_date else "—"
+    offer_date = format_date(position.offer_date)
     submission_end = (
-        f" (срок подачи до {position.offer_submission_end.isoformat()})"
+        f" (срок подачи до {format_date(position.offer_submission_end)})"
         if position.offer_submission_end
         else ""
     )

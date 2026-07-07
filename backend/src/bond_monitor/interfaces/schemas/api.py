@@ -54,6 +54,10 @@ class BondResponse(BaseModel):
     has_warnings: bool = False
     warnings: list[str] = Field(default_factory=list)
     tinvest_enriched: bool = False
+    issuer_name: str = ""
+    instrument_full_name: str = ""
+    sector: str = ""
+    description: str = ""
 
 
 class BondsListResponse(BaseModel):
@@ -87,6 +91,8 @@ class PortfolioResponse(BaseModel):
 class PlanResponse(BaseModel):
     total_net_profit_rub: float
     total_net_profit_with_held_rub: float
+    invested_capital_rub: float
+    total_invested_rub: float
     final_cash_balance: float
     final_portfolio_value: float
     expected_xirr_pct: float | None = None
@@ -265,3 +271,33 @@ class BrokerAccountResponse(BaseModel):
 class DeleteSandboxAccountResponse(BaseModel):
     account_id: str
     deleted_portfolio_id: str | None = None
+
+
+class SandboxPayInRequest(BaseModel):
+    amount_rub: float = Field(gt=0)
+
+
+class SandboxPayInResponse(BaseModel):
+    amount_added_rub: float
+    money_rub: float
+
+
+class AccountOperationResponse(BaseModel):
+    id: str
+    type: str
+    type_label: str
+    state: str
+    state_label: str
+    date: str
+    figi: str
+    instrument_type: str
+    isin: str | None = None
+    name: str | None = None
+    payment_rub: float | None = None
+    quantity: int
+    price_pct: float | None = None
+    commission_rub: float | None = None
+
+
+class AccountOperationsResponse(BaseModel):
+    operations: list[AccountOperationResponse]

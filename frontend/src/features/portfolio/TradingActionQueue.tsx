@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ClipboardCopy,
   Loader2,
+  PlusCircle,
   RefreshCw,
   ShoppingCart,
   Tag,
@@ -29,7 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { cn, formatPct, formatRub } from "@/lib/utils";
+import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
 
 const BUY_KINDS = new Set(["initial_buy", "reinvest_buy", "top_up_buy"]);
 
@@ -343,7 +344,7 @@ function OperationCard({
         {displayPricePct != null && (
           <span>лимит {displayPricePct.toFixed(2)}%</span>
         )}
-        {!isOnExchange && op.due_date && <span>до {op.due_date}</span>}
+        {!isOnExchange && op.due_date && <span>до {formatDate(op.due_date)}</span>}
       </div>
 
       {isOnExchange && <OrderDetailPanel op={op} />}
@@ -361,7 +362,7 @@ function OperationCard({
           <p className="flex items-start gap-1.5 rounded-md bg-red-500/10 px-2.5 py-2 text-xs text-red-800 dark:text-red-300">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             Осталось мало времени: подайте заявку на пут-оферту через чат брокера
-            {op.due_date ? ` до ${op.due_date}` : ""}, иначе право на досрочный выкуп будет упущено.
+            {op.due_date ? ` до ${formatDate(op.due_date)}` : ""}, иначе право на досрочный выкуп будет упущено.
           </p>
         )}
 
@@ -723,10 +724,11 @@ function ConfirmDialog({
           )}
 
           {insufficientCash && (
-            <p className="flex items-start gap-1.5 text-sm text-destructive">
+            <p className="flex items-start gap-1.5 text-sm text-amber-800 dark:text-amber-300">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              Недостаточно средств на счёте для покупки
-              {totalToPay != null ? ` (~${formatRub(totalToPay)})` : ""}.
+              По оценке брокера на счёте может не хватить средств
+              {totalToPay != null ? ` (~${formatRub(totalToPay)} при ${formatRub(preview!.money_rub)} на счёте)` : ""}.
+              Заявку всё равно можно отправить — биржа примет или отклонит.
             </p>
           )}
 
@@ -746,8 +748,7 @@ function ConfirmDialog({
             disabled={
               isPending ||
               !pricePct ||
-              Number.isNaN(parseFloat(pricePct)) ||
-              insufficientCash
+              Number.isNaN(parseFloat(pricePct))
             }
           >
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -785,6 +786,79 @@ function Section({
   );
 }
 
+function SandboxPayInPanel({
+  portfolioId,
+  onSuccess,
+  disabled,
+}: {
+  portfolioId: string;
+  onSuccess: () => void;
+  disabled?: boolean;
+}) {
+  const [amountRub, setAmountRub] = useState("50 000");
+  const [error, setError] = useState<string | null>(null);
+
+  const payInMutation = useMutation({
+    mutationFn: async () => {
+      const amount = Number(amountRub.replace(/\s/g, "").replace(",", "."));
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("Укажите корректную сумму пополнения");
+      }
+      return api.sandboxPayIn(portfolioId, { amount_rub: amount });
+    },
+    onSuccess: () => {
+      setError(null);
+      onSuccess();
+    },
+    onError: (err: Error) => {
+      setError(parseApiError(err));
+    },
+  });
+
+  return (
+    <div className="space-y-2 border-t border-border/60 pt-3">
+      <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <PlusCircle className="h-3.5 w-3.5" />
+        Песочница · добавить средства
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Имитирует пополнение брокерского счёта. После добавления нажмите «Обновить счёт» или
+        дождитесь авто-синхронизации — пополнение распределится по портфелю.
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-[140px] flex-1 space-y-1">
+          <label htmlFor={`sandbox-pay-in-${portfolioId}`} className="text-xs text-muted-foreground">
+            Сумма, ₽
+          </label>
+          <Input
+            id={`sandbox-pay-in-${portfolioId}`}
+            inputMode="decimal"
+            value={amountRub}
+            onChange={(e) => setAmountRub(e.target.value)}
+            disabled={disabled || payInMutation.isPending}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => payInMutation.mutate()}
+          disabled={disabled || payInMutation.isPending}
+        >
+          {payInMutation.isPending ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <PlusCircle className="h-3.5 w-3.5" />
+          )}
+          Добавить средства
+        </Button>
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
 export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
   const queryClient = useQueryClient();
   const [confirmOp, setConfirmOp] = useState<PendingOperation | null>(null);
@@ -809,6 +883,7 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
       queryClient.invalidateQueries({ queryKey: ["plan", portfolio.id] });
     }
     queryClient.invalidateQueries({ queryKey: ["portfolios"] });
+    queryClient.invalidateQueries({ queryKey: ["account-operations", portfolio.id] });
   };
 
   const confirmMutation = useMutation({
@@ -902,6 +977,14 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
     />
   );
 
+  const sandboxPayInPanel = !isProduction ? (
+    <SandboxPayInPanel
+      portfolioId={portfolio.id}
+      onSuccess={() => void refetch()}
+      disabled={isFetching}
+    />
+  ) : null;
+
   if (isLoading) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-border p-4 text-sm text-muted-foreground">
@@ -937,20 +1020,23 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
 
   if (!hasContent) {
     return (
-      <div className="flex items-center justify-between rounded-xl border border-green-400/30 bg-green-500/5 px-4 py-3 text-sm">
-        <span className="text-green-800 dark:text-green-300">
-          Очередь действий пуста — все операции выполнены
-        </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-1.5 text-muted-foreground"
-          onClick={() => refetch()}
-          disabled={isFetching}
-        >
-          <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
-          Обновить
-        </Button>
+      <div className="space-y-3 rounded-xl border border-green-400/30 bg-green-500/5 px-4 py-3 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-green-800 dark:text-green-300">
+            Очередь действий пуста — все операции выполнены
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5 text-muted-foreground"
+            onClick={() => refetch()}
+            disabled={isFetching}
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5", isFetching && "animate-spin")} />
+            Обновить
+          </Button>
+        </div>
+        {sandboxPayInPanel}
       </div>
     );
   }
@@ -1061,6 +1147,8 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
             ))}
           </div>
         )}
+
+        {sandboxPayInPanel}
       </div>
 
       <ConfirmDialog

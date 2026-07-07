@@ -6,7 +6,7 @@ import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatPct } from "@/lib/utils";
+import { cn, formatDate, formatPct } from "@/lib/utils";
 
 const RISK_LABELS: Record<number, { label: string; className: string }> = {
   0: { label: "Неизвестен", className: "bg-muted text-muted-foreground" },
@@ -122,7 +122,7 @@ export function FavoritesPage() {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">Погашение</p>
-                    <p className="text-xs font-medium">{bond.maturity_date ?? "—"}</p>
+                    <p className="text-xs font-medium">{formatDate(bond.maturity_date)}</p>
                   </div>
                 </div>
 

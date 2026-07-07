@@ -59,6 +59,79 @@ def test_get_plan_includes_resolved_slots() -> None:
             assert "trigger_reason" in slot
             assert "expected_cash_rub" in slot
             assert "source_position_isin" in slot
+            assert "selection_mode" in slot
+            assert "status" in slot
+            assert "eligible_candidates" in slot
+            assert isinstance(slot["eligible_candidates"], list)
+
+
+def test_set_slot_override_rejects_ineligible_bond() -> None:
+    with _portfolio_client() as (client, pid):
+        client.post(f"/api/v1/portfolios/{pid}/auto-compose")
+        plan = client.get(f"/api/v1/portfolios/{pid}/plan").json()
+        if not plan["slots"]:
+            return
+
+        slot = plan["slots"][0]
+        source_isin = slot["source_position_isin"]
+        assert source_isin
+
+        resp = client.post(
+            f"/api/v1/portfolios/{pid}/slots/override",
+            json={"source_position_isin": source_isin, "confirmed_isin": source_isin},
+        )
+        assert resp.status_code == 422, resp.text
+
+
+def test_horizon_change_rebuilds_plan_slots_without_touching_positions() -> None:
+    with _portfolio_client(name="Horizon Change") as (client, pid):
+        client.post(f"/api/v1/portfolios/{pid}/auto-compose")
+        before = client.get(f"/api/v1/portfolios/{pid}").json()
+        plan_short = client.get(f"/api/v1/portfolios/{pid}/plan").json()
+        short_slots = len(plan_short["slots"])
+
+        resp = client.patch(
+            f"/api/v1/portfolios/{pid}",
+            json={"horizon_date": "2028-06-01"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["horizon_date"] == "2028-06-01"
+
+        after = client.get(f"/api/v1/portfolios/{pid}").json()
+        assert after["data"]["positions"] == before["data"]["positions"]
+
+        plan_long = client.get(f"/api/v1/portfolios/{pid}/plan").json()
+        assert len(plan_long["slots"]) >= short_slots
+
+
+def test_reset_all_slot_overrides() -> None:
+    with _portfolio_client() as (client, pid):
+        client.post(f"/api/v1/portfolios/{pid}/auto-compose")
+        plan = client.get(f"/api/v1/portfolios/{pid}/plan").json()
+        if not plan["slots"]:
+            return
+
+        slot = plan["slots"][0]
+        source_isin = slot["source_position_isin"]
+        override_isin = slot.get("suggested_isin")
+        if not source_isin or not override_isin:
+            return
+
+        client.post(
+            f"/api/v1/portfolios/{pid}/slots/override",
+            json={"source_position_isin": source_isin, "confirmed_isin": override_isin},
+        )
+
+        resp = client.post(f"/api/v1/portfolios/{pid}/slots/reset-all")
+        assert resp.status_code == 200, resp.text
+
+        plan_after = client.get(f"/api/v1/portfolios/{pid}/plan").json()
+        matched = [
+            s for s in plan_after["slots"] if s["source_position_isin"] == source_isin
+        ]
+        if matched:
+            assert matched[0]["confirmed_isin"] is None
+            assert matched[0]["selection_mode"] == "strategy"
 
 
 def test_set_slot_override_by_source_position_isin() -> None:

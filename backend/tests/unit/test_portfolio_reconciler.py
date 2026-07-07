@@ -23,6 +23,7 @@ from bond_monitor.domain.portfolio.models import (
 from bond_monitor.domain.shared.money import PriceUnitPct, Rub
 from bond_monitor.domain.trading.reconciler import (
     detect_top_up,
+    reconcile_acknowledged_top_ups,
     reconcile_positions,
     validate_account_for_attach,
 )
@@ -312,3 +313,69 @@ def test_detect_top_up_limited_by_cash() -> None:
     assert result.pending_top_up_rub == 100_000.0
     # available ограничено реальным cash: 20 000 × (1 − 0.005) = 19 900
     assert result.available_for_distribution_rub == pytest.approx(19_900.0)
+
+
+def test_reconcile_acknowledged_top_ups_from_positions() -> None:
+    """Sync поднимает acknowledged_top_ups, если на счёте больше initial."""
+    portfolio = _portfolio(initial_amount=20_000.0)
+    portfolio.mode = PortfolioMode.TRADING
+    portfolio.positions = [
+        PortfolioPosition(
+            isin="RU000A100PB0",
+            secid="RU000A100PB0",
+            name="Test bond",
+            lots=175,
+            lot_size=1,
+            purchase_clean_price_pct=100.0,
+            purchase_dirty_price_rub=1_000.0,
+            purchase_aci_rub=0.0,
+            purchase_date=date(2026, 1, 1),
+            purchase_amount_rub=175_000.0,
+            coupon_rate=20.0,
+            face_value=1_000.0,
+            maturity_date=date(2027, 1, 1),
+            offer_date=None,
+            coupon_period_days=182,
+            source=PositionSourceType.INITIAL,
+            actual_lots=175,
+        ),
+    ]
+    snapshot = _empty_snapshot(5_000.0)
+    portfolio.positions[0].figi = "FIGI1"
+
+    reconcile_acknowledged_top_ups(portfolio, snapshot)
+
+    assert portfolio.acknowledged_top_ups_rub == pytest.approx(160_000.0)
+
+
+def test_reconcile_acknowledged_top_ups_syncs_down_when_inflated() -> None:
+    """Sync снижает acknowledged_top_ups, если на счёте меньше метаданных."""
+    portfolio = _portfolio(initial_amount=20_000.0)
+    portfolio.mode = PortfolioMode.TRADING
+    portfolio.acknowledged_top_ups_rub = 227_738.0
+    portfolio.positions = [
+        PortfolioPosition(
+            isin="RU000A100PB0",
+            secid="RU000A100PB0",
+            name="Test bond",
+            lots=175,
+            lot_size=1,
+            purchase_clean_price_pct=100.0,
+            purchase_dirty_price_rub=1_000.0,
+            purchase_aci_rub=0.0,
+            purchase_date=date(2026, 1, 1),
+            purchase_amount_rub=175_000.0,
+            coupon_rate=20.0,
+            face_value=1_000.0,
+            maturity_date=date(2027, 1, 1),
+            offer_date=None,
+            coupon_period_days=182,
+            source=PositionSourceType.INITIAL,
+            actual_lots=175,
+        ),
+    ]
+    snapshot = _empty_snapshot(5_000.0)
+
+    assert reconcile_acknowledged_top_ups(portfolio, snapshot)
+
+    assert portfolio.acknowledged_top_ups_rub == pytest.approx(160_000.0)

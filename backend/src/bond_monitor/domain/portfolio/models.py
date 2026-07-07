@@ -151,6 +151,15 @@ class ReinvestmentTriggerReason(StrEnum):
     COUPON_CASH = "coupon_cash"
 
 
+class ReinvestmentSlotStatus(StrEnum):
+    """Статус подбора замены для UI."""
+
+    OK = "ok"
+    NO_CANDIDATE = "no_candidate"
+    INVALID_SELECTION = "invalid_selection"
+    INSUFFICIENT_CASH = "insufficient_cash"
+
+
 @dataclass
 class PortfolioPosition:
     """Одна позиция в портфеле — фактически купленная или запланированная.
@@ -319,6 +328,15 @@ class ReinvestmentSlot:
     confirmed_isin: str | None = None
     gap_days: int = 2
     source_position_isin: str | None = None
+    # Plan-response metadata (not persisted in portfolio JSON).
+    status: ReinvestmentSlotStatus = ReinvestmentSlotStatus.OK
+    failure_reason: str | None = None
+    eligible_candidates: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def selection_mode(self) -> str:
+        """``strategy`` — автоподбор; ``manual`` — пользовательский override."""
+        return "manual" if self.confirmed_isin else "strategy"
 
     @property
     def effective_isin(self) -> str | None:
@@ -343,6 +361,15 @@ class ReinvestmentSlot:
             "gap_days": self.gap_days,
             "source_position_isin": self.source_position_isin,
         }
+
+    def to_plan_dict(self) -> dict[str, Any]:
+        """Serialize slot for ``GET /plan`` including UI metadata."""
+        data = self.to_dict()
+        data["selection_mode"] = self.selection_mode
+        data["status"] = self.status.value
+        data["failure_reason"] = self.failure_reason
+        data["eligible_candidates"] = list(self.eligible_candidates)
+        return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ReinvestmentSlot:

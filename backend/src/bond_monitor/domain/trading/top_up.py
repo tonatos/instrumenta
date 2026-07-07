@@ -86,7 +86,11 @@ def apply_top_up_distribution(
             position.figi = allocation.figi
             portfolio.positions.append(position)
         else:
-            position.lots += allocation.lots
+            underweight = (
+                position.actual_lots is not None and position.actual_lots < position.lots
+            )
+            if not underweight:
+                position.lots += allocation.lots
 
         rollback_allocations.append(
             {

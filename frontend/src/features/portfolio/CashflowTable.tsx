@@ -9,7 +9,7 @@ import {
   YAxis,
 } from "recharts";
 import type { PlanResponse } from "@/api/types";
-import { cn, formatRub } from "@/lib/utils";
+import { cn, formatDate, formatRub } from "@/lib/utils";
 
 const KIND_CONFIG: Record<
   string,
@@ -123,7 +123,7 @@ export function CashflowTable({
                 const cfg = getKindConfig(row.kind);
                 return (
                   <tr key={i} className={cn("border-t border-border", cfg.rowClass)}>
-                    <td className="whitespace-nowrap px-3 py-2 font-medium">{row.date}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-medium">{formatDate(row.date)}</td>
                     <td className="px-3 py-2">
                       <span
                         className={cn(
@@ -175,11 +175,11 @@ export function CashflowTable({
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={cashflow}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-              <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+              <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v) => formatDate(String(v))} />
               <YAxis tick={{ fontSize: 10 }} />
               <RechartsTooltip
                 formatter={(v) => [formatRub(Number(v)), "Сумма"]}
-                labelFormatter={(l) => `Дата: ${l}`}
+                labelFormatter={(l) => `Дата: ${formatDate(String(l))}`}
               />
               <Bar dataKey="amount_rub" fill="var(--color-primary)" radius={3} />
             </BarChart>

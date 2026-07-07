@@ -1,4 +1,5 @@
 import type {
+  AccountOperationsResponse,
   AccountPreview,
   Bond,
   BondsListResponse,
@@ -9,10 +10,39 @@ import type {
   OrderPreviewResponse,
   PlanResponse,
   Portfolio,
+  SandboxPayInResponse,
   TradingSyncResponse,
 } from "./types";
 
 const BASE = "/api/v1";
+
+export class ApiError extends Error {
+  status: number;
+  extra?: Record<string, unknown>;
+
+  constructor(message: string, status: number, extra?: Record<string, unknown>) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.extra = extra;
+  }
+}
+
+function parseErrorMessage(text: string, status: number): ApiError {
+  try {
+    const body = JSON.parse(text) as {
+      detail?: string;
+      extra?: Record<string, unknown>;
+    };
+    const message =
+      typeof body.detail === "string" && body.detail
+        ? body.detail
+        : text || `HTTP ${status}`;
+    return new ApiError(message, status, body.extra);
+  } catch {
+    return new ApiError(text || `HTTP ${status}`, status);
+  }
+}
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -21,7 +51,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+    throw parseErrorMessage(text, res.status);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -95,6 +125,8 @@ export const api = {
         confirmed_isin: confirmedIsin,
       }),
     }),
+  resetAllSlotOverrides: (id: string) =>
+    request<Portfolio>(`/portfolios/${id}/slots/reset-all`, { method: "POST" }),
   getPlan: (id: string) => request<PlanResponse>(`/portfolios/${id}/plan`),
 
   getAccounts: (kind: "sandbox" | "production" = "sandbox") =>
@@ -139,6 +171,11 @@ export const api = {
     request<TradingSyncResponse["pending_operations"]>(`/portfolios/${id}/pending-operations`),
   syncPortfolio: (id: string) =>
     request<TradingSyncResponse>(`/portfolios/${id}/sync`, { method: "POST" }),
+  sandboxPayIn: (id: string, body: { amount_rub: number }) =>
+    request<SandboxPayInResponse>(`/portfolios/${id}/sandbox-pay-in`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   confirmPendingOperation: (
     id: string,
     opId: string,
@@ -179,6 +216,8 @@ export const api = {
       tax_paid_rub: number;
       money_rub: number;
     } | null>(`/portfolios/${id}/performance`),
+  getAccountOperations: (id: string) =>
+    request<AccountOperationsResponse>(`/portfolios/${id}/account-operations`),
 
   calculatePortfolio: (body: {
     secids: string[];

@@ -29,7 +29,7 @@ import { Input } from "@/components/ui/input";
 import { PopoverContent, PopoverRoot, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip } from "@/components/ui/tooltip";
-import { cn, formatPct, formatRub } from "@/lib/utils";
+import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
 
 const columnHelper = createColumnHelper<Bond>();
 
@@ -289,7 +289,7 @@ export function ScreenerPage() {
       }),
       columnHelper.accessor("maturity_date", {
         header: "Погашение",
-        cell: (i) => i.getValue() ?? "—",
+        cell: (i) => formatDate(i.getValue()),
       }),
     ],
     [toggleFavorite],

@@ -28,6 +28,7 @@ from bond_monitor.infrastructure.ratings.scraper import (
     fetch_smartlab_bond_ratings,
 )
 from bond_monitor.infrastructure.tinvest.read_client import (
+    enrich_bond_detail_metadata,
     enrich_bonds_from_tinvest,
     get_bond_coupon_schedule,
 )
@@ -113,7 +114,10 @@ class BondService:
         if bond is None:
             return None
         bonds, _ = self._enrich_and_score([bond])
-        return bonds[0] if bonds else None
+        result = bonds[0] if bonds else None
+        if result is not None and self._token:
+            enrich_bond_detail_metadata(result, self._token)
+        return result
 
     def get_coupon_schedule(self, figi: str) -> list[dict]:
         if not self._token or not figi:

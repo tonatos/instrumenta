@@ -5,7 +5,18 @@ from __future__ import annotations
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio
 from bond_monitor.domain.portfolio.planner import PortfolioPlan
-from bond_monitor.interfaces.schemas.api import BondResponse, PlanResponse, PortfolioResponse
+from bond_monitor.domain.shared.money import bond_clean_price_pct_from_rub
+from bond_monitor.domain.trading.operation_labels import (
+    operation_state_label,
+    operation_type_label,
+)
+from bond_monitor.infrastructure.tinvest.trading_client import OperationRecord
+from bond_monitor.interfaces.schemas.api import (
+    AccountOperationResponse,
+    BondResponse,
+    PlanResponse,
+    PortfolioResponse,
+)
 
 
 def bond_to_response(bond: BondRecord) -> BondResponse:
@@ -38,6 +49,10 @@ def bond_to_response(bond: BondRecord) -> BondResponse:
         has_warnings=bond.has_warnings,
         warnings=bond.warnings_list(),
         tinvest_enriched=bond.tinvest_enriched,
+        issuer_name=bond.issuer_name,
+        instrument_full_name=bond.instrument_full_name,
+        sector=bond.sector,
+        description=bond.description,
     )
 
 
@@ -62,6 +77,8 @@ def plan_to_response(plan: PortfolioPlan) -> PlanResponse:
     return PlanResponse(
         total_net_profit_rub=plan.total_net_profit_rub,
         total_net_profit_with_held_rub=plan.total_net_profit_with_held_rub,
+        invested_capital_rub=plan.invested_capital_rub,
+        total_invested_rub=plan.total_invested_rub,
         final_cash_balance=plan.final_cash_balance_rub,
         final_portfolio_value=plan.final_portfolio_value_rub,
         expected_xirr_pct=plan.effective_annual_return_pct,
@@ -98,5 +115,49 @@ def plan_to_response(plan: PortfolioPlan) -> PlanResponse:
             }
             for h in plan.held_positions
         ],
-        slots=[s.to_dict() for s in plan.resolved_slots],
+        slots=[s.to_plan_dict() for s in plan.resolved_slots],
+    )
+
+
+def account_operation_to_response(
+    operation: OperationRecord,
+    *,
+    bonds_by_figi: dict[str, BondRecord],
+) -> AccountOperationResponse:
+    bond = bonds_by_figi.get(operation.figi) if operation.figi else None
+    price_pct: float | None = None
+    if operation.price_pct is not None:
+        raw_price = float(operation.price_pct)
+        if (
+            operation.instrument_type == "bond"
+            and bond is not None
+            and bond.face_value is not None
+            and bond.face_value > 0
+        ):
+            # T-Invest отдаёт цену сделки в ₽ за облигацию, не в % от номинала.
+            price_pct = float(
+                bond_clean_price_pct_from_rub(
+                    clean_price_rub=raw_price,
+                    face_value=bond.face_value,
+                )
+            )
+        else:
+            price_pct = raw_price
+    return AccountOperationResponse(
+        id=operation.id,
+        type=operation.type,
+        type_label=operation_type_label(operation.type),
+        state=operation.state,
+        state_label=operation_state_label(operation.state),
+        date=operation.date.isoformat(),
+        figi=operation.figi,
+        instrument_type=operation.instrument_type,
+        isin=bond.isin if bond is not None else None,
+        name=bond.name if bond is not None else None,
+        payment_rub=float(operation.payment_rub) if operation.payment_rub is not None else None,
+        quantity=operation.quantity,
+        price_pct=price_pct,
+        commission_rub=(
+            float(operation.commission_rub) if operation.commission_rub is not None else None
+        ),
     )

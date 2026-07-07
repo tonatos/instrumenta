@@ -16,6 +16,7 @@ import {
 import { api } from "@/api/client";
 import type { Bond, Portfolio, PortfolioPosition } from "@/api/types";
 import { CashflowTable } from "@/features/portfolio/CashflowTable";
+import { AccountOperationsTable } from "@/features/portfolio/AccountOperationsTable";
 import { PortfolioValueChart } from "@/features/portfolio/PortfolioValueChart";
 import { ReinvestmentSlots } from "@/features/portfolio/ReinvestmentSlots";
 import { TradingActionQueue } from "@/features/portfolio/TradingActionQueue";
@@ -34,11 +35,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TabsContent, TabsList, TabsRoot, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip } from "@/components/ui/tooltip";
-import { cn, formatPct, formatRub } from "@/lib/utils";
+import { cn, formatDate, formatPct, formatRub, todayIsoDate } from "@/lib/utils";
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -54,6 +56,10 @@ const SOURCE_LABELS: Record<string, string> = {
   reinvest_put_offer: "Реинв. оферта",
   reinvest_coupon_cash: "Реинв. купоны",
 };
+
+function portfolioInvestedCapitalRub(portfolio: Portfolio): number {
+  return portfolio.initial_amount_rub + (portfolio.data?.acknowledged_top_ups_rub ?? 0);
+}
 
 // ─── Portfolio form (shared create / edit) ───────────────────────────────────
 
@@ -99,11 +105,10 @@ function PortfolioForm({
       </label>
       <label className="space-y-1.5 text-sm">
         <span className="font-medium text-muted-foreground">Горизонт инвестирования</span>
-        <Input
-          type="date"
+        <DatePicker
           value={form.horizon_date}
-          min={new Date().toISOString().slice(0, 10)}
-          onChange={(e) => setForm({ ...form, horizon_date: e.target.value })}
+          min={todayIsoDate()}
+          onChange={(horizon_date) => setForm({ ...form, horizon_date })}
         />
       </label>
       <label className="space-y-1.5 text-sm sm:col-span-2">
@@ -259,8 +264,8 @@ function PositionsTab({
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                     {pos.offer_date
-                      ? <span className="text-orange-600 dark:text-orange-400">{pos.offer_date} ⚡</span>
-                      : (pos.maturity_date ?? "—")}
+                      ? <span className="text-orange-600 dark:text-orange-400">{formatDate(pos.offer_date)} ⚡</span>
+                      : formatDate(pos.maturity_date)}
                   </td>
                   {!isTrading && (
                     <td className="px-2 py-2">
@@ -330,14 +335,17 @@ function PositionsTab({
 
 function ForecastMetrics({
   plan,
+  isTrading,
 }: {
   plan: NonNullable<ReturnType<typeof useQuery>["data"]>;
+  isTrading: boolean;
 }) {
   const [heldExpanded, setHeldExpanded] = useState(false);
 
   const p = plan as {
     total_net_profit_rub: number;
     total_net_profit_with_held_rub: number;
+    invested_capital_rub: number;
     expected_xirr_pct: number | null;
     final_cash_balance: number;
     final_portfolio_value: number;
@@ -350,6 +358,10 @@ function ForecastMetrics({
     }>;
   };
 
+  const primaryProfit = isTrading ? p.total_net_profit_with_held_rub : p.total_net_profit_rub;
+  const secondaryProfit = isTrading ? p.total_net_profit_rub : p.total_net_profit_with_held_rub;
+  const secondaryLabel = isTrading ? "реализовано в кэш" : "с held";
+
   return (
     <div className="space-y-3">
       {/* Primary metrics — big three */}
@@ -357,25 +369,34 @@ function ForecastMetrics({
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
             Чистая прибыль
-            <Tooltip content="Купоны + возврат номинала − вложения − НДФЛ. Позиции за горизонтом не учитываются.">
+            <Tooltip
+              content={
+                isTrading
+                  ? "Итоговая стоимость на горизонте − вложенный капитал (старт + пополнения) − НДФЛ. Включает удерживаемые бумаги."
+                  : "Купоны + возврат номинала − вложения − НДФЛ. Позиции за горизонтом не учитываются."
+              }
+            >
               <InfoIconButton />
             </Tooltip>
           </p>
           <p
             className={cn(
               "mt-1.5 text-2xl font-bold tabular-nums",
-              p.total_net_profit_rub > 0
+              primaryProfit > 0
                 ? "text-green-600 dark:text-green-400"
                 : "text-red-600 dark:text-red-400",
             )}
           >
-            {p.total_net_profit_rub > 0 ? "+" : ""}
-            {formatRub(p.total_net_profit_rub)}
+            {primaryProfit > 0 ? "+" : ""}
+            {formatRub(primaryProfit)}
           </p>
-          {p.held_positions.length > 0 && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            вложено: {formatRub(p.invested_capital_rub)}
+          </p>
+          {(isTrading || p.held_positions.length > 0) && (
             <p className="mt-1 text-xs text-muted-foreground">
-              с held: {p.total_net_profit_with_held_rub > 0 ? "+" : ""}
-              {formatRub(p.total_net_profit_with_held_rub)}
+              {secondaryLabel}: {secondaryProfit > 0 ? "+" : ""}
+              {formatRub(secondaryProfit)}
             </p>
           )}
         </div>
@@ -383,7 +404,7 @@ function ForecastMetrics({
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
             Годовая доходность (XIRR)
-            <Tooltip content="Internal Rate of Return по всему cashflow от сегодня до горизонта. Аннуализированная, с учётом НДФЛ.">
+            <Tooltip content="Годовая доходность на вложенный капитал: XIRR по датам покупок и итоговой стоимости на горизонте, с учётом НДФЛ.">
               <InfoIconButton />
             </Tooltip>
           </p>
@@ -445,7 +466,7 @@ function ForecastMetrics({
                     <div className="min-w-0">
                       <p className="truncate font-medium">{h.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {h.lots} л. · погашение {h.maturity_date ?? "—"}
+                        {h.lots} л. · погашение {formatDate(h.maturity_date)}
                       </p>
                     </div>
                     <span className="shrink-0 tabular-nums">
@@ -578,6 +599,8 @@ export function PortfolioPage() {
     mutationFn: (values: Partial<Portfolio>) => api.updatePortfolio(active!.id, values),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["portfolios"] });
+      queryClient.invalidateQueries({ queryKey: ["plan", activeId] });
+      queryClient.invalidateQueries({ queryKey: ["trading-sync", activeId] });
       setEditOpen(false);
     },
   });
@@ -611,6 +634,18 @@ export function PortfolioPage() {
   const slots = plan?.slots ?? [];
   const isTrading = active?.mode === "trading";
   const bondsList = bonds?.bonds ?? [];
+
+  const {
+    data: accountOperationsData,
+    isLoading: accountOperationsLoading,
+    isError: accountOperationsError,
+    refetch: refetchAccountOperations,
+    isFetching: accountOperationsFetching,
+  } = useQuery({
+    queryKey: ["account-operations", activeId],
+    queryFn: () => api.getAccountOperations(activeId!),
+    enabled: !!activeId && isTrading && !!active?.account_id,
+  });
 
   return (
     <div className="space-y-5">
@@ -699,11 +734,27 @@ export function PortfolioPage() {
                     <TradingModeBadge portfolio={active} />
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">
-                      {formatRub(active.initial_amount_rub)}
-                    </span>
+                    {portfolioInvestedCapitalRub(active) > active.initial_amount_rub ? (
+                      <>
+                        <Tooltip content="Начальный бюджет при создании портфеля">
+                          <span className="cursor-help font-medium text-foreground">
+                            старт {formatRub(active.initial_amount_rub)}
+                          </span>
+                        </Tooltip>
+                        <span>·</span>
+                        <Tooltip content="Вложенный капитал: начальный бюджет плюс учтённые пополнения счёта">
+                          <span className="cursor-help font-semibold text-foreground">
+                            капитал {formatRub(portfolioInvestedCapitalRub(active))}
+                          </span>
+                        </Tooltip>
+                      </>
+                    ) : (
+                      <span className="font-medium text-foreground">
+                        {formatRub(active.initial_amount_rub)}
+                      </span>
+                    )}
                     <span>·</span>
-                    <span>до {active.horizon_date}</span>
+                    <span>до {formatDate(active.horizon_date)}</span>
                     <span>·</span>
                     <span>{RISK_LABELS[active.risk_profile] ?? active.risk_profile}</span>
                     {active.cash_balance_rub > 0 && (
@@ -744,7 +795,9 @@ export function PortfolioPage() {
                       <DialogHeader>
                         <DialogTitle>Редактировать портфель</DialogTitle>
                         <DialogDescription>
-                          Изменение бюджета не влияет на существующие позиции.
+                          Изменение бюджета не влияет на существующие позиции. Смена
+                          горизонта пересчитывает прогноз реинвестиций, не меняя уже
+                          купленные бумаги на счёте.
                         </DialogDescription>
                       </DialogHeader>
                       <PortfolioForm
@@ -889,7 +942,7 @@ export function PortfolioPage() {
               <Skeleton className="h-24" />
             </div>
           )}
-          {plan && <ForecastMetrics plan={plan} />}
+          {plan && <ForecastMetrics plan={plan} isTrading={isTrading} />}
 
           {plan && plan.value_timeline.length > 0 && (
             <PortfolioValueChart
@@ -928,6 +981,16 @@ export function PortfolioPage() {
                   </span>
                 )}
               </TabsTrigger>
+              {isTrading && active.account_id && (
+                <TabsTrigger value="operations">
+                  История операций
+                  {accountOperationsData && (
+                    <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-mono">
+                      {accountOperationsData.operations.length}
+                    </span>
+                  )}
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="positions" className="mt-4">
@@ -945,7 +1008,7 @@ export function PortfolioPage() {
                   portfolioId={active.id}
                   slots={slots}
                   positions={positions}
-                  bonds={bondsList}
+                  planNotes={plan.notes}
                 />
               ) : (
                 <div className="flex items-center justify-center py-10">
@@ -978,6 +1041,18 @@ export function PortfolioPage() {
                 </p>
               )}
             </TabsContent>
+
+            {isTrading && active.account_id && (
+              <TabsContent value="operations" className="mt-4">
+                <AccountOperationsTable
+                  operations={accountOperationsData?.operations ?? []}
+                  isLoading={accountOperationsLoading}
+                  isError={accountOperationsError}
+                  onRefresh={() => refetchAccountOperations()}
+                  isRefreshing={accountOperationsFetching}
+                />
+              </TabsContent>
+            )}
           </TabsRoot>
 
           {/* Refresh plan */}

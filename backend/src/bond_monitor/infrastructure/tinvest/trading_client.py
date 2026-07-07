@@ -49,9 +49,9 @@ from bond_monitor.domain.shared.money import (
     Lots,
     PriceUnitPct,
     Rub,
+    bond_clean_price_pct_from_rub,
     bond_clean_price_quotation,
     money_value_to_rub,
-    pct_to_quotation,
     quotation_to_float,
 )
 
@@ -481,7 +481,43 @@ def _portfolio_money_rub(portfolio: PortfolioResponse) -> Rub:
     return Rub(estimated_rub)
 
 
-def _classify_position(pos: Any) -> tuple[str, OtherInstrument | BondPosition | None]:
+def _fetch_bond_nominal_rub(client: Any, *, figi: str, instrument_uid: str) -> float | None:
+    """Номинал облигации из ``instruments.bond_by`` (нужен для % ↔ ₽)."""
+    from t_tech.invest import InstrumentIdType
+
+    lookups: list[tuple[object, str]] = []
+    if instrument_uid:
+        lookups.append((InstrumentIdType.INSTRUMENT_ID_TYPE_UID, instrument_uid))
+    if figi:
+        lookups.append((InstrumentIdType.INSTRUMENT_ID_TYPE_FIGI, figi))
+
+    for id_type, id_value in lookups:
+        try:
+            resp = client.instruments.bond_by(id_type=id_type, id=id_value)
+        except Exception:
+            logger.debug("bond_by failed for %s=%s", id_type, id_value, exc_info=True)
+            continue
+        nominal = money_value_to_rub(resp.instrument.nominal)
+        if nominal is not None and nominal > 0:
+            return float(nominal)
+    return None
+
+
+def _bond_price_pct_from_rub(
+    price_rub: float | None,
+    *,
+    nominal_rub: float | None,
+) -> PriceUnitPct | None:
+    if price_rub is None or nominal_rub is None or nominal_rub <= 0:
+        return None
+    return bond_clean_price_pct_from_rub(clean_price_rub=price_rub, face_value=nominal_rub)
+
+
+def _classify_position(
+    pos: Any,
+    *,
+    nominal_rub: float | None = None,
+) -> tuple[str, OtherInstrument | BondPosition | None]:
     """Классифицировать позицию: bond / other / skip(пустая или RUB-кэш).
 
     Возвращает кортеж ``(kind, value)``:
@@ -510,10 +546,10 @@ def _classify_position(pos: Any) -> tuple[str, OtherInstrument | BondPosition | 
         )
     if instrument_type == "bond":
         current_price = quotation_to_float(pos.current_price)
-        current_price_pct = PriceUnitPct(current_price) if current_price is not None else None
+        current_price_pct = _bond_price_pct_from_rub(current_price, nominal_rub=nominal_rub)
         current_nkd = money_value_to_rub(pos.current_nkd)
         avg_price = quotation_to_float(pos.average_position_price)
-        avg_price_pct = PriceUnitPct(avg_price) if avg_price is not None else None
+        avg_price_pct = _bond_price_pct_from_rub(avg_price, nominal_rub=nominal_rub)
         lots_raw = float(quotation_to_float(pos.quantity_lots) or 0.0)
         lots = max(1, int(lots_raw)) if lots_raw > 0 else max(1, int(quantity))
         return (
@@ -560,18 +596,37 @@ def get_account_snapshot(
     try:
         with _open_client(token, account_kind) as client:
             portfolio = client.operations.get_portfolio(account_id=account_id)
+            money_rub = _portfolio_money_rub(portfolio)
+            bond_nominals: dict[str, float] = {}
+            for pos in portfolio.positions:
+                if (pos.instrument_type or "").lower() != "bond":
+                    continue
+                figi = pos.figi or ""
+                if not figi or figi in bond_nominals:
+                    continue
+                nominal = _fetch_bond_nominal_rub(
+                    client,
+                    figi=figi,
+                    instrument_uid=pos.instrument_uid or "",
+                )
+                if nominal is not None:
+                    bond_nominals[figi] = nominal
+
+            bonds: dict[str, BondPosition] = {}
+            others: list[OtherInstrument] = []
+            for pos in portfolio.positions:
+                nominal = (
+                    bond_nominals.get(pos.figi or "")
+                    if (pos.instrument_type or "").lower() == "bond"
+                    else None
+                )
+                kind, value = _classify_position(pos, nominal_rub=nominal)
+                if kind == "bond" and isinstance(value, BondPosition):
+                    bonds[value.figi] = value
+                elif kind == "other" and isinstance(value, OtherInstrument):
+                    others.append(value)
     except RequestError as exc:
         raise _map_request_error(exc, account_id=account_id) from exc
-
-    money_rub = _portfolio_money_rub(portfolio)
-    bonds: dict[str, BondPosition] = {}
-    others: list[OtherInstrument] = []
-    for pos in portfolio.positions:
-        kind, value = _classify_position(pos)
-        if kind == "bond" and isinstance(value, BondPosition):
-            bonds[value.figi] = value
-        elif kind == "other" and isinstance(value, OtherInstrument):
-            others.append(value)
 
     return AccountSnapshot(
         account_id=account_id,
@@ -589,10 +644,12 @@ def get_account_snapshot(
 def _operation_to_record(item: OperationItem) -> OperationRecord:
     type_name = getattr(item.type, "name", str(item.type))
     state_name = getattr(item.state, "name", str(item.state))
-    price_pct: PriceUnitPct | None = None
+    # Для облигаций T-Invest возвращает чистую цену в ₽ за бумагу.
+    # Конвертация в % от номинала — при сериализации в API (см. universe).
+    price_raw: PriceUnitPct | None = None
     raw_price = quotation_to_float(item.price)
     if raw_price is not None:
-        price_pct = PriceUnitPct(raw_price)
+        price_raw = PriceUnitPct(raw_price)
     return OperationRecord(
         id=item.id,
         type=type_name,
@@ -603,7 +660,7 @@ def _operation_to_record(item: OperationItem) -> OperationRecord:
         instrument_type=(item.instrument_type or "").lower(),
         payment_rub=money_value_to_rub(item.payment),
         quantity=int(item.quantity or 0),
-        price_pct=price_pct,
+        price_pct=price_raw,
         commission_rub=money_value_to_rub(item.commission),
         raw=item,
     )

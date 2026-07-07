@@ -26,11 +26,19 @@ import logging
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
-from bond_monitor.domain.shared.money import Rub
 from bond_monitor.domain.portfolio.models import Portfolio, PortfolioPosition
+from bond_monitor.domain.shared.money import Rub
 from bond_monitor.infrastructure.tinvest.trading_client import AccountSnapshot, OperationRecord
 
 logger = logging.getLogger(__name__)
+
+
+def _position_cost_basis(position: PortfolioPosition) -> float:
+    if position.actual_lots is not None and position.actual_lots > 0:
+        return position.purchase_dirty_price_rub * position.actual_lots * position.lot_size
+    if position.purchase_amount_rub > 0:
+        return position.purchase_amount_rub
+    return position.purchase_dirty_price_rub * position.lots * position.lot_size
 
 
 # Минимальный буфер RUB на счёте, который не распределяется через top-up:
@@ -302,6 +310,7 @@ def reconcile_positions(
 
     portfolio.cash_balance_rub = float(snapshot.money_rub)
     portfolio.last_synced_at = snapshot.fetched_at
+    reconcile_acknowledged_top_ups(portfolio, snapshot)
 
     return ReconciliationResult(
         updated_positions=portfolio.positions,
@@ -389,6 +398,28 @@ def detect_top_up(
     )
 
 
+def reconcile_acknowledged_top_ups(
+    portfolio: Portfolio,
+    snapshot: AccountSnapshot,
+) -> bool:
+    """Синхронизировать ``acknowledged_top_ups_rub`` с фактическим капиталом на счёте.
+
+    ``acknowledged_top_ups_rub = max(0, позиции + кэш − initial_amount)``.
+    Обновляет и вверх (покупки вне batch), и вниз (отмена batch / частичное
+    исполнение).
+    """
+    if not portfolio.is_trading:
+        return False
+
+    deployed = sum(_position_cost_basis(position) for position in portfolio.positions)
+    on_account = deployed + float(snapshot.money_rub)
+    implied_top_ups = max(0.0, on_account - portfolio.initial_amount_rub)
+    if abs(implied_top_ups - portfolio.acknowledged_top_ups_rub) > 0.01:
+        portfolio.acknowledged_top_ups_rub = round(implied_top_ups, 2)
+        return True
+    return False
+
+
 __all__ = [
     "AttachValidation",
     "PositionDrift",
@@ -396,6 +427,7 @@ __all__ = [
     "TOP_UP_COST_BUFFER",
     "TopUpDetection",
     "detect_top_up",
+    "reconcile_acknowledged_top_ups",
     "reconcile_positions",
     "validate_account_for_attach",
 ]

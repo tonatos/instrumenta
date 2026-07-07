@@ -49,6 +49,7 @@ from bond_monitor.infrastructure.tinvest.read_client import (
 )
 from bond_monitor.infrastructure.tinvest.trading_client import (
     AccountSnapshot,
+    OperationRecord,
     OrderTooLargeError,
     TradingClientError,
     TradingNotAvailableError,
@@ -410,6 +411,24 @@ class TradingService:
         return {
             "account_id": account_id,
             "deleted_portfolio_id": deleted_portfolio_id,
+        }
+
+    async def sandbox_pay_in_for_portfolio(
+        self,
+        portfolio_id: str,
+        *,
+        amount_rub: float,
+    ) -> dict:
+        portfolio = await self._get_trading_portfolio(portfolio_id)
+        if portfolio.account_kind != AccountKind.SANDBOX:
+            raise ValueError("Пополнение доступно только для песочницы")
+        if amount_rub <= 0:
+            raise ValueError("Сумма пополнения должна быть больше нуля")
+        token = self._token(AccountKind.SANDBOX)
+        balance = sandbox_pay_in(token, portfolio.account_id, Rub(amount_rub))  # type: ignore[arg-type]
+        return {
+            "amount_added_rub": amount_rub,
+            "money_rub": float(balance),
         }
 
     async def create_sandbox_account(
@@ -1032,18 +1051,6 @@ class TradingService:
 
         direction = "SELL" if op.kind == "manual_sell" else "BUY"
 
-        for tr in portfolio.trade_records:
-            if tr.pending_op_id == op.id and (
-                tr.is_active or tr.status == "EXECUTION_REPORT_STATUS_FILL"
-            ):
-                return await self.sync_portfolio(
-                    portfolio_id,
-                    universe,
-                    key_rate=key_rate,
-                    tax_rate=tax_rate,
-                    today=today,
-                )
-
         order_lots = lots if lots is not None else op.lots
         order_price = price_pct if price_pct is not None else op.suggested_price_pct
         if order_lots is None or order_lots <= 0:
@@ -1263,3 +1270,18 @@ class TradingService:
             "tax_paid_rub": float(perf.tax_paid_rub),
             "money_rub": float(snapshot.money_rub),
         }
+
+    async def get_account_operations_history(
+        self,
+        portfolio_id: str,
+    ) -> list[OperationRecord]:
+        portfolio = await self._get_trading_portfolio(portfolio_id)
+        token = self._token(portfolio.account_kind)  # type: ignore[arg-type]
+        today = date.today()
+        operations = get_account_operations(
+            token,
+            portfolio.account_kind,  # type: ignore[arg-type]
+            portfolio.account_id,  # type: ignore[arg-type]
+            from_date=_operations_from_date(portfolio, today=today),
+        )
+        return sorted(operations, key=lambda op: op.date, reverse=True)

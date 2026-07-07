@@ -6,10 +6,12 @@ from datetime import date
 
 from litestar import Controller, delete, get, patch, post, put
 from litestar.di import Provide
+from litestar.exceptions import ClientException, NotFoundException
 from litestar.status_codes import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bond_monitor.application.bonds.bond_service import BondService
+from bond_monitor.application.portfolio.errors import SlotOverrideValidationError
 from bond_monitor.application.portfolio.portfolio_service import PortfolioService
 from bond_monitor.application.trading.trading_service import TradingService
 from bond_monitor.domain.portfolio.calculator import calculate_portfolio_budget
@@ -19,6 +21,7 @@ from bond_monitor.infrastructure.persistence.favorites_repository import Favorit
 from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
 from bond_monitor.interfaces.config import Settings, get_settings
 from bond_monitor.interfaces.schemas.api import (
+    AccountOperationsResponse,
     AccountPreviewResponse,
     AddPositionRequest,
     BondsListResponse,
@@ -35,11 +38,14 @@ from bond_monitor.interfaces.schemas.api import (
     PlanResponse,
     PortfolioResponse,
     PutOfferDecisionRequest,
+    SandboxPayInRequest,
+    SandboxPayInResponse,
     SetSlotOverrideRequest,
     TradingSyncResponse,
     UpdatePortfolioRequest,
 )
 from bond_monitor.interfaces.schemas.serializers import (
+    account_operation_to_response,
     bond_to_response,
     plan_to_response,
     portfolio_to_response,
@@ -310,17 +316,40 @@ class PortfoliosController(Controller):
         portfolio_id: str,
         data: SetSlotOverrideRequest,
         portfolio_service: PortfolioService,
+        bond_service: BondService,
+        settings: Settings,
     ) -> PortfolioResponse:
+        universe = bond_service.load_universe().bonds
         try:
             portfolio = await portfolio_service.set_slot_override(
                 portfolio_id,
                 source_position_isin=data.source_position_isin,
                 confirmed_isin=data.confirmed_isin,
+                universe=universe,
+                key_rate=settings.key_rate,
+                tax_rate=settings.tax_rate / 100.0,
+                today=date.today(),
             )
+        except SlotOverrideValidationError as exc:
+            raise ClientException(
+                detail=exc.message,
+                status_code=422,
+                extra={"code": exc.code},
+            ) from exc
         except ValueError:
-            from litestar.exceptions import NotFoundException
+            raise NotFoundException(detail="Portfolio not found") from None
+        return portfolio_to_response(portfolio)
 
-            raise NotFoundException(detail="Portfolio not found")
+    @post("/{portfolio_id:str}/slots/reset-all", status_code=HTTP_200_OK)
+    async def reset_all_slot_overrides(
+        self,
+        portfolio_id: str,
+        portfolio_service: PortfolioService,
+    ) -> PortfolioResponse:
+        try:
+            portfolio = await portfolio_service.reset_all_slot_overrides(portfolio_id)
+        except ValueError:
+            raise NotFoundException(detail="Portfolio not found") from None
         return portfolio_to_response(portfolio)
 
     @post("/{portfolio_id:str}/auto-compose")
@@ -552,6 +581,27 @@ class TradingController(Controller):
         portfolio = await trading_service.detach_account(portfolio_id)
         return portfolio_to_response(portfolio)
 
+    @post("/portfolios/{portfolio_id:str}/sandbox-pay-in", status_code=HTTP_201_CREATED)
+    async def sandbox_pay_in(
+        self,
+        portfolio_id: str,
+        data: SandboxPayInRequest,
+        trading_service: TradingService,
+    ) -> SandboxPayInResponse:
+        from litestar.exceptions import ClientException, NotFoundException
+
+        try:
+            result = await trading_service.sandbox_pay_in_for_portfolio(
+                portfolio_id,
+                amount_rub=data.amount_rub,
+            )
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        return SandboxPayInResponse(**result)
+
     @post("/portfolios/{portfolio_id:str}/sync")
     async def sync_portfolio(
         self,
@@ -758,3 +808,27 @@ class TradingController(Controller):
         trading_service: TradingService,
     ) -> dict | None:
         return await trading_service.get_performance(portfolio_id)
+
+    @get("/portfolios/{portfolio_id:str}/account-operations")
+    async def account_operations(
+        self,
+        portfolio_id: str,
+        trading_service: TradingService,
+        bond_service: BondService,
+    ) -> AccountOperationsResponse:
+        from litestar.exceptions import ClientException, NotFoundException
+
+        universe = bond_service.load_universe().bonds
+        try:
+            operations = await trading_service.get_account_operations_history(portfolio_id)
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        bonds_by_figi = {bond.figi: bond for bond in universe if bond.figi}
+        return AccountOperationsResponse(
+            operations=[
+                account_operation_to_response(op, bonds_by_figi=bonds_by_figi) for op in operations
+            ]
+        )

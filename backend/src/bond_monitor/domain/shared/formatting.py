@@ -1,6 +1,6 @@
-"""Number/money display helpers.
+"""Number, money, and date display helpers.
 
-Centralises formatting of monetary amounts so the whole UI is consistent.
+Centralises formatting so the whole UI is consistent.
 
 Russian-style spacing is enforced manually (Python's locale module isn't
 available in every container image and Streamlit's ``column_config.format``
@@ -15,11 +15,44 @@ uses a client-side locale that we can't pin reliably):
 
 from __future__ import annotations
 
+from datetime import date
+
 # U+00A0 NO-BREAK SPACE — keeps "1 234 567" together when text wraps.
 _THOUSANDS_SEP: str = "\u00a0"
 
 # Placeholder rendered when a numeric value is missing.
 MISSING_VALUE: str = "—"
+
+_RU_MONTHS_GENITIVE: tuple[str, ...] = (
+    "",
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+)
+
+
+def format_date(value: date | None, *, reference: date | None = None) -> str:
+    """Human-readable Russian date: ``28 июля`` or ``28 июля 2027``.
+
+    Year is omitted when it matches ``reference`` (defaults to today).
+    ``None`` → :data:`MISSING_VALUE`.
+    """
+    if value is None:
+        return MISSING_VALUE
+    ref = reference or date.today()
+    month = _RU_MONTHS_GENITIVE[value.month]
+    if value.year == ref.year:
+        return f"{value.day} {month}"
+    return f"{value.day} {month} {value.year}"
 
 
 def format_number(value: float | int | None, *, decimals: int = 2) -> str:

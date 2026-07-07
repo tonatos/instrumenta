@@ -48,6 +48,7 @@ const tradingPortfolio = {
     mode: "trading",
     account_id: "acc-e2e",
     account_kind: "sandbox",
+    acknowledged_top_ups_rub: 100_000,
     frozen_forecast: null,
     pending_operations: [],
   },
@@ -281,6 +282,8 @@ test.describe("Очередь действий (торговля)", () => {
     await page.goto(`/portfolio/${PORTFOLIO_ID}`);
 
     await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/старт.*100/)).toBeVisible();
+    await expect(page.getByText(/капитал.*200/)).toBeVisible();
     await expect(page.getByText(/Обнаружено пополнение/)).toBeVisible();
     await expect(page.getByText("Покупка (пополнение)")).toBeVisible();
     await expect(page.getByText("Отменить партию")).toBeVisible();
@@ -346,8 +349,8 @@ test.describe("Очередь действий (торговля)", () => {
       suggested_price_pct: 100.0,
       due_date: "2026-07-09",
       reason:
-        "Пут-оферта 2026-07-20 по цене 100.00%. Подайте заявку через чат брокера (API не умеет). " +
-        "Срочно: предъявите бумаги до 2026-07-09 включительно, если ещё не подали заявку.",
+        "Пут-оферта 20 июля по цене 100.00%. Подайте заявку через чат брокера (API не умеет). " +
+        "Срочно: предъявите бумаги до 9 июля включительно, если ещё не подали заявку.",
       status: "action_required",
       block_reason: null,
       estimated_amount_rub: null,
@@ -367,5 +370,34 @@ test.describe("Очередь действий (торговля)", () => {
     await expect(page.getByText(/Осталось мало времени/)).toBeVisible();
     await expect(page.getByText(/предъявите бумаги/i)).toBeVisible();
     await expect(page.getByText("Я подал оферту")).toBeVisible();
+  });
+
+  test("в песочнице можно добавить средства для теста пополнения", async ({ page }) => {
+    let syncCalls = 0;
+
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sandbox-pay-in`, async (route) => {
+      await route.fulfill({
+        status: 201,
+        json: { amount_added_rub: 50_000, money_rub: 150_000 },
+      });
+    });
+
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sync`, async (route) => {
+      syncCalls += 1;
+      await route.fulfill({
+        json: syncResponse([topUpBuy], {
+          money_rub: 150_000,
+          top_up_auto_applied: true,
+          top_up_distributed_rub: 50_000,
+        }),
+      });
+    });
+
+    await page.goto(`/portfolio/${PORTFOLIO_ID}`);
+
+    await expect(page.getByText("Песочница · добавить средства")).toBeVisible({ timeout: 15_000 });
+    await page.getByRole("button", { name: "Добавить средства" }).click();
+    await expect(page.getByText(/Обнаружено пополнение/)).toBeVisible({ timeout: 10_000 });
+    expect(syncCalls).toBeGreaterThanOrEqual(2);
   });
 });

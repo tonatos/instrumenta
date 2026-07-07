@@ -5,13 +5,16 @@ from __future__ import annotations
 from datetime import date
 from uuid import uuid4
 
+from bond_monitor.application.portfolio.errors import SlotOverrideValidationError
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio, RiskProfile
 from bond_monitor.domain.portfolio.planner import (
     PortfolioPlan,
     auto_compose,
     build_plan,
+    clear_downstream_slot_overrides,
     distribute_top_up,
+    validate_slot_replacement,
 )
 from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
 
@@ -228,6 +231,10 @@ class PortfolioService:
         *,
         source_position_isin: str,
         confirmed_isin: str | None,
+        universe: list[BondRecord],
+        key_rate: float,
+        tax_rate: float,
+        today: date,
     ) -> Portfolio:
         from bond_monitor.domain.portfolio.models import (
             ReinvestmentSlot,
@@ -237,6 +244,49 @@ class PortfolioService:
         portfolio = await self._repo.get_by_id(portfolio_id)
         if portfolio is None:
             raise ValueError(f"Portfolio {portfolio_id} not found")
+
+        plan = build_plan(
+            portfolio,
+            universe,
+            today=today,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+        )
+        matching_slots = [
+            slot
+            for slot in plan.resolved_slots
+            if slot.source_position_isin == source_position_isin
+        ]
+        slot_context = matching_slots[0] if matching_slots else None
+
+        if confirmed_isin is not None:
+            if slot_context is None:
+                raise SlotOverrideValidationError(
+                    "Слот реинвестиции для этой позиции не найден в плане"
+                )
+            reason = validate_slot_replacement(
+                portfolio,
+                universe,
+                slot=slot_context,
+                confirmed_isin=confirmed_isin,
+                key_rate=key_rate,
+                tax_rate=tax_rate,
+            )
+            if reason is not None:
+                raise SlotOverrideValidationError(reason)
+
+        previous_confirmed: str | None = None
+        for slot in portfolio.slots:
+            if slot.source_position_isin == source_position_isin:
+                previous_confirmed = slot.confirmed_isin
+                break
+
+        if confirmed_isin != previous_confirmed:
+            clear_downstream_slot_overrides(
+                portfolio,
+                source_position_isin,
+                plan.resolved_slots,
+            )
 
         for slot in portfolio.slots:
             if slot.source_position_isin == source_position_isin:
@@ -255,6 +305,21 @@ class PortfolioService:
         )
         portfolio.touch()
         return await self._repo.save(portfolio)
+
+    async def reset_all_slot_overrides(self, portfolio_id: str) -> Portfolio:
+        portfolio = await self._repo.get_by_id(portfolio_id)
+        if portfolio is None:
+            raise ValueError(f"Portfolio {portfolio_id} not found")
+
+        changed = False
+        for slot in portfolio.slots:
+            if slot.confirmed_isin is not None:
+                slot.confirmed_isin = None
+                changed = True
+        if changed:
+            portfolio.touch()
+            return await self._repo.save(portfolio)
+        return portfolio
 
     async def preview_top_up(
         self,

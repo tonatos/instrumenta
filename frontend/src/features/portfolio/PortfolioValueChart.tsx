@@ -10,23 +10,9 @@ import {
   YAxis,
 } from "recharts";
 import type { PlanResponse } from "@/api/types";
-import { formatRub } from "@/lib/utils";
+import { formatDate, formatRub } from "@/lib/utils";
 
 type TimelinePoint = PlanResponse["value_timeline"][number];
-
-function formatAxisDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("ru-RU", { month: "short", year: "2-digit" });
-}
-
-function formatTooltipDate(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
-}
 
 function ChartTooltip({
   active,
@@ -42,7 +28,7 @@ function ChartTooltip({
 
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-md">
-      <p className="mb-2 font-medium">{formatTooltipDate(label)}</p>
+      <p className="mb-2 font-medium">{formatDate(label)}</p>
       <div className="space-y-1">
         <p className="flex items-center justify-between gap-4">
           <span className="text-muted-foreground">Итого</span>
@@ -97,8 +83,8 @@ export function PortfolioValueChart({
     );
   }
 
-  const startLabel = formatTooltipDate(data[0].date);
-  const endLabel = formatTooltipDate(horizonDate);
+  const startLabel = formatDate(data[0].date);
+  const endLabel = formatDate(horizonDate);
 
   return (
     <div
@@ -162,7 +148,7 @@ export function PortfolioValueChart({
             <CartesianGrid strokeDasharray="3 3" className="stroke-border/60" vertical={false} />
             <XAxis
               dataKey="date"
-              tickFormatter={formatAxisDate}
+              tickFormatter={(v) => formatDate(String(v))}
               tick={{ fontSize: 10 }}
               tickLine={false}
               axisLine={false}
