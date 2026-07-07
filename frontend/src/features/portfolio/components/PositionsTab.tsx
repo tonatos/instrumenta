@@ -5,23 +5,26 @@ import { api } from "@/api/client";
 import type { Bond, PortfolioPosition } from "@/api/types";
 import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
 import { POSITION_STATUS_LABELS, SOURCE_LABELS } from "@/features/portfolio/labels";
+import { SellPositionDialog } from "@/features/portfolio/trading/SellPositionDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Tooltip } from "@/components/ui/tooltip";
-import { cn, formatDate, formatRub } from "@/lib/utils";
+import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
 
 export function PositionsTab({
   positions,
   portfolioId,
   isTrading,
+  accountKind,
   bonds,
   closedPositionsCount,
 }: {
   positions: PortfolioPosition[];
   portfolioId: string;
   isTrading: boolean;
+  accountKind: string | null;
   bonds: Bond[];
   closedPositionsCount: number;
 }) {
@@ -30,6 +33,10 @@ export function PositionsTab({
   const [selectedIsin, setSelectedIsin] = useState<string | null>(null);
   const [detailSecid, setDetailSecid] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
+  const [sellPosition, setSellPosition] = useState<PortfolioPosition | null>(null);
+
+  const canSellInSandbox =
+    isTrading && accountKind === "sandbox";
 
   const visiblePositions = useMemo(
     () => (showClosed ? positions : positions.filter((p) => p.status !== "closed")),
@@ -53,6 +60,11 @@ export function PositionsTab({
       setSelectedIsin(null);
     },
   });
+
+  const bondsByIsin = useMemo(
+    () => new Map(bonds.map((b) => [b.isin, b])),
+    [bonds],
+  );
 
   const bondOptions: ComboboxOption[] = bonds.map((b) => ({
     value: b.isin,
@@ -94,18 +106,21 @@ export function PositionsTab({
                 {isTrading && (
                   <th className="px-3 py-2 text-left font-semibold">Статус</th>
                 )}
+                <th className="px-3 py-2 text-right font-semibold">YTM</th>
+                <th className="px-3 py-2 text-right font-semibold">Скор</th>
                 <th className="px-3 py-2 text-right font-semibold">
                   {isTrading ? "Пл / Фк" : "Лотов"}
                 </th>
                 <th className="px-3 py-2 text-right font-semibold">Вложено</th>
                 <th className="px-3 py-2 text-left font-semibold">Источник</th>
                 <th className="px-3 py-2 text-left font-semibold">Погашение</th>
-                {!isTrading && <th className="w-8 px-2 py-2" />}
+                {(canSellInSandbox || !isTrading) && <th className="w-20 px-2 py-2" />}
               </tr>
             </thead>
             <tbody>
               {visiblePositions.map((pos) => {
                 const status = pos.status ?? "active";
+                const bond = bondsByIsin.get(pos.isin);
                 return (
                 <tr
                   key={pos.isin}
@@ -151,6 +166,25 @@ export function PositionsTab({
                       </Badge>
                     </td>
                   )}
+                  <td
+                    className="whitespace-nowrap px-3 py-2 text-right font-mono"
+                    data-testid={`position-ytm-${pos.isin}`}
+                  >
+                    {formatPct(bond?.ytm_net)}
+                  </td>
+                  <td
+                    className="px-3 py-2 text-right"
+                    data-testid={`position-score-${pos.isin}`}
+                  >
+                    <Badge
+                      variant={
+                        bond?.score != null && bond.score >= 60 ? "default" : "secondary"
+                      }
+                      className="font-mono text-[10px] font-normal"
+                    >
+                      {bond?.score != null ? Math.round(bond.score) : "—"}
+                    </Badge>
+                  </td>
                   <td className="px-3 py-2 text-right font-medium">
                     {isTrading && pos.actual_lots != null ? (
                       <Tooltip
@@ -180,6 +214,25 @@ export function PositionsTab({
                       ? <span className="text-orange-600 dark:text-orange-400">{formatDate(pos.offer_date)} ⚡</span>
                       : formatDate(pos.maturity_date)}
                   </td>
+                  {canSellInSandbox && (
+                    <td className="px-2 py-2">
+                      {(pos.actual_lots ?? 0) > 0 && pos.status !== "closed" && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          data-testid={`sell-position-${pos.isin}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSellPosition(pos);
+                          }}
+                        >
+                          Продать
+                        </Button>
+                      )}
+                    </td>
+                  )}
                   {!isTrading && (
                     <td className="px-2 py-2">
                       <button
@@ -240,6 +293,15 @@ export function PositionsTab({
       )}
 
       <BondDetailSheet secid={detailSecid} onClose={() => setDetailSecid(null)} />
+
+      <SellPositionDialog
+        position={sellPosition}
+        portfolioId={portfolioId}
+        open={sellPosition != null}
+        onOpenChange={(open) => {
+          if (!open) setSellPosition(null);
+        }}
+      />
     </div>
   );
 }

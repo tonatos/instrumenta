@@ -25,3 +25,19 @@ def format_buy_limit_buffer_label(buffer: float) -> str:
 def suggested_buy_limit_price_pct(base_pct: float, buffer: float) -> PriceUnitPct:
     """Рекомендуемая лимитная цена покупки: рынок + buffer."""
     return PriceUnitPct(round(base_pct * (1 + buffer), 4))
+
+
+# Буфер к рыночной цене для пассивной лимитной продажи (last_price × (1 - buffer)).
+SELL_LIMIT_PRICE_BUFFER_SANDBOX: float = 0.005  # −0.5% — песочница
+
+
+def sell_limit_price_buffer(account_kind: AccountKind | None) -> float:
+    """Буфер лимитной цены продажи в зависимости от контура T-Invest."""
+    if account_kind == AccountKind.PRODUCTION:
+        return BUY_LIMIT_PRICE_BUFFER_PRODUCTION
+    return SELL_LIMIT_PRICE_BUFFER_SANDBOX
+
+
+def suggested_sell_limit_price_pct(base_pct: float, buffer: float) -> PriceUnitPct:
+    """Рекомендуемая лимитная цена продажи: рынок − buffer."""
+    return PriceUnitPct(round(base_pct * (1 - buffer), 4))

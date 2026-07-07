@@ -8,8 +8,9 @@ from bond_monitor.application.trading.attach_use_case import AttachUseCase
 from bond_monitor.application.trading.context import TradingContext
 from bond_monitor.application.trading.order_use_case import OrderUseCase, block_non_api_tradable_pending
 from bond_monitor.application.trading.sandbox_use_case import SandboxUseCase
+from bond_monitor.application.trading.sell_position_use_case import SellPositionUseCase
 from bond_monitor.application.trading.sync_use_case import SyncUseCase
-from bond_monitor.application.trading.types import OrderPreviewResult, TradingSyncResult
+from bond_monitor.application.trading.types import OrderPreviewResult, SellPositionPreviewResult, SellQuoteResult, TradingSyncResult
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio, PutOfferDecision
 from bond_monitor.domain.portfolio.planner import PortfolioPlan
@@ -33,6 +34,7 @@ class TradingService:
         self._attach = AttachUseCase(ctx)
         self._sync = SyncUseCase(ctx)
         self._order = OrderUseCase(ctx, self._sync)
+        self._sell = SellPositionUseCase(ctx, self._sync)
         self._sandbox = SandboxUseCase(ctx)
 
     async def list_accounts(self, kind: AccountKind) -> list[dict]:
@@ -204,6 +206,75 @@ class TradingService:
         today: date,
     ) -> TradingSyncResult:
         return await self._order.cancel_pending_order(
+            portfolio_id,
+            op_id,
+            universe,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            today=today,
+        )
+
+    async def preview_sell_position(
+        self,
+        portfolio_id: str,
+        isin: str,
+        universe: list[BondRecord],
+        *,
+        lots: int,
+        price_pct: float,
+        today: date,
+    ) -> SellPositionPreviewResult:
+        return await self._sell.preview_sell_position(
+            portfolio_id,
+            isin,
+            universe,
+            lots=lots,
+            price_pct=price_pct,
+            today=today,
+        )
+
+    async def get_sell_quote(
+        self,
+        portfolio_id: str,
+        isin: str,
+        universe: list[BondRecord],
+    ) -> SellQuoteResult:
+        return await self._sell.get_sell_quote(portfolio_id, isin, universe)
+
+    async def queue_manual_sell(
+        self,
+        portfolio_id: str,
+        isin: str,
+        universe: list[BondRecord],
+        *,
+        lots: int,
+        price_pct: float | None,
+        key_rate: float,
+        tax_rate: float,
+        today: date,
+    ) -> TradingSyncResult:
+        return await self._sell.queue_manual_sell(
+            portfolio_id,
+            isin,
+            universe,
+            lots=lots,
+            price_pct=price_pct,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            today=today,
+        )
+
+    async def dismiss_manual_sell(
+        self,
+        portfolio_id: str,
+        op_id: str,
+        universe: list[BondRecord],
+        *,
+        key_rate: float,
+        tax_rate: float,
+        today: date,
+    ) -> TradingSyncResult:
+        return await self._sell.dismiss_manual_sell(
             portfolio_id,
             op_id,
             universe,

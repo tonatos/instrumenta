@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from bond_monitor.domain.trading.ports import (
+    BrokerActiveOrder,
     BrokerBondPosition,
     BrokerOperation,
     BrokerOtherInstrument,
@@ -12,6 +13,7 @@ from bond_monitor.infrastructure.tinvest.trading_client import (
     AccountSnapshot,
     BondPosition,
     OperationRecord,
+    OrderState,
     OtherInstrument,
 )
 
@@ -68,10 +70,29 @@ def _bond_position_from_infrastructure(position: BondPosition) -> BrokerBondPosi
     )
 
 
-def _other_instrument_from_infrastructure(instrument: OtherInstrument) -> BrokerOtherInstrument:
-    return BrokerOtherInstrument(
-        instrument_type=instrument.instrument_type,
-        figi=instrument.figi,
-        ticker=instrument.ticker,
-        quantity=instrument.quantity,
-    )
+def broker_active_orders_from_infrastructure(orders: list[OrderState]) -> list[BrokerActiveOrder]:
+    result: list[BrokerActiveOrder] = []
+    for order in orders:
+        result.append(
+            BrokerActiveOrder(
+                order_id=order.order_id,
+                request_uid=order.request_uid,
+                figi=order.figi,
+                direction=order.direction,
+                lots_requested=order.lots_requested,
+                lots_executed=order.lots_executed,
+                status=order.execution_report_status,
+                price_pct=float(order.price_pct) if order.price_pct is not None else None,
+                total_order_amount_rub=(
+                    float(order.total_order_amount_rub)
+                    if order.total_order_amount_rub is not None
+                    else None
+                ),
+                initial_commission_rub=(
+                    float(order.initial_commission_rub)
+                    if order.initial_commission_rub is not None
+                    else None
+                ),
+            )
+        )
+    return result

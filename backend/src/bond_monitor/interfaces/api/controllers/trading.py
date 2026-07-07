@@ -32,7 +32,11 @@ from bond_monitor.interfaces.schemas.api import (
     PutOfferDecisionRequest,
     SandboxPayInRequest,
     SandboxPayInResponse,
+    SellPositionPreviewResponse,
+    SellPositionRequest,
+    SellQuoteResponse,
     TradingSyncResponse,
+    QueueSellRequest,
 )
 from bond_monitor.interfaces.schemas.serializers import (
     account_operation_to_response,
@@ -343,6 +347,112 @@ class TradingController(Controller):
             result = await trading_service.cancel_top_up_batch_operation(
                 portfolio_id,
                 batch_id,
+                universe,
+                key_rate=settings.key_rate,
+                tax_rate=settings.tax_rate_fraction,
+                today=date.today(),
+            )
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        return trading_sync_to_response(result)
+
+    @post(
+        "/portfolios/{portfolio_id:str}/positions/{isin:str}/sell-preview",
+        status_code=HTTP_200_OK,
+    )
+    async def sell_position_preview(
+        self,
+        portfolio_id: str,
+        isin: str,
+        data: SellPositionRequest,
+        trading_service: TradingService,
+        bond_service: BondService,
+        settings: Settings,
+    ) -> SellPositionPreviewResponse:
+        universe = bond_service.load_universe().bonds
+        try:
+            result = await trading_service.preview_sell_position(
+                portfolio_id,
+                isin,
+                universe,
+                lots=data.lots,
+                price_pct=data.price_pct,
+                today=date.today(),
+            )
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        return SellPositionPreviewResponse(**result.__dict__)
+
+    @get("/portfolios/{portfolio_id:str}/positions/{isin:str}/sell-quote")
+    async def sell_quote(
+        self,
+        portfolio_id: str,
+        isin: str,
+        trading_service: TradingService,
+        bond_service: BondService,
+    ) -> SellQuoteResponse:
+        universe = bond_service.load_universe().bonds
+        try:
+            result = await trading_service.get_sell_quote(portfolio_id, isin, universe)
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        return SellQuoteResponse(**result.__dict__)
+
+    @post("/portfolios/{portfolio_id:str}/positions/{isin:str}/queue-sell", status_code=HTTP_200_OK)
+    async def queue_manual_sell(
+        self,
+        portfolio_id: str,
+        isin: str,
+        data: QueueSellRequest,
+        trading_service: TradingService,
+        bond_service: BondService,
+        settings: Settings,
+    ) -> TradingSyncResponse:
+        universe = bond_service.load_universe().bonds
+        try:
+            result = await trading_service.queue_manual_sell(
+                portfolio_id,
+                isin,
+                universe,
+                lots=data.lots,
+                price_pct=data.price_pct,
+                key_rate=settings.key_rate,
+                tax_rate=settings.tax_rate_fraction,
+                today=date.today(),
+            )
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        return trading_sync_to_response(result)
+
+    @post(
+        "/portfolios/{portfolio_id:str}/pending-operations/{op_id:str}/dismiss",
+        status_code=HTTP_200_OK,
+    )
+    async def dismiss_manual_sell(
+        self,
+        portfolio_id: str,
+        op_id: str,
+        trading_service: TradingService,
+        bond_service: BondService,
+        settings: Settings,
+    ) -> TradingSyncResponse:
+        universe = bond_service.load_universe().bonds
+        try:
+            result = await trading_service.dismiss_manual_sell(
+                portfolio_id,
+                op_id,
                 universe,
                 key_rate=settings.key_rate,
                 tax_rate=settings.tax_rate_fraction,

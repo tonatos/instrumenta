@@ -297,7 +297,7 @@ export function BondDetailSheet({ secid, onClose }: Props) {
               <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Скоринг
                 <Tooltip
-                  content="Комплексная оценка привлекательности облигации от 0 до 100. Формула: YTM-скор × 0.40 + Риск-скор × 0.40 + Ликвидность-скор × 0.20"
+                  content="Комплексная оценка привлекательности облигации от 0 до 100. Формула: YTM-скор × 0.45 + Риск-скор × 0.35 + Ликвидность-скор × 0.20"
                   side="right"
                 >
                   <HelpCircle className="h-3.5 w-3.5 cursor-help opacity-60" />
@@ -309,12 +309,12 @@ export function BondDetailSheet({ secid, onClose }: Props) {
                   value={<ScoreBar value={bond.score} />}
                 />
                 <InfoRow
-                  label="YTM-скор × 0.40"
+                  label="YTM-скор × 0.45"
                   value={<ScoreBar value={bond.ytm_score} />}
                   tooltip="Насколько YTM нетто превышает безрисковую ставку (КС ЦБ). Нормируется по 95-му перцентилю выборки."
                 />
                 <InfoRow
-                  label="Риск-скор × 0.40"
+                  label="Риск-скор × 0.35"
                   value={<ScoreBar value={bond.risk_score} />}
                   tooltip="Оценка риска: уровень риска, рейтинг, штрафы за амортизацию / плавающий купон / субординацию / колл."
                 />

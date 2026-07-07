@@ -11,6 +11,8 @@ import type {
   PlanResponse,
   Portfolio,
   SandboxPayInResponse,
+  SellPositionPreviewResponse,
+  SellQuoteResponse,
   TradingSyncResponse,
 } from "./types";
 
@@ -208,6 +210,33 @@ export const api = {
     request<TradingSyncResponse>(
       `/portfolios/${id}/positions/${isin}/put-offer-decision`,
       { method: "POST", body: JSON.stringify({ decision }) },
+    ),
+  sellPositionPreview: (
+    id: string,
+    isin: string,
+    body: { lots: number; price_pct: number },
+  ) =>
+    request<SellPositionPreviewResponse>(
+      `/portfolios/${id}/positions/${encodeURIComponent(isin)}/sell-preview`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  getSellQuote: (id: string, isin: string) =>
+    request<SellQuoteResponse>(
+      `/portfolios/${id}/positions/${encodeURIComponent(isin)}/sell-quote`,
+    ),
+  queueManualSell: (
+    id: string,
+    isin: string,
+    body: { lots: number; price_pct?: number },
+  ) =>
+    request<TradingSyncResponse>(
+      `/portfolios/${id}/positions/${encodeURIComponent(isin)}/queue-sell`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+  dismissManualSell: (id: string, opId: string) =>
+    request<TradingSyncResponse>(
+      `/portfolios/${id}/pending-operations/${opId}/dismiss`,
+      { method: "POST" },
     ),
   getPerformance: (id: string) =>
     request<{

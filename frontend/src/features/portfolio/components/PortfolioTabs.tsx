@@ -82,6 +82,7 @@ export function PortfolioTabs({
           positions={positions}
           portfolioId={active.id}
           isTrading={isTrading}
+          accountKind={active.account_kind}
           bonds={bondsList}
           closedPositionsCount={active.closed_positions_count ?? 0}
         />

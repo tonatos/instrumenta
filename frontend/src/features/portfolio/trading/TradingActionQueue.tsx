@@ -43,6 +43,7 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
     cancelMutation,
     cancelBatchMutation,
     putOfferMutation,
+    dismissMutation,
     isPending,
   } = useTradingSync(portfolio);
 
@@ -99,6 +100,7 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
         setConfirmOp(o);
       }}
       onCancel={(o) => cancelMutation.mutate(o.id)}
+      onDismiss={(o) => dismissMutation.mutate(o.id)}
       onPutOffer={(o, decision) => putOfferMutation.mutate({ isin: o.isin, decision })}
     />
   );

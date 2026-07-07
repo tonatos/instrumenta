@@ -164,6 +164,7 @@ export function OperationCard({
   isProduction,
   onConfirm,
   onCancel,
+  onDismiss,
   onPutOffer,
   isPending,
 }: {
@@ -171,6 +172,7 @@ export function OperationCard({
   isProduction: boolean;
   onConfirm: (op: PendingOperation) => void;
   onCancel: (op: PendingOperation) => void;
+  onDismiss: (op: PendingOperation) => void;
   onPutOffer: (op: PendingOperation, decision: "exercise" | "hold") => void;
   isPending: boolean;
 }) {
@@ -315,16 +317,29 @@ export function OperationCard({
             Отменить заявку
           </Button>
         ) : (
-          <Button
-            type="button"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => onConfirm(op)}
-            disabled={isPending || op.status === "blocked"}
-          >
-            <ShoppingCart className="h-3.5 w-3.5" />
-            {op.kind === "manual_sell" ? "Подтвердить продажу" : "Подтвердить покупку"}
-          </Button>
+          <>
+            {op.kind === "manual_sell" && op.status === "action_required" && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => onDismiss(op)}
+                disabled={isPending}
+              >
+                Убрать из очереди
+              </Button>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => onConfirm(op)}
+              disabled={isPending || op.status === "blocked"}
+            >
+              <ShoppingCart className="h-3.5 w-3.5" />
+              {op.kind === "manual_sell" ? "Подтвердить продажу" : "Подтвердить покупку"}
+            </Button>
+          </>
         )}
       </div>
 

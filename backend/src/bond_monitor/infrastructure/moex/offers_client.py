@@ -12,18 +12,21 @@ Fields used:
     offerdatestart   — first day investors may submit exercise requests
     offerdateend     — last day to submit (often ~2 weeks before execution)
     price            — redemption price as % of face value (often ≠ 100)
-    offertype        — «Оферта» = investor put-offer
+    offertype        — «Оферта» on MOEX (both investor puts and issuer calls)
 
 We only fetch for bonds that already have ``offer_date`` in the MOEX
 snapshot (~400 instruments, not the full ≈3 000 universe). Results are
 cached on disk for 24 h keyed by ISIN.
+
+Issuer-call detection: nearest future offer without a submission window
+and without any historical windowed offers in bondization is treated as
+an issuer call (coupon-reset trap), not an investor put.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -48,18 +51,19 @@ _CACHE_FILE: Path = _CACHE_DIR / "moex_put_offers.json"
 _MAX_WORKERS: int = 10
 _HTTP_TIMEOUT = httpx.Timeout(connect=10.0, read=20.0, write=10.0, pool=10.0)
 
-# MOEX offertype value for investor put-offers (not issuer call-offers).
+# MOEX offertype label shared by investor puts and issuer calls.
 _PUT_OFFER_TYPE = "Оферта"
 
 
 @dataclass(frozen=True)
 class PutOfferSchedule:
-    """Nearest future put-offer schedule for one ISIN."""
+    """Nearest future offer schedule for one ISIN."""
 
     offer_date: date
     submission_start: date | None
     submission_end: date | None
     offer_price_pct: float | None
+    is_issuer_call: bool = False
 
 
 def _parse_date(value: Any) -> date | None:
@@ -78,6 +82,76 @@ def _parse_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _row_has_submission_window(
+    submission_start: date | None,
+    submission_end: date | None,
+) -> bool:
+    return submission_start is not None or submission_end is not None
+
+
+def _offer_schedule_from_rows(
+    rows: list[list[Any]],
+    columns: list[str],
+    today: date,
+) -> PutOfferSchedule | None:
+    """Parse bondization offers block into nearest future schedule."""
+    if not columns or not rows:
+        return None
+
+    col_idx = {name: i for i, name in enumerate(columns)}
+    has_window_history = False
+    future_candidates: list[PutOfferSchedule] = []
+
+    for row in rows:
+        offer_type = row[col_idx["offertype"]] if "offertype" in col_idx else None
+        if offer_type != _PUT_OFFER_TYPE:
+            continue
+        face_unit = row[col_idx["faceunit"]] if "faceunit" in col_idx else None
+        if face_unit and face_unit != "RUB":
+            continue
+
+        submission_start = _parse_date(
+            row[col_idx["offerdatestart"]] if "offerdatestart" in col_idx else None
+        )
+        submission_end = _parse_date(
+            row[col_idx["offerdateend"]] if "offerdateend" in col_idx else None
+        )
+        if _row_has_submission_window(submission_start, submission_end):
+            has_window_history = True
+
+        offer_dt = _parse_date(row[col_idx["offerdate"]])
+        if offer_dt is None or offer_dt < today:
+            continue
+
+        future_candidates.append(
+            PutOfferSchedule(
+                offer_date=offer_dt,
+                submission_start=submission_start,
+                submission_end=submission_end,
+                offer_price_pct=_parse_float(
+                    row[col_idx["price"]] if "price" in col_idx else None
+                ),
+            )
+        )
+
+    if not future_candidates:
+        return None
+
+    nearest = min(future_candidates, key=lambda s: s.offer_date)
+    if _row_has_submission_window(nearest.submission_start, nearest.submission_end):
+        return nearest
+    if has_window_history:
+        return nearest
+
+    return PutOfferSchedule(
+        offer_date=nearest.offer_date,
+        submission_start=nearest.submission_start,
+        submission_end=nearest.submission_end,
+        offer_price_pct=nearest.offer_price_pct,
+        is_issuer_call=True,
+    )
 
 
 def _load_cache() -> dict[str, dict]:
@@ -113,6 +187,7 @@ def _schedule_to_dict(schedule: PutOfferSchedule) -> dict:
             schedule.submission_end.isoformat() if schedule.submission_end else None
         ),
         "offer_price_pct": schedule.offer_price_pct,
+        "is_issuer_call": schedule.is_issuer_call,
     }
 
 
@@ -130,11 +205,12 @@ def _schedule_from_dict(data: dict) -> PutOfferSchedule:
         offer_price_pct=(
             float(data["offer_price_pct"]) if data.get("offer_price_pct") is not None else None
         ),
+        is_issuer_call=bool(data.get("is_issuer_call", False)),
     )
 
 
 def _fetch_put_offer_for_secid(secid: str, today: date) -> PutOfferSchedule | None:
-    """Fetch nearest future put-offer for one SECID from MOEX bondization."""
+    """Fetch nearest future offer for one SECID from MOEX bondization."""
     url = f"{MOEX_ISS_BASE}/securities/{secid}/bondization/offers.json"
     try:
         with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
@@ -150,38 +226,7 @@ def _fetch_put_offer_for_secid(secid: str, today: date) -> PutOfferSchedule | No
         return None
     columns: list[str] = offers_block.get("columns", [])
     rows: list[list[Any]] = offers_block.get("data", [])
-    if not columns or not rows:
-        return None
-
-    col_idx = {name: i for i, name in enumerate(columns)}
-    candidates: list[PutOfferSchedule] = []
-
-    for row in rows:
-        offer_type = row[col_idx["offertype"]] if "offertype" in col_idx else None
-        if offer_type != _PUT_OFFER_TYPE:
-            continue
-        face_unit = row[col_idx["faceunit"]] if "faceunit" in col_idx else None
-        if face_unit and face_unit != "RUB":
-            continue
-        offer_dt = _parse_date(row[col_idx["offerdate"]])
-        if offer_dt is None or offer_dt < today:
-            continue
-        candidates.append(
-            PutOfferSchedule(
-                offer_date=offer_dt,
-                submission_start=_parse_date(
-                    row[col_idx["offerdatestart"]] if "offerdatestart" in col_idx else None
-                ),
-                submission_end=_parse_date(
-                    row[col_idx["offerdateend"]] if "offerdateend" in col_idx else None
-                ),
-                offer_price_pct=_parse_float(row[col_idx["price"]] if "price" in col_idx else None),
-            )
-        )
-
-    if not candidates:
-        return None
-    return min(candidates, key=lambda s: s.offer_date)
+    return _offer_schedule_from_rows(rows, columns, today)
 
 
 def _load_schedules_for_isins(
@@ -203,6 +248,10 @@ def _load_schedules_for_isins(
         if entry and now - entry.get("_fetched_at", 0) < CACHE_TTL_SECONDS:
             sched_data = entry.get("schedule")
             if sched_data is None:
+                continue
+            # Re-fetch schedules cached before issuer-call detection was added.
+            if "is_issuer_call" not in sched_data:
+                to_fetch.append((isin, secid))
                 continue
             result[isin] = _schedule_from_dict(sched_data)
             continue
@@ -235,10 +284,33 @@ def _load_schedules_for_isins(
     return result
 
 
+def _apply_issuer_call_schedule(bond: BondRecord, schedule: PutOfferSchedule, ref_date: date) -> None:
+    """Conservative handling: horizon to maturity, no investor put rights."""
+    bond.call_date = schedule.offer_date
+    bond.offer_date = None
+    bond.offer_submission_start = None
+    bond.offer_submission_end = None
+    bond.offer_price_pct = schedule.offer_price_pct
+    if bond.maturity_date is not None and bond.maturity_date >= ref_date:
+        bond.effective_date = bond.maturity_date
+        bond.days_to_maturity = (bond.maturity_date - ref_date).days
+
+
+def _apply_put_schedule(bond: BondRecord, schedule: PutOfferSchedule, ref_date: date) -> None:
+    bond.offer_date = schedule.offer_date
+    bond.offer_submission_start = schedule.submission_start
+    bond.offer_submission_end = schedule.submission_end
+    bond.offer_price_pct = schedule.offer_price_pct
+    dates = [d for d in (bond.maturity_date, bond.offer_date) if d is not None and d >= ref_date]
+    if dates:
+        bond.effective_date = min(dates)
+        bond.days_to_maturity = (bond.effective_date - ref_date).days
+
+
 def enrich_bonds_with_put_offers(
     bonds: list[BondRecord], *, today: date | None = None
 ) -> list[BondRecord]:
-    """Attach put-offer submission windows and offer prices to bonds.
+    """Attach put-offer schedules; issuer calls mapped to ``call_date``.
 
     Only bonds with a non-null ``offer_date`` in the MOEX snapshot are
     queried — the rest are returned unchanged.
@@ -255,26 +327,21 @@ def enrich_bonds_with_put_offers(
     secid_by_isin = {b.isin: b.secid for b in candidates}
     schedules = _load_schedules_for_isins(isins, secid_by_isin, ref_date)
 
+    issuer_calls = 0
     for bond in bonds:
         schedule = schedules.get(bond.isin)
         if schedule is None:
             continue
-        # Prefer bondization execution date when it matches or replaces snapshot.
-        bond.offer_date = schedule.offer_date
-        bond.offer_submission_start = schedule.submission_start
-        bond.offer_submission_end = schedule.submission_end
-        bond.offer_price_pct = schedule.offer_price_pct
-        # Recalculate effective_date with enriched offer_date.
-        dates = [
-            d for d in (bond.maturity_date, bond.offer_date) if d is not None and d >= ref_date
-        ]
-        if dates:
-            bond.effective_date = min(dates)
-            bond.days_to_maturity = (bond.effective_date - ref_date).days
+        if schedule.is_issuer_call:
+            _apply_issuer_call_schedule(bond, schedule, ref_date)
+            issuer_calls += 1
+        else:
+            _apply_put_schedule(bond, schedule, ref_date)
 
     logger.info(
-        "Put-offer enrichment: %d bonds queried, %d schedules attached",
+        "Put-offer enrichment: %d bonds queried, %d schedules attached (%d issuer calls)",
         len(candidates),
         len(schedules),
+        issuer_calls,
     )
     return bonds

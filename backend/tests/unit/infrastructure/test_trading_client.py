@@ -13,6 +13,7 @@ from bond_monitor.infrastructure.tinvest.trading_client import (
     PostOrderResult,
     TradingNotAvailableError,
     _classify_position,
+    _order_state_from_proto,
     get_account_snapshot,
     post_limit_order,
     post_market_sell_order,
@@ -75,6 +76,32 @@ def test_classify_bond_without_nominal_leaves_price_pct_none() -> None:
     assert bond is not None
     assert bond.current_price_pct is None
     assert bond.average_price_pct is None
+
+
+def test_order_state_converts_initial_security_price_rub_to_pct() -> None:
+    from t_tech.invest import OrderDirection as ProtoOrderDirection
+    from t_tech.invest.schemas import OrderExecutionReportStatus
+
+    state = SimpleNamespace(
+        order_id="order-1",
+        execution_report_status=OrderExecutionReportStatus.EXECUTION_REPORT_STATUS_NEW,
+        figi="FIGI_BOND",
+        direction=ProtoOrderDirection.ORDER_DIRECTION_SELL,
+        lots_executed=0,
+        lots_requested=36,
+        executed_order_price=None,
+        initial_security_price=_quotation(906.0),
+        initial_order_price=SimpleNamespace(units=32616, nano=0, currency="rub"),
+        total_order_amount=SimpleNamespace(units=32616, nano=0, currency="rub"),
+        order_date=None,
+        order_request_id="uid-1",
+        initial_commission=SimpleNamespace(units=326, nano=0, currency="rub"),
+        instrument_uid="uid-bond",
+    )
+
+    result = _order_state_from_proto(state, face_value=1000.0)
+
+    assert float(result.price_pct) == pytest.approx(90.6)
 
 
 def test_get_account_snapshot_fetches_nominal_for_bond_prices() -> None:

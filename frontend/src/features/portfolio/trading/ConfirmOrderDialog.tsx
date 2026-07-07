@@ -64,11 +64,13 @@ export function ConfirmOrderDialog({
   useEffect(() => {
     if (op) {
       setLots(op.lots);
-      setPricePct(op.suggested_price_pct?.toFixed(4) ?? "");
+      const initialPrice =
+        op.active_order_price_pct ?? op.suggested_price_pct ?? null;
+      setPricePct(initialPrice != null ? initialPrice.toFixed(4) : "");
     }
   }, [op]);
 
-  const { preview, previewLoading, previewError, isBuy } = useOrderPreview({
+  const { preview, previewLoading, previewError, isBuy, isSell } = useOrderPreview({
     open,
     op,
     portfolioId,
@@ -78,7 +80,7 @@ export function ConfirmOrderDialog({
 
   if (!op) return null;
 
-  const isSell = op.kind === "manual_sell";
+  const isSellOp = op.kind === "manual_sell";
   const lotSize = op.lot_size ?? 1;
   const previewApplies =
     preview != null &&
@@ -96,7 +98,7 @@ export function ConfirmOrderDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isSell ? "Подтвердить продажу" : "Подтвердить покупку"}
+            {isSellOp ? "Подтвердить продажу" : "Подтвердить покупку"}
           </DialogTitle>
           <DialogDescription>
             {op.name} · {KIND_LABELS[op.kind]}
@@ -116,6 +118,14 @@ export function ConfirmOrderDialog({
               На биржу уходит лимитная заявка по{" "}
               <span className="font-medium text-foreground">чистой</span> цене (% от
               номинала). НКД и комиссия спишутся дополнительно при исполнении.
+            </p>
+          )}
+
+          {isSellOp && (
+            <p className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              Лимитная заявка на продажу по{" "}
+              <span className="font-medium text-foreground">чистой</span> цене. НКД и
+              комиссия учтутся при исполнении.
             </p>
           )}
 
@@ -150,7 +160,7 @@ export function ConfirmOrderDialog({
             </div>
           </div>
 
-          {isBuy && op.suggested_price_pct != null && (
+          {(isBuy || isSellOp) && op.suggested_price_pct != null && (
             <Button
               type="button"
               variant="ghost"
@@ -162,7 +172,7 @@ export function ConfirmOrderDialog({
             </Button>
           )}
 
-          {isBuy && (previewLoading || previewApplies || previewError) && (
+          {(isBuy || isSellOp) && (previewLoading || previewApplies || previewError) && (
             <div className="space-y-2 rounded-lg border border-blue-400/30 bg-blue-500/5 p-3">
               <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
                 {brokerPreview ? "Расчёт брокера" : "Оценка по MOEX"}
@@ -177,7 +187,11 @@ export function ConfirmOrderDialog({
                 <p className="text-xs text-destructive">{previewError}</p>
               )}
               {previewApplies && preview && (
-                <PreviewDetails preview={preview} brokerPreview={brokerPreview} />
+                <PreviewDetails
+                  preview={preview}
+                  brokerPreview={brokerPreview}
+                  isSell={isSellOp}
+                />
               )}
             </div>
           )}
@@ -222,9 +236,11 @@ export function ConfirmOrderDialog({
 function PreviewDetails({
   preview,
   brokerPreview,
+  isSell = false,
 }: {
   preview: OrderPreviewResponse;
   brokerPreview: OrderPreviewResponse | null;
+  isSell?: boolean;
 }) {
   return (
     <div className="space-y-2">
@@ -262,16 +278,18 @@ function PreviewDetails({
         />
       )}
       <PricingRow
-        label="Итого к списанию"
+        label={isSell ? "Итого к зачислению" : "Итого к списанию"}
         value={formatRub(
           brokerPreview?.broker_total_amount_rub ??
             preview.local_total_amount_rub,
         )}
       />
-      <PricingRow
-        label="На счёте"
-        value={formatRub(preview.money_rub)}
-      />
+      {!isSell && (
+        <PricingRow
+          label="На счёте"
+          value={formatRub(preview.money_rub)}
+        />
+      )}
     </div>
   );
 }

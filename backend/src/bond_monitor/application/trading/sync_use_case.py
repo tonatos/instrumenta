@@ -10,6 +10,7 @@ from bond_monitor.application.trading.types import TradingSyncResult
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio
 from bond_monitor.domain.portfolio.planner import PortfolioPlan, build_plan, distribute_top_up
+from bond_monitor.domain.trading.broker_orders import reconcile_active_broker_orders
 from bond_monitor.domain.trading.cash_constraints import available_cash_for_new_purchases_rub
 from bond_monitor.domain.trading.pending_operations import (
     api_trade_position_warnings,
@@ -29,6 +30,7 @@ from bond_monitor.domain.trading.top_up import (
 )
 from bond_monitor.domain.trading.yield_calc import summarize_actual_performance
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import (
+    broker_active_orders_from_infrastructure,
     broker_operations_from_infrastructure,
     broker_snapshot_from_infrastructure,
 )
@@ -99,6 +101,31 @@ class SyncUseCase:
                 logger.warning("Failed to refresh order %s: %s", tr.order_id, exc)
         return updated
 
+    def _import_active_broker_orders(
+        self,
+        portfolio: Portfolio,
+        token: str,
+        *,
+        universe_by_isin: dict[str, BondRecord],
+    ) -> int:
+        if not portfolio.account_id or not portfolio.account_kind:
+            return 0
+        try:
+            infra_orders = broker.get_active_orders(
+                token,
+                portfolio.account_kind,
+                account_id=portfolio.account_id,
+            )
+        except TradingClientError as exc:
+            logger.warning("Failed to fetch active broker orders: %s", exc)
+            return 0
+        broker_orders = broker_active_orders_from_infrastructure(infra_orders)
+        return reconcile_active_broker_orders(
+            portfolio,
+            broker_orders,
+            universe_by_isin=universe_by_isin,
+        )
+
     async def sync_portfolio(
         self,
         portfolio_id: str,
@@ -128,10 +155,11 @@ class SyncUseCase:
 
         snapshot = broker_snapshot_from_infrastructure(infra_snapshot)
         operations = broker_operations_from_infrastructure(infra_operations)
+        universe_by_isin = {b.isin: b for b in universe}
 
         reconciliation = reconcile_positions(portfolio, snapshot, operations)
+        self._import_active_broker_orders(portfolio, token, universe_by_isin=universe_by_isin)
         self._refresh_trade_record_states(portfolio, token)
-        universe_by_isin = {b.isin: b for b in universe}
         apply_filled_reinvest_buys(portfolio, universe_by_isin, today)
         close_matured_positions(portfolio, snapshot, today)
         sweep_completed_pending(portfolio)

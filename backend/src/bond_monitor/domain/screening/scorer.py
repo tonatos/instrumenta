@@ -31,6 +31,36 @@ _RISK_BASE: dict[RiskLevel, float] = {
     RiskLevel.UNKNOWN: 45.0,
 }
 
+# Penalty when no credit rating is available (worse than known BB).
+_UNRATED_PENALTY: float = -25.0
+
+# Distress spread thresholds (net YTM above risk-free, percentage points).
+# Sweet spot for aggressive VDO extends to ~28pp; YTM score caps above that.
+# Decay to zero only beyond _DISTRESS_SPREAD_FULL_PP (~distressed junk).
+_DISTRESS_SPREAD_START_PP: float = 28.0
+_DISTRESS_YTM_DECAY_START_PP: float = 35.0
+_DISTRESS_SPREAD_FULL_PP: float = 50.0
+_DISTRESS_PENALTY_MAX: float = 40.0
+
+# Investment-grade spreads get a higher distress threshold (BBB- and above).
+_IG_DISTRESS_SPREAD_BONUS_PP: float = 12.0
+_IG_MIN_RATING_ORDINAL: int = 3  # BBB-
+
+# Aggressive profile: penalise low-spread «boring» bonds in composite score.
+_AGGRESSIVE_BOREDOM_SPREAD_PP: float = 14.0
+_AGGRESSIVE_BOREDOM_PENALTY_MAX: float = 22.0
+
+# Aggressive profile: extra composite penalty for sub-IG yields implying distress.
+_AGGRESSIVE_JUNK_SPREAD_PP: float = 28.0
+_AGGRESSIVE_JUNK_PENALTY_MAX: float = 50.0
+
+# Issuer call: coupon-reset trap — stronger than generic early redemption.
+_CALL_TRAP_PENALTY: float = 12.0
+
+# Absolute liquidity anchors (RUB/day); independent of universe max volume.
+_LIQ_FLOOR_RUB: float = 500_000.0
+_LIQ_GOOD_RUB: float = 10_000_000.0
+
 # Rating bonus/penalty thresholds (ordinal ≥ threshold → bonus)
 _RATING_BONUSES: list[tuple[int, float]] = [
     (12, 20.0),  # AAA
@@ -51,7 +81,7 @@ _RATING_BONUSES: list[tuple[int, float]] = [
 
 def _rating_bonus(rating: str | None) -> float:
     if rating is None:
-        return 0.0
+        return _UNRATED_PENALTY
     ordinal = RATING_ORDER.get(rating)
     if ordinal is None:
         return 0.0
@@ -65,9 +95,10 @@ def calc_ytm_score(ytm_net: float | None, risk_free_net: float, max_spread: floa
     """
     Normalize excess yield above risk-free (after tax) to [0, 100].
 
-    A bond yielding exactly the risk-free rate scores 0. The 95th percentile
-    of the universe's spread anchors 100, and anything above it clips at 100.
-    See ``_YTM_SCALE_PERCENTILE`` for the rationale.
+    Linear up to ``_DISTRESS_SPREAD_START_PP``, flat cap until
+    ``_DISTRESS_YTM_DECAY_START_PP``, then decay to 0 at
+    ``_DISTRESS_SPREAD_FULL_PP``. High but still tradeable VDO yields
+    (30–40% gross) keep their score; only extreme spreads decay.
     """
     if ytm_net is None:
         return 0.0
@@ -76,7 +107,40 @@ def calc_ytm_score(ytm_net: float | None, risk_free_net: float, max_spread: floa
         return 0.0
     if max_spread <= 0:
         return 50.0
-    return min(100.0, spread / max_spread * 100.0)
+
+    peak_spread = min(spread, _DISTRESS_SPREAD_START_PP)
+    peak_score = min(100.0, peak_spread / max_spread * 100.0)
+    if spread <= _DISTRESS_YTM_DECAY_START_PP:
+        return peak_score
+
+    if spread >= _DISTRESS_SPREAD_FULL_PP:
+        return 0.0
+
+    decay_frac = (spread - _DISTRESS_YTM_DECAY_START_PP) / (
+        _DISTRESS_SPREAD_FULL_PP - _DISTRESS_YTM_DECAY_START_PP
+    )
+    return max(0.0, peak_score * (1.0 - decay_frac))
+
+
+def _scoring_ytm_net(
+    bond: BondRecord,
+    risk_free_net: float,
+    after_tax_multiplier: float,
+) -> float | None:
+    """
+    YTM net for scoring only (display ``bond.ytm_net`` stays MOEX yield).
+
+    Callable bonds: cap at coupon yield so phantom yield-to-call does not
+    inflate scores. Missing coupon → neutral spread (risk-free only).
+    """
+    if bond.ytm_net is None:
+        return None
+    if bond.call_date is None:
+        return bond.ytm_net
+    if bond.coupon_rate is None:
+        return risk_free_net
+    coupon_net = bond.coupon_rate * after_tax_multiplier
+    return min(bond.ytm_net, coupon_net)
 
 
 def _ytm_scale_reference(ytm_values: Sequence[float]) -> float | None:
@@ -109,9 +173,6 @@ def calc_risk_score(bond: BondRecord) -> float:
     if bond.amortization_flag:
         # Amortization complicates cash flow modelling
         penalties += 5.0
-    if bond.floating_coupon_flag or bond.coupon_type == CouponType.FLOATING:
-        # Floating coupon: future size unknown, rate sensitivity risk
-        penalties += 10.0
     if bond.coupon_type == CouponType.VARIABLE:
         # Variable coupon: next period unknown
         penalties += 8.0
@@ -119,22 +180,110 @@ def calc_risk_score(bond: BondRecord) -> float:
         # In bankruptcy, subordinated holders get paid last
         penalties += 30.0
     if bond.call_date is not None:
-        # Issuer can redeem early, cutting off expected coupons
-        penalties += 5.0
+        # Issuer call: post-call coupon unknown, no put protection
+        penalties += _CALL_TRAP_PENALTY
 
     score = base - penalties + _rating_bonus(bond.credit_rating)
     return max(0.0, min(100.0, score))
 
 
-def calc_liquidity_score(volume_rub: float | None, max_volume: float) -> float:
-    """
-    Logarithmic liquidity score [0, 100].
+def _distress_spread_start(bond: BondRecord) -> float:
+    """Per-bond distress threshold; IG ratings tolerate wider spreads."""
+    ordinal = RATING_ORDER.get(bond.credit_rating) if bond.credit_rating else None
+    if ordinal is not None and ordinal >= _IG_MIN_RATING_ORDINAL:
+        return _DISTRESS_SPREAD_START_PP + _IG_DISTRESS_SPREAD_BONUS_PP
+    return _DISTRESS_SPREAD_START_PP
 
-    Uses log scale because trading volumes span several orders of magnitude.
+
+def calc_distress_penalty(bond: BondRecord, ytm_net: float | None, risk_free_net: float) -> float:
     """
-    if not volume_rub or volume_rub <= 0 or max_volume <= 0:
+    Penalty applied to risk_score when yield spread signals distress.
+
+    Spread above the bond's distress start ramps linearly to
+    ``_DISTRESS_PENALTY_MAX`` at ``_DISTRESS_SPREAD_FULL_PP``.
+    BBB- and above get a higher start threshold.
+    """
+    spread = (ytm_net or 0.0) - risk_free_net
+    start = _distress_spread_start(bond)
+    if spread <= start:
         return 0.0
-    return min(100.0, math.log10(volume_rub) / math.log10(max_volume) * 100.0)
+    span = _DISTRESS_SPREAD_FULL_PP - start
+    if span <= 0:
+        return _DISTRESS_PENALTY_MAX
+    frac = (spread - start) / span
+    return min(1.0, frac) * _DISTRESS_PENALTY_MAX
+
+
+def calc_liquidity_score(volume_rub: float | None) -> float:
+    """
+    Logarithmic liquidity score [0, 100] on absolute volume anchors.
+
+    ``_LIQ_FLOOR_RUB`` (min screener filter) maps to 0; ``_LIQ_GOOD_RUB``
+    maps to 100. Independent of peer volumes in the scored universe.
+    """
+    if not volume_rub or volume_rub <= 0:
+        return 0.0
+    if volume_rub <= _LIQ_FLOOR_RUB:
+        return 0.0
+    if volume_rub >= _LIQ_GOOD_RUB:
+        return 100.0
+    log_span = math.log10(_LIQ_GOOD_RUB) - math.log10(_LIQ_FLOOR_RUB)
+    if log_span <= 0:
+        return 0.0
+    frac = (math.log10(volume_rub) - math.log10(_LIQ_FLOOR_RUB)) / log_span
+    return min(100.0, max(0.0, frac * 100.0))
+
+
+def _final_risk_score(
+    bond: BondRecord,
+    risk_free_net: float,
+    after_tax_multiplier: float,
+) -> float:
+    """Risk score after distress spread penalty."""
+    scoring_ytm = _scoring_ytm_net(bond, risk_free_net, after_tax_multiplier)
+    return max(
+        0.0,
+        calc_risk_score(bond) - calc_distress_penalty(bond, scoring_ytm, risk_free_net),
+    )
+
+
+def calc_aggressive_boredom_penalty(ytm_net: float | None, risk_free_net: float) -> float:
+    """
+    Composite-score penalty for low-yield bonds in the aggressive profile.
+
+    AAA/AA issues at ~17–20% YTM should not outrank VDO at 30–40%.
+    """
+    spread = (ytm_net or 0.0) - risk_free_net
+    if spread >= _AGGRESSIVE_BOREDOM_SPREAD_PP:
+        return 0.0
+    if _AGGRESSIVE_BOREDOM_SPREAD_PP <= 0:
+        return 0.0
+    frac = 1.0 - spread / _AGGRESSIVE_BOREDOM_SPREAD_PP
+    return max(0.0, frac) * _AGGRESSIVE_BOREDOM_PENALTY_MAX
+
+
+def calc_aggressive_junk_penalty(
+    bond: BondRecord,
+    ytm_net: float | None,
+    risk_free_net: float,
+) -> float:
+    """
+    Composite-score penalty for sub-IG bonds with extreme yield spreads.
+
+    Distinguishes «good aggressive» VDO (BBB-/BB- at 30–40%) from
+    distressed junk (BB and below at 55%+).
+    """
+    spread = (ytm_net or 0.0) - risk_free_net
+    if spread <= _AGGRESSIVE_JUNK_SPREAD_PP:
+        return 0.0
+    ordinal = RATING_ORDER.get(bond.credit_rating) if bond.credit_rating else None
+    if ordinal is not None and ordinal >= _IG_MIN_RATING_ORDINAL:
+        return 0.0
+    span = _DISTRESS_SPREAD_FULL_PP - _AGGRESSIVE_JUNK_SPREAD_PP
+    if span <= 0:
+        return _AGGRESSIVE_JUNK_PENALTY_MAX
+    frac = min(1.0, (spread - _AGGRESSIVE_JUNK_SPREAD_PP) / span)
+    return frac * _AGGRESSIVE_JUNK_PENALTY_MAX
 
 
 def score_bonds(
@@ -149,13 +298,13 @@ def score_bonds(
     bond before scoring. The screener and calculator rely on this being driven
     by the same ``tax_rate`` as the scoring itself.
 
-    Score = YTM_score×0.40 + Risk_score×0.40 + Liquidity_score×0.20
+    Score = YTM_score×0.45 + Risk_score×0.35 + Liquidity_score×0.20
 
     The YTM scale is anchored at the 95th percentile of ytm_net in the supplied
     universe (not the maximum), which keeps distressed/buggy outliers from
     collapsing the scale; bonds above the percentile clip at 100. Risk and
-    liquidity scales are still relative, so scores depend on the full universe
-    — always score the entire screened set at once.
+    liquidity scales use absolute volume anchors — scores depend on the
+    bond's own trading volume, not the universe maximum.
     """
     if not bonds:
         return []
@@ -166,21 +315,23 @@ def score_bonds(
     for bond in bonds:
         bond.ytm_net = bond.ytm * after_tax_multiplier if bond.ytm is not None else None
 
-    ytm_values: list[float] = [b.ytm_net for b in bonds if b.ytm_net is not None]
+    ytm_values: list[float] = [
+        net
+        for b in bonds
+        if (net := _scoring_ytm_net(b, risk_free_net, after_tax_multiplier)) is not None
+    ]
     scale_ytm_net = _ytm_scale_reference(ytm_values)
     if scale_ytm_net is None:
         scale_ytm_net = risk_free_net
     max_spread = max(scale_ytm_net - risk_free_net, 0.0)
 
-    volumes = [b.filter_volume_rub for b in bonds if b.filter_volume_rub > 0]
-    max_volume = max(volumes) if volumes else 1.0
-
     result: list[BondRecord] = []
     for bond in bonds:
-        bond.ytm_score = calc_ytm_score(bond.ytm_net, risk_free_net, max_spread)
-        bond.risk_score = calc_risk_score(bond)
-        bond.liquidity_score = calc_liquidity_score(bond.filter_volume_rub, max_volume)
-        bond.score = bond.ytm_score * 0.40 + bond.risk_score * 0.40 + bond.liquidity_score * 0.20
+        scoring_ytm = _scoring_ytm_net(bond, risk_free_net, after_tax_multiplier)
+        bond.ytm_score = calc_ytm_score(scoring_ytm, risk_free_net, max_spread)
+        bond.risk_score = _final_risk_score(bond, risk_free_net, after_tax_multiplier)
+        bond.liquidity_score = calc_liquidity_score(bond.filter_volume_rub)
+        bond.score = bond.ytm_score * 0.45 + bond.risk_score * 0.35 + bond.liquidity_score * 0.20
         result.append(bond)
 
     result.sort(key=lambda b: b.score or 0.0, reverse=True)
@@ -204,14 +355,11 @@ def score_bonds(
 # ``NORMAL`` — приоритет качеству эмитента (риск × 0.50); YTM весит меньше
 # (× 0.30), потому что в этом профиле мы заведомо отсекаем низкие рейтинги.
 #
-# ``AGGRESSIVE`` — приоритет доходности (YTM × 0.65); риск-фильтр уже
-# отсёк совсем junk-бумаги, дальше выбираем самые прибыльные. Раньше
-# было (0.55, 0.25, 0.20), но по фидбэку — слишком осторожно: рейтинг
-# уже учтён фильтром, дублировать его весом смысла нет, поэтому усилили
-# YTM до 0.65.
+# ``AGGRESSIVE`` — приоритет доходности (YTM × 0.60); risk × 0.25 и
+# boredom-penalty не дают AAA/AA с низким спредом обгонять VDO.
 _PROFILE_WEIGHTS: dict[RiskProfile, tuple[float, float, float]] = {
     RiskProfile.NORMAL: (0.30, 0.50, 0.20),
-    RiskProfile.AGGRESSIVE: (0.65, 0.20, 0.15),
+    RiskProfile.AGGRESSIVE: (0.60, 0.25, 0.15),
 }
 
 
@@ -226,12 +374,12 @@ def score_bonds_for_profile(
 
     * ``NORMAL`` — упор на качество (риск-скор × 0.50 при доходности × 0.30):
       выбираются более надёжные бумаги, даже если их YTM ниже.
-    * ``AGGRESSIVE`` — упор на доходность (YTM × 0.55, риск × 0.25):
-      допускает менее надёжные эмиссии ради бо́льшего ожидаемого дохода.
+    * ``AGGRESSIVE`` — упор на доходность (YTM × 0.60, риск × 0.25):
+      VDO с умеренно высоким YTM предпочтительнее IG с низким спредом;
+      boredom-penalty и дистресс-штраф удерживают junk внизу.
 
-    Шкалы под YTM/ликвидность строятся по тому же принципу, что и в
-    :func:`score_bonds` (95-й перцентиль для YTM, log-шкала для объёма),
-    поэтому оба варианта совместимы по диапазону значений [0, 100].
+    Шкала YTM строится по 95-му перцентилю; ликвидность — по абсолютным
+    якорям объёма (см. ``calc_liquidity_score``).
     """
     if not bonds:
         return []
@@ -243,25 +391,35 @@ def score_bonds_for_profile(
     for bond in bonds:
         bond.ytm_net = bond.ytm * after_tax_multiplier if bond.ytm is not None else None
 
-    ytm_values: list[float] = [b.ytm_net for b in bonds if b.ytm_net is not None]
+    ytm_values: list[float] = [
+        net
+        for b in bonds
+        if (net := _scoring_ytm_net(b, risk_free_net, after_tax_multiplier)) is not None
+    ]
     scale_ytm_net = _ytm_scale_reference(ytm_values)
     if scale_ytm_net is None:
         scale_ytm_net = risk_free_net
     max_spread = max(scale_ytm_net - risk_free_net, 0.0)
 
-    volumes = [b.filter_volume_rub for b in bonds if b.filter_volume_rub > 0]
-    max_volume = max(volumes) if volumes else 1.0
-
     result: list[BondRecord] = []
     for bond in bonds:
-        bond.ytm_score = calc_ytm_score(bond.ytm_net, risk_free_net, max_spread)
-        bond.risk_score = calc_risk_score(bond)
-        bond.liquidity_score = calc_liquidity_score(bond.filter_volume_rub, max_volume)
+        scoring_ytm = _scoring_ytm_net(bond, risk_free_net, after_tax_multiplier)
+        bond.ytm_score = calc_ytm_score(scoring_ytm, risk_free_net, max_spread)
+        bond.risk_score = _final_risk_score(bond, risk_free_net, after_tax_multiplier)
+        bond.liquidity_score = calc_liquidity_score(bond.filter_volume_rub)
         bond.score = (
             bond.ytm_score * weight_ytm
             + bond.risk_score * weight_risk
             + bond.liquidity_score * weight_liq
         )
+        if profile == RiskProfile.AGGRESSIVE:
+            boredom_ytm = scoring_ytm if scoring_ytm is not None else bond.ytm_net
+            bond.score = max(
+                0.0,
+                bond.score
+                - calc_aggressive_boredom_penalty(boredom_ytm, risk_free_net)
+                - calc_aggressive_junk_penalty(bond, boredom_ytm, risk_free_net),
+            )
         result.append(bond)
 
     result.sort(key=lambda b: b.score or 0.0, reverse=True)

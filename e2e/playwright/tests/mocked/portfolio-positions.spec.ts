@@ -96,6 +96,40 @@ test.describe("Позиции — жизненный цикл", () => {
       plan: makeEmptyPlan({ invested_capital_rub: 100_000 }),
       sync: makeEmptySync(),
     });
+    await page.route("**/api/v1/bonds/**", async (route) => {
+      await route.fulfill({
+        json: {
+          bonds: [
+            {
+              secid: "OPEN1",
+              isin: "RU000AOPEN1",
+              name: "Активная облигация",
+              ytm: 14.5,
+              ytm_net: 12.62,
+              score: 78,
+              face_value: 1000,
+              lot_size: 1,
+              coupon_type: "fixed",
+              risk_level: 2,
+            },
+            {
+              secid: "PEND1",
+              isin: "RU000APEND1",
+              name: "Ожидающая покупка",
+              ytm: 13.0,
+              ytm_net: 11.31,
+              score: 65,
+              face_value: 1000,
+              lot_size: 1,
+              coupon_type: "fixed",
+              risk_level: 2,
+            },
+          ],
+          source: "mock",
+          count: 2,
+        },
+      });
+    });
     await gotoPortfolio(page, PORTFOLIO_ID);
     await expect(page.getByRole("tab", { name: /Позиции/ })).toBeVisible({ timeout: 15_000 });
   });
@@ -120,6 +154,15 @@ test.describe("Позиции — жизненный цикл", () => {
   test("badge на вкладке считает только открытые позиции", async ({ page }) => {
     const tab = page.getByRole("tab", { name: /Позиции/ });
     await expect(tab).toContainText("2");
+  });
+
+  test("показывает YTM и скор из справочника облигаций", async ({ page }) => {
+    await page.getByRole("tab", { name: /Позиции/ }).click();
+
+    await expect(page.getByTestId("position-ytm-RU000AOPEN1")).toHaveText("12.62%");
+    await expect(page.getByTestId("position-score-RU000AOPEN1")).toHaveText("78");
+    await expect(page.getByTestId("position-ytm-RU000APEND1")).toHaveText("11.31%");
+    await expect(page.getByTestId("position-score-RU000APEND1")).toHaveText("65");
   });
 
   test("фильтр показывает закрытые позиции", async ({ page }) => {

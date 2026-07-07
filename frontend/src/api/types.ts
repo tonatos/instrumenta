@@ -360,3 +360,16 @@ export interface OrderPreviewResponse {
   sufficient_cash: boolean;
   preview_source: "broker" | "moex";
 }
+
+export interface SellPositionPreviewResponse extends OrderPreviewResponse {
+  available_lots: number;
+  sufficient_lots: boolean;
+  suggested_price_pct: number | null;
+}
+
+export interface SellQuoteResponse {
+  market_price_pct: number;
+  suggested_price_pct: number;
+  available_lots: number;
+  sell_buffer_label: string;
+}

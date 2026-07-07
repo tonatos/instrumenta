@@ -41,3 +41,22 @@ class OrderPreviewResult:
     money_rub: float
     sufficient_cash: bool
     preview_source: str = "moex"
+
+
+@dataclass
+class SellPositionPreviewResult(OrderPreviewResult):
+    """Превью прямой продажи позиции."""
+
+    available_lots: int = 0
+    sufficient_lots: bool = False
+    suggested_price_pct: float | None = None
+
+
+@dataclass
+class SellQuoteResult:
+    """Рекомендуемая лимитная цена продажи и рыночная база."""
+
+    market_price_pct: float
+    suggested_price_pct: float
+    available_lots: int
+    sell_buffer_label: str

@@ -287,6 +287,29 @@ class OrderPreviewResponse(BaseModel):
     preview_source: str = "moex"
 
 
+class SellPositionRequest(BaseModel):
+    lots: int = Field(ge=1)
+    price_pct: float = Field(gt=0)
+
+
+class QueueSellRequest(BaseModel):
+    lots: int = Field(ge=1)
+    price_pct: float | None = Field(default=None, gt=0)
+
+
+class SellQuoteResponse(BaseModel):
+    market_price_pct: float
+    suggested_price_pct: float
+    available_lots: int
+    sell_buffer_label: str
+
+
+class SellPositionPreviewResponse(OrderPreviewResponse):
+    available_lots: int
+    sufficient_lots: bool
+    suggested_price_pct: float | None = None
+
+
 class PutOfferDecisionRequest(BaseModel):
     decision: str = Field(pattern="^(exercise|hold)$")
 

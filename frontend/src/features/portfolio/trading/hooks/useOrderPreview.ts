@@ -3,6 +3,7 @@ import { api } from "@/api/client";
 import type { OrderPreviewResponse, PendingOperation } from "@/api/types";
 
 export const BUY_KINDS = new Set(["initial_buy", "reinvest_buy", "top_up_buy"]);
+export const SELL_KINDS = new Set(["manual_sell"]);
 
 export function previewMatchesForm(
   preview: OrderPreviewResponse,
@@ -43,9 +44,11 @@ export function useOrderPreview({
   const [previewError, setPreviewError] = useState<string | null>(null);
 
   const isBuy = op != null && BUY_KINDS.has(op.kind);
+  const isSell = op != null && SELL_KINDS.has(op.kind);
+  const previewEnabled = isBuy || isSell;
 
   useEffect(() => {
-    if (!open || !op || !isBuy) {
+    if (!open || !op || !previewEnabled) {
       return;
     }
     if (!Number.isFinite(parsedPricePct) || parsedPricePct <= 0 || lots <= 0) {
@@ -93,7 +96,7 @@ export function useOrderPreview({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, isBuy, op, portfolioId, lots, parsedPricePct]);
+  }, [open, previewEnabled, op, portfolioId, lots, parsedPricePct]);
 
-  return { preview, previewLoading, previewError, isBuy };
+  return { preview, previewLoading, previewError, isBuy, isSell };
 }

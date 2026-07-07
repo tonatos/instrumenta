@@ -63,11 +63,17 @@ export function useTradingSync(portfolio: Portfolio) {
     onSuccess: (data) => afterMutation(data, { refreshPlan: true }),
   });
 
+  const dismissMutation = useMutation({
+    mutationFn: (opId: string) => api.dismissManualSell(portfolio.id, opId),
+    onSuccess: (data) => afterMutation(data),
+  });
+
   const isPending =
     confirmMutation.isPending ||
     cancelMutation.isPending ||
     cancelBatchMutation.isPending ||
-    putOfferMutation.isPending;
+    putOfferMutation.isPending ||
+    dismissMutation.isPending;
 
   return {
     ...syncQuery,
@@ -75,6 +81,7 @@ export function useTradingSync(portfolio: Portfolio) {
     cancelMutation,
     cancelBatchMutation,
     putOfferMutation,
+    dismissMutation,
     isPending,
     parseApiError,
   };

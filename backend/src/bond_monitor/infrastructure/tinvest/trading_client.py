@@ -261,6 +261,9 @@ class OrderState:
     initial_order_price_rub: Rub | None
     total_order_amount_rub: Rub | None
     order_date: datetime | None
+    request_uid: str = ""
+    price_pct: PriceUnitPct | None = None
+    initial_commission_rub: Rub | None = None
 
 
 @dataclass(frozen=True)
@@ -891,23 +894,37 @@ def post_market_sell_order(
     )
 
 
-def get_order_state(
-    token: str,
-    account_kind: AccountKind,
+def _order_limit_price_pct_from_state(
+    state: ProtoOrderState,
     *,
-    account_id: str,
-    order_id: str,
-) -> OrderState:
-    """Статус заявки на бирже (`EXECUTION_REPORT_STATUS_*`)."""
-    with _open_client(token, account_kind) as client:
-        state: ProtoOrderState = client.orders.get_order_state(
-            account_id=account_id, order_id=order_id
-        )
+    face_value: float | None,
+) -> PriceUnitPct | None:
+    """Лимитная цена заявки в % от номинала.
 
+  T-Invest в ``initial_security_price`` для облигаций возвращает чистую цену
+  **в рублях за 1 бумагу**, а не пункты/% (см. table_order_currency).
+    """
+    limit_rub = quotation_to_float(state.initial_security_price)
+    if limit_rub is None:
+        return None
+    if face_value is not None and face_value > 0:
+        return bond_clean_price_pct_from_rub(clean_price_rub=limit_rub, face_value=face_value)
+    return PriceUnitPct(limit_rub)
+
+
+def _order_state_from_proto(
+    state: ProtoOrderState,
+    *,
+    face_value: float | None = None,
+) -> OrderState:
     executed_pct: PriceUnitPct | None = None
     val = quotation_to_float(state.executed_order_price)
     if val is not None:
+        # executed_order_price для облигаций приходит в % от номинала
         executed_pct = PriceUnitPct(val)
+
+    limit_pct = _order_limit_price_pct_from_state(state, face_value=face_value)
+
     return OrderState(
         order_id=state.order_id,
         execution_report_status=getattr(
@@ -921,7 +938,73 @@ def get_order_state(
         initial_order_price_rub=money_value_to_rub(state.initial_order_price),
         total_order_amount_rub=money_value_to_rub(state.total_order_amount),
         order_date=state.order_date,
+        request_uid=str(state.order_request_id or ""),
+        price_pct=limit_pct,
+        initial_commission_rub=money_value_to_rub(state.initial_commission),
     )
+
+
+def get_order_state(
+    token: str,
+    account_kind: AccountKind,
+    *,
+    account_id: str,
+    order_id: str,
+    face_value: float | None = None,
+) -> OrderState:
+    """Статус заявки на бирже (`EXECUTION_REPORT_STATUS_*`)."""
+    with _open_client(token, account_kind) as client:
+        state: ProtoOrderState = client.orders.get_order_state(
+            account_id=account_id, order_id=order_id
+        )
+        resolved_face = face_value
+        if resolved_face is None and state.figi:
+            resolved_face = _fetch_bond_nominal_rub(
+                client,
+                figi=state.figi,
+                instrument_uid=state.instrument_uid or "",
+            )
+
+    return _order_state_from_proto(state, face_value=resolved_face)
+
+
+def get_active_orders(
+    token: str,
+    account_kind: AccountKind,
+    *,
+    account_id: str,
+) -> list[OrderState]:
+    """Активные заявки на счёте (NEW и PARTIALLYFILL)."""
+    from t_tech.invest.exceptions import RequestError
+    from t_tech.invest.schemas import OrderExecutionReportStatus
+
+    active_statuses = [
+        OrderExecutionReportStatus.EXECUTION_REPORT_STATUS_NEW,
+        OrderExecutionReportStatus.EXECUTION_REPORT_STATUS_PARTIALLYFILL,
+    ]
+    try:
+        with _open_client(token, account_kind) as client:
+            resp = client.orders.get_orders(
+                account_id=account_id,
+                execution_status=active_statuses,
+            )
+            nominal_cache: dict[str, float | None] = {}
+            orders: list[OrderState] = []
+            for state in resp.orders:
+                figi = state.figi or ""
+                if figi not in nominal_cache:
+                    nominal_cache[figi] = _fetch_bond_nominal_rub(
+                        client,
+                        figi=figi,
+                        instrument_uid=state.instrument_uid or "",
+                    )
+                orders.append(
+                    _order_state_from_proto(state, face_value=nominal_cache[figi])
+                )
+    except RequestError as exc:
+        raise _map_request_error(exc, account_id=account_id) from exc
+
+    return orders
 
 
 def cancel_order(
@@ -1067,6 +1150,7 @@ __all__ = [
     "close_sandbox_account",
     "get_account_operations",
     "get_account_snapshot",
+    "get_active_orders",
     "get_order_state",
     "list_accounts",
     "make_request_uid",

@@ -214,12 +214,12 @@ class OrderUseCase:
             raise ValueError(f"Pending operation {op_id} not found or already completed")
         if op.kind == "put_offer_submit":
             raise ValueError("Put-offer operations cannot be previewed via order API")
-        if op.kind == "manual_sell":
-            raise ValueError("Sell operations are not supported by buy preview")
         if op.status == "in_progress":
             raise ValueError("Order already submitted and is in progress")
         if op.status == "blocked":
             raise ValueError(op.block_reason or "Operation is blocked")
+
+        direction: OrderDirection = "SELL" if op.kind == "manual_sell" else "BUY"
 
         order_lots = lots if lots is not None else op.lots
         order_price = price_pct if price_pct is not None else op.suggested_price_pct
@@ -268,7 +268,7 @@ class OrderUseCase:
                 account_id=account_id,
                 figi=op.figi,
                 instrument_uid=instrument_uid,
-                direction="BUY",
+                direction=direction,
                 lots=Lots(order_lots),
                 price_pct=PriceUnitPct(order_price),
                 face_value=face_value,
@@ -293,7 +293,12 @@ class OrderUseCase:
 
         required_cash = broker_total if broker_total is not None else local_total
         money_rub = float(snapshot.money_rub)
-        sufficient_cash = money_rub + 0.01 >= required_cash
+        if direction == "SELL":
+            position = next((p for p in portfolio.positions if p.isin == op.isin), None)
+            actual = position.actual_lots if position and position.actual_lots is not None else 0
+            sufficient_cash = order_lots <= actual
+        else:
+            sufficient_cash = money_rub + 0.01 >= required_cash
 
         return OrderPreviewResult(
             order_lots=order_lots,

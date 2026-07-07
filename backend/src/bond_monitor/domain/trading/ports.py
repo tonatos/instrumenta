@@ -57,3 +57,19 @@ class BrokerOperation:
     quantity: int
     price_pct: PriceUnitPct | None
     commission_rub: Rub | None
+
+
+@dataclass(frozen=True)
+class BrokerActiveOrder:
+    """Активная заявка на счёте брокера (NEW / PARTIALLYFILL)."""
+
+    order_id: str
+    request_uid: str
+    figi: str
+    direction: str
+    lots_requested: int
+    lots_executed: int
+    status: str
+    price_pct: float | None
+    total_order_amount_rub: float | None
+    initial_commission_rub: float | None
