@@ -27,6 +27,13 @@ from bond_monitor.domain.trading.pending_operations import (
     sweep_completed_pending,
     sweep_non_api_tradable_pending,
 )
+from bond_monitor.domain.trading.position_lifecycle import (
+    apply_filled_reinvest_buys,
+    close_matured_positions,
+    ensure_reinvest_position,
+    find_reinvest_slot_for_op,
+    reinvest_source_for_slot,
+)
 from bond_monitor.domain.trading.reconciler import (
     AttachValidation,
     detect_top_up,
@@ -731,8 +738,10 @@ class TradingService:
 
         reconciliation = reconcile_positions(portfolio, snapshot, operations)
         self._refresh_trade_record_states(portfolio, token)
-        sweep_completed_pending(portfolio)
         universe_by_isin = {b.isin: b for b in universe}
+        apply_filled_reinvest_buys(portfolio, universe_by_isin, today)
+        close_matured_positions(portfolio, snapshot, today)
+        sweep_completed_pending(portfolio)
         _refresh_position_figis_from_universe(portfolio, universe_by_isin)
         sweep_non_api_tradable_pending(portfolio, universe_by_isin)
         api_trade_warnings = api_trade_position_warnings(portfolio, universe_by_isin)
@@ -1058,6 +1067,25 @@ class TradingService:
         if order_price is None:
             raise ValueError("Price is required")
 
+        bond = next((b for b in universe if b.isin == op.isin), None)
+
+        if op.kind == "reinvest_buy":
+            slot = find_reinvest_slot_for_op(portfolio, plan.resolved_slots, op)
+            if slot is None:
+                raise ValueError("Reinvestment slot not found for this operation")
+            if bond is None:
+                raise ValueError(f"Bond {op.isin} not found in universe")
+            ensure_reinvest_position(
+                portfolio,
+                bond,
+                lots=order_lots,
+                source=reinvest_source_for_slot(slot),
+                figi=op.figi,
+                today=today,
+                purchase_price_pct=float(order_price),
+            )
+            await self._repo.save(portfolio)
+
         instrument_uid = _position_instrument_uid(snapshot, op.figi)
         try:
             trade = ensure_order_instrument(
@@ -1081,7 +1109,8 @@ class TradingService:
             figi=op.figi,
         )
 
-        bond = next((b for b in universe if b.isin == op.isin), None)
+        if bond is None:
+            bond = next((b for b in universe if b.isin == op.isin), None)
         face_value = bond.face_value if bond else 1000.0
         lot_size = bond.lot_size if bond else 1
         aci_rub = (bond.accrued_interest or 0.0) if bond else (op.aci_rub_per_bond or 0.0)

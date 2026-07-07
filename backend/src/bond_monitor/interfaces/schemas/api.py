@@ -85,6 +85,7 @@ class PortfolioResponse(BaseModel):
     account_id: str | None = None
     account_kind: str | None = None
     positions_count: int
+    closed_positions_count: int = 0
     data: dict[str, Any] = Field(default_factory=dict)
 
 

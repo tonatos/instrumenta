@@ -57,6 +57,21 @@ const SOURCE_LABELS: Record<string, string> = {
   reinvest_coupon_cash: "Реинв. купоны",
 };
 
+const POSITION_STATUS_LABELS: Record<string, string> = {
+  pending: "Ожидает",
+  active: "Активна",
+  drift: "Расхождение",
+  closed: "Закрыта",
+};
+
+function isClosedPosition(pos: PortfolioPosition): boolean {
+  return pos.status === "closed" || pos.closed_at != null;
+}
+
+function openPositionsCount(positions: PortfolioPosition[]): number {
+  return positions.filter((p) => !isClosedPosition(p)).length;
+}
+
 function portfolioInvestedCapitalRub(portfolio: Portfolio): number {
   return portfolio.initial_amount_rub + (portfolio.data?.acknowledged_top_ups_rub ?? 0);
 }
@@ -168,6 +183,13 @@ function PositionsTab({
   const [addLots, setAddLots] = useState(1);
   const [selectedIsin, setSelectedIsin] = useState<string | null>(null);
   const [detailSecid, setDetailSecid] = useState<string | null>(null);
+  const [showClosed, setShowClosed] = useState(false);
+
+  const visiblePositions = useMemo(
+    () => (showClosed ? positions : positions.filter((p) => !isClosedPosition(p))),
+    [positions, showClosed],
+  );
+  const closedCount = positions.length - openPositionsCount(positions);
 
   const removeMutation = useMutation({
     mutationFn: (isin: string) => api.removePosition(portfolioId, isin),
@@ -199,9 +221,23 @@ function PositionsTab({
 
   return (
     <div className="space-y-4">
-      {positions.length === 0 ? (
+      {isTrading && closedCount > 0 && (
+        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={showClosed}
+            onChange={(e) => setShowClosed(e.target.checked)}
+            data-testid="show-closed-positions"
+          />
+          Показать закрытые ({closedCount})
+        </label>
+      )}
+
+      {visiblePositions.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-          Позиций нет — воспользуйтесь «Автосостав» или добавьте бумаги вручную
+          {positions.length > 0 && !showClosed
+            ? "Нет активных позиций — включите «Показать закрытые»"
+            : "Позиций нет — воспользуйтесь «Автосостав» или добавьте бумаги вручную"}
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -209,6 +245,9 @@ function PositionsTab({
             <thead className="bg-muted/50">
               <tr>
                 <th className="px-3 py-2 text-left font-semibold">Бумага</th>
+                {isTrading && (
+                  <th className="px-3 py-2 text-left font-semibold">Статус</th>
+                )}
                 <th className="px-3 py-2 text-right font-semibold">
                   {isTrading ? "Пл / Фк" : "Лотов"}
                 </th>
@@ -219,16 +258,26 @@ function PositionsTab({
               </tr>
             </thead>
             <tbody>
-              {positions.map((pos) => (
+              {visiblePositions.map((pos) => {
+                const status = pos.status ?? (isClosedPosition(pos) ? "closed" : "active");
+                return (
                 <tr
                   key={pos.isin}
-                  className="cursor-pointer border-t border-border hover:bg-muted/20"
+                  data-testid={`position-row-${pos.isin}`}
+                  data-status={status}
+                  className={cn(
+                    "cursor-pointer border-t border-border hover:bg-muted/20",
+                    status === "closed" && "text-muted-foreground opacity-70",
+                  )}
                   onClick={() => setDetailSecid(pos.secid)}
                 >
                   <td className="px-3 py-2">
                     <button
                       type="button"
-                      className="max-w-[180px] truncate text-left font-medium hover:underline"
+                      className={cn(
+                        "max-w-[180px] truncate text-left font-medium hover:underline",
+                        status === "closed" && "line-through",
+                      )}
                       onClick={(e) => {
                         e.stopPropagation();
                         setDetailSecid(pos.secid);
@@ -238,6 +287,24 @@ function PositionsTab({
                     </button>
                     <p className="text-muted-foreground">{pos.secid}</p>
                   </td>
+                  {isTrading && (
+                    <td className="px-3 py-2">
+                      <Badge
+                        variant={
+                          status === "active"
+                            ? "default"
+                            : status === "pending"
+                              ? "secondary"
+                              : status === "drift"
+                                ? "destructive"
+                                : "outline"
+                        }
+                        className="text-[10px] font-normal"
+                      >
+                        {POSITION_STATUS_LABELS[status] ?? status}
+                      </Badge>
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-right font-medium">
                     {isTrading && pos.actual_lots != null ? (
                       <Tooltip
@@ -284,7 +351,8 @@ function PositionsTab({
                     </td>
                   )}
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -959,9 +1027,9 @@ export function PortfolioPage() {
             <TabsList className="w-full sm:w-auto">
               <TabsTrigger value="positions">
                 Позиции
-                {positions.length > 0 && (
+                {openPositionsCount(positions) > 0 && (
                   <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-mono">
-                    {positions.length}
+                    {openPositionsCount(positions)}
                   </span>
                 )}
               </TabsTrigger>

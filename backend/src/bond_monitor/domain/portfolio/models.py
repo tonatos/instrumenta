@@ -202,6 +202,12 @@ class PortfolioPosition:
     # (покупка ещё не подтверждена биржей, или произошла частичная
     # продажа) — расхождение подсвечивается в UI.
     actual_lots: int | None = None
+    # Дата архивации позиции (погашение / полная продажа) в TRADING.
+    closed_at: date | None = None
+
+    @property
+    def is_closed(self) -> bool:
+        return self.closed_at is not None
 
     @property
     def bonds_count(self) -> int:
@@ -248,6 +254,7 @@ class PortfolioPosition:
             "put_offer_decision": self.put_offer_decision.value,
             "figi": self.figi,
             "actual_lots": self.actual_lots,
+            "closed_at": self.closed_at.isoformat() if self.closed_at else None,
         }
 
     @classmethod
@@ -304,6 +311,9 @@ class PortfolioPosition:
             ),
             figi=(str(data["figi"]) if data.get("figi") else None),
             actual_lots=(int(data["actual_lots"]) if data.get("actual_lots") is not None else None),
+            closed_at=(
+                date.fromisoformat(str(data["closed_at"])) if data.get("closed_at") else None
+            ),
         )
 
 

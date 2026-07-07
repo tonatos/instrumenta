@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio
 from bond_monitor.domain.portfolio.planner import PortfolioPlan
+from bond_monitor.domain.portfolio.position_status import open_positions, position_to_api_dict
 from bond_monitor.domain.shared.money import bond_clean_price_pct_from_rub
 from bond_monitor.domain.trading.operation_labels import (
     operation_state_label,
@@ -56,8 +59,15 @@ def bond_to_response(bond: BondRecord) -> BondResponse:
     )
 
 
-def portfolio_to_response(portfolio: Portfolio) -> PortfolioResponse:
+def portfolio_to_response(portfolio: Portfolio, *, today: date | None = None) -> PortfolioResponse:
+    today = today or date.today()
     d = portfolio.to_dict()
+    d["positions"] = [
+        position_to_api_dict(p, is_trading=portfolio.is_trading, today=today)
+        for p in portfolio.positions
+    ]
+    open_count = len(open_positions(portfolio.positions))
+    d["closed_positions_count"] = len(portfolio.positions) - open_count
     return PortfolioResponse(
         id=portfolio.id,
         name=portfolio.name,
@@ -68,7 +78,8 @@ def portfolio_to_response(portfolio: Portfolio) -> PortfolioResponse:
         mode=portfolio.mode.value,
         account_id=portfolio.account_id,
         account_kind=portfolio.account_kind.value if portfolio.account_kind else None,
-        positions_count=len(portfolio.positions),
+        positions_count=open_count,
+        closed_positions_count=len(portfolio.positions) - open_count,
         data=d,
     )
 

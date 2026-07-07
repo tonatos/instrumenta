@@ -38,6 +38,7 @@ from bond_monitor.domain.portfolio.policies import (
     DEFAULT_PORTFOLIO_ALLOCATION_POLICY,
     BondSelectionContext,
 )
+from bond_monitor.domain.portfolio.position_status import open_positions
 from bond_monitor.domain.portfolio.selection import (
     api_tradable_filter,
     bond_eligibility_reason,
@@ -971,7 +972,9 @@ def _invested_capital_baseline(
     if account_snapshot_money_rub is None:
         return portfolio.initial_amount_rub
 
-    deployed = sum(_position_cost_basis(position) for position in portfolio.positions)
+    deployed = sum(
+        _position_cost_basis(position) for position in open_positions(portfolio.positions)
+    )
     # Факт на счёте: купленные бумаги + свободный кэш. Это и есть вложенный
     # капитал; метаданные acknowledged_top_ups могут завышаться (отменённые
     # batch, частичное исполнение) или отставать (покупки вне batch).
@@ -1015,8 +1018,10 @@ def _calculate_plan_expected_xirr(
     cashflow: list[tuple[date, float]] = []
 
     if account_snapshot_money_rub is not None:
-        for position in portfolio.positions:
+        for position in open_positions(portfolio.positions):
             if position.source != PositionSourceType.INITIAL:
+                continue
+            if position.is_closed:
                 continue
             cost = _position_cost_basis(position)
             if cost > 0 and position.purchase_date <= horizon:
@@ -1174,9 +1179,11 @@ def build_plan(
         if slot.source_position_isin:
             saved_slots_by_source[slot.source_position_isin] = slot
 
-    worklist: list[tuple[PortfolioPosition, int]] = [(p, 0) for p in portfolio.positions]
+    worklist: list[tuple[PortfolioPosition, int]] = [
+        (p, 0) for p in open_positions(portfolio.positions)
+    ]
     # Подтягиваем окна пут-оферт из live-универса в сохранённые позиции.
-    for pos in portfolio.positions:
+    for pos in open_positions(portfolio.positions):
         live_bond = universe_by_isin.get(pos.isin)
         if live_bond is not None:
             _sync_put_offer_from_bond(pos, live_bond)
@@ -2126,7 +2133,9 @@ def _finalize_plan_totals(
     cash = _plan_initial_cash(portfolio, account_snapshot_money_rub)
     if account_snapshot_money_rub is not None:
         initial_spent = 0.0
-        for position in portfolio.positions:
+        for position in open_positions(portfolio.positions):
+            if position.is_closed:
+                continue
             if (
                 position.source != PositionSourceType.INITIAL
                 or position.purchase_date > portfolio.horizon_date
@@ -2205,7 +2214,7 @@ def _finalize_plan_totals(
     # «годовая доходность текущих позиций к их собственным погашениям»;
     # она НЕ описывает ожидаемую доходность портфеля за горизонт при
     # наличии реинвестиций (нужно смотреть effective_annual_return_pct).
-    weighted_initial = _weighted_ytm(portfolio.positions, universe_by_isin)
+    weighted_initial = _weighted_ytm(open_positions(portfolio.positions), universe_by_isin)
     if weighted_initial is not None:
         plan.weighted_ytm_net_pct = round(weighted_initial, 2)
 
@@ -2477,7 +2486,7 @@ def distribute_top_up(
 
     # Текущее распределение по ISIN (оценка по рыночной стоимости позиций).
     current_value_by_isin: dict[str, float] = {}
-    for p in portfolio.positions:
+    for p in open_positions(portfolio.positions):
         bond = next((b for b in scored if b.isin == p.isin), None)
         unit_cost = bond.price_per_lot_rub if bond and bond.price_per_lot_rub else 0.0
         if unit_cost <= 0:
@@ -2494,7 +2503,7 @@ def distribute_top_up(
 
     allocations: list[TopUpAllocation] = []
     remaining = top_up_amount_rub
-    existing_count = len({p.isin for p in portfolio.positions})
+    existing_count = len({p.isin for p in open_positions(portfolio.positions)})
 
     for bond in scored:
         if remaining < min_per_position and existing_count + len(allocations) >= MIN_AUTO_POSITIONS:

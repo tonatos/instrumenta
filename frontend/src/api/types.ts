@@ -49,6 +49,8 @@ export interface ConfigResponse {
   production_configured: boolean;
 }
 
+export type PositionStatus = "pending" | "active" | "drift" | "closed";
+
 export interface PortfolioPosition {
   isin: string;
   secid: string;
@@ -68,6 +70,8 @@ export interface PortfolioPosition {
   put_offer_decision: string;
   figi: string | null;
   actual_lots: number | null;
+  closed_at?: string | null;
+  status?: PositionStatus;
 }
 
 export interface ReinvestmentSlotCandidate {
@@ -143,6 +147,7 @@ export interface Portfolio {
   account_id: string | null;
   account_kind: string | null;
   positions_count: number;
+  closed_positions_count?: number;
   api_trade_only?: boolean;
   data: PortfolioData;
 }
