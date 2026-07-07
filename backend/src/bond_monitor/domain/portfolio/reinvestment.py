@@ -349,3 +349,51 @@ def select_replacement(
         key_rate=key_rate,
         tax_rate=tax_rate,
     )
+
+
+def reinvest_slot_stable_key(slot: ReinvestmentSlot) -> str:
+    """Стабильный ключ слота (не зависит от выбранной замены)."""
+    if slot.source_position_isin:
+        return slot.source_position_isin + slot.trigger_date.isoformat()
+    target = slot.confirmed_isin or slot.suggested_isin or ""
+    return target + slot.trigger_date.isoformat()
+
+
+def reinvest_slot_stable_id(portfolio: Portfolio, slot: ReinvestmentSlot) -> str:
+    from bond_monitor.domain.trading.ids import stable_id
+
+    return stable_id(portfolio.id, "reinvest_slot", reinvest_slot_stable_key(slot))
+
+
+def reinvest_buy_stable_id(portfolio: Portfolio, slot: ReinvestmentSlot) -> str:
+    from bond_monitor.domain.trading.ids import stable_id
+
+    return stable_id(portfolio.id, "reinvest_buy", reinvest_slot_stable_key(slot))
+
+
+def refresh_due_reinvest_slot_suggestions(
+    slots: Sequence[ReinvestmentSlot],
+    *,
+    portfolio: Portfolio,
+    universe: Sequence[BondRecord],
+    today: date,
+    key_rate: float,
+    tax_rate: float,
+) -> None:
+    """Пересчитать ``suggested_isin`` для наступивших слотов без ручного override."""
+    for slot in slots:
+        if slot.confirmed_isin or slot.trigger_date > today:
+            continue
+        suggested, _note = select_replacement(
+            universe,
+            target_date=slot.purchase_date,
+            profile=portfolio.risk_profile,
+            amount=slot.expected_cash_rub,
+            horizon_date=portfolio.horizon_date,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            api_trade_only=portfolio.api_trade_only,
+        )
+        if suggested is not None:
+            slot.suggested_isin = suggested.isin
+            slot.suggested_name = suggested.name

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
+
 from bond_monitor.domain.bonds.models import BondRecord, RiskLevel
 from bond_monitor.domain.portfolio.models import (
     Portfolio,
@@ -143,3 +145,55 @@ def test_distribute_marks_existing_positions() -> None:
         match = next((a for a in allocs if a.isin == "RU000A001"), None)
         if match:
             assert match.is_existing_position is True
+
+
+def test_top_up_total_budget_avoids_double_counting_acknowledged() -> None:
+    from bond_monitor.domain.portfolio.top_up_distribution import top_up_total_budget_rub
+
+    p = _portfolio(initial=20_000.0)
+    p.acknowledged_top_ups_rub = 180_000.0
+    assert top_up_total_budget_rub(p, 180_000.0) == pytest.approx(200_000.0)
+
+
+def test_distribute_large_top_up_adds_new_positions_not_only_existing() -> None:
+    """20k старт + 3 позиции + 180k top-up → новые ISIN при ребалансировке."""
+    p = _portfolio(initial=20_000.0)
+    p.acknowledged_top_ups_rub = 180_000.0
+    existing_isins = [f"RU000EX{i}" for i in range(3)]
+    p.positions = [
+        PortfolioPosition(
+            isin=isin,
+            secid=isin[:6],
+            name=f"Existing {i}",
+            lots=5,
+            lot_size=1,
+            purchase_clean_price_pct=100.0,
+            purchase_dirty_price_rub=1000.0,
+            purchase_aci_rub=0.0,
+            purchase_date=date(2025, 1, 1),
+            purchase_amount_rub=5_000.0,
+            coupon_rate=10.0,
+            face_value=1000.0,
+            maturity_date=date(2026, 12, 31),
+            offer_date=None,
+            coupon_period_days=180,
+            source=PositionSourceType.INITIAL,
+        )
+        for i, isin in enumerate(existing_isins)
+    ]
+    universe = [_bond(isin) for isin in existing_isins]
+    universe.extend(_bond(f"RU000NW{i:02d}") for i in range(8))
+
+    allocs, _ = distribute_top_up(
+        portfolio=p,
+        universe=universe,
+        top_up_amount_rub=180_000.0,
+        today=date(2025, 1, 1),
+        key_rate=16.0,
+        tax_rate=0.13,
+    )
+
+    assert allocs
+    new_allocs = [a for a in allocs if not a.is_existing_position]
+    assert new_allocs, "крупный top-up должен добавить новые бумаги, не только докупку existing"
+    assert sum(a.estimated_amount_rub for a in allocs) <= 180_000.0

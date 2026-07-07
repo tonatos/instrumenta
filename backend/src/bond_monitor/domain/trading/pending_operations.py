@@ -56,6 +56,10 @@ from bond_monitor.domain.trading.policies import (
     suggested_buy_limit_price_pct,
 )
 from bond_monitor.domain.portfolio.put_offer import put_offer_submit_due
+from bond_monitor.domain.portfolio.reinvestment import (
+    reinvest_buy_stable_id,
+    reinvest_slot_stable_id,
+)
 from bond_monitor.domain.trading.ids import stable_id
 from bond_monitor.domain.trading.ports import BrokerSnapshot
 
@@ -490,9 +494,7 @@ def _gen_reinvest_buys(
         name = bond.name if bond else f"Реинвест слота {format_date(slot.trigger_date)}"
         result.append(
             PendingOperation(
-                id=stable_id(
-                    portfolio.id, "reinvest_buy", target_isin + slot.trigger_date.isoformat()
-                ),
+                id=reinvest_buy_stable_id(portfolio, slot),
                 kind="reinvest_buy",
                 isin=target_isin,
                 name=name,
@@ -505,9 +507,7 @@ def _gen_reinvest_buys(
                     f"{format_date(slot.trigger_date)}: ожидается "
                     f"{slot.expected_cash_rub:,.0f} ₽"
                 ),
-                slot_id=stable_id(
-                    portfolio.id, "reinvest_slot", target_isin + slot.trigger_date.isoformat()
-                ),
+                slot_id=reinvest_slot_stable_id(portfolio, slot),
             )
         )
     return result

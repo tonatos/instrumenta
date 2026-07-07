@@ -225,7 +225,6 @@ def test_cancel_top_up_batch_rolls_back() -> None:
 
     assert portfolio.positions[0].lots == 5
     assert portfolio.acknowledged_top_ups_rub == 0.0
-    assert portfolio.last_top_up_processed_at is not None
-    assert portfolio.last_top_up_processed_at != "2025-01-01T00:00:00+00:00"
+    assert portfolio.last_top_up_processed_at == "2025-01-01T00:00:00+00:00"
     assert not portfolio.pending_operations
     assert "batch-1" not in portfolio.top_up_batch_meta

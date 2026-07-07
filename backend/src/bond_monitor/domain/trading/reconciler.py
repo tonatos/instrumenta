@@ -105,6 +105,31 @@ class TopUpDetection:
         return self.pending_top_up_rub > 100.0 and self.available_for_distribution_rub > 100.0
 
 
+# Минимум свободного кэша для автораспределения без свежего INPUT
+# (например после отмены партии top-up).
+ORPHAN_CASH_TOP_UP_MIN_RUB = 5_000.0
+
+
+def top_up_amount_to_distribute(
+    detection: TopUpDetection,
+    *,
+    free_cash_rub: float,
+    min_orphan_cash_rub: float = ORPHAN_CASH_TOP_UP_MIN_RUB,
+) -> tuple[float, str | None]:
+    """Сколько рублей распределить при sync: INPUT после watermark или «осиротевший» кэш."""
+    if free_cash_rub <= 100.0:
+        return 0.0, None
+    if detection.has_pending_top_up:
+        amount = min(float(detection.available_for_distribution_rub), free_cash_rub)
+        return amount, None
+    if free_cash_rub >= min_orphan_cash_rub:
+        return free_cash_rub, (
+            f"Свободный кэш {free_cash_rub:,.0f} ₽ на счёте без активной партии top-up — "
+            "автораспределение."
+        )
+    return 0.0, None
+
+
 # ── Validation ───────────────────────────────────────────────────────────────
 
 
@@ -419,8 +444,10 @@ __all__ = [
     "ReconciliationResult",
     "TOP_UP_COST_BUFFER",
     "TopUpDetection",
+    "ORPHAN_CASH_TOP_UP_MIN_RUB",
     "detect_top_up",
     "reconcile_acknowledged_top_ups",
     "reconcile_positions",
+    "top_up_amount_to_distribute",
     "validate_account_for_attach",
 ]

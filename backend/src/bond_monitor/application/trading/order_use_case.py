@@ -11,6 +11,7 @@ from bond_monitor.application.trading.types import OrderPreviewResult, TradingSy
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio, PutOfferDecision
 from bond_monitor.domain.portfolio.planner import build_plan
+from bond_monitor.domain.portfolio.reinvestment import refresh_due_reinvest_slot_suggestions
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, Rub, order_amount_rub
 from bond_monitor.domain.trading.models import OrderDirection, PendingOperation, TradeRecord
 from bond_monitor.domain.trading.pending_operations import compute_pending_operations
@@ -202,6 +203,14 @@ class OrderUseCase:
             account_snapshot_money_rub=snapshot.money_rub,
             assume_best_put_outcome=False,
         )
+        refresh_due_reinvest_slot_suggestions(
+            plan.resolved_slots,
+            portfolio=portfolio,
+            universe=universe,
+            today=today,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+        )
         op = self._find_pending_op(
             portfolio,
             broker_snapshot,
@@ -343,6 +352,14 @@ class OrderUseCase:
             tax_rate=tax_rate,
             account_snapshot_money_rub=snapshot.money_rub,
             assume_best_put_outcome=False,
+        )
+        refresh_due_reinvest_slot_suggestions(
+            plan.resolved_slots,
+            portfolio=portfolio,
+            universe=universe,
+            today=today,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
         )
         op = self._find_pending_op(
             portfolio,
@@ -582,6 +599,5 @@ class OrderUseCase:
             key_rate=key_rate,
             tax_rate=tax_rate,
             today=today,
-            skip_auto_top_up=True,
             block_non_api_tradable_pending=block_non_api_tradable_pending,
         )

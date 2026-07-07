@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date
 from typing import Any
 
 from bond_monitor.domain.bonds.models import BondRecord
@@ -158,9 +158,7 @@ def cancel_top_up_batch(portfolio: Portfolio, batch_id: str) -> None:
     portfolio.acknowledged_top_ups_rub = max(
         0.0, portfolio.acknowledged_top_ups_rub - meta.distributed_amount_rub
     )
-    # Помечаем текущие INPUT как обработанные, чтобы auto-apply на следующем
-    # sync не создал ту же партию заново.
-    portfolio.last_top_up_processed_at = datetime.now(UTC).isoformat()
+    portfolio.last_top_up_processed_at = meta.previous_watermark
     del portfolio.top_up_batch_meta[batch_id]
 
 

@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, X } from "lucide-react";
 import { api } from "@/api/client";
-import type { Bond, PortfolioPosition } from "@/api/types";
+import type { Bond, PendingOperation, PortfolioPosition } from "@/api/types";
 import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
 import { POSITION_STATUS_LABELS, SOURCE_LABELS } from "@/features/portfolio/labels";
 import { SellPositionDialog } from "@/features/portfolio/trading/SellPositionDialog";
@@ -12,6 +12,22 @@ import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
+
+const ACTIVE_SELL_STATUSES = new Set(["action_required", "in_progress"]);
+
+function manualSellLabel(op: PendingOperation): string {
+  if (op.status === "in_progress") {
+    return `На бирже · ${op.lots} л.`;
+  }
+  return `В очереди · ${op.lots} л.`;
+}
+
+function manualSellHint(op: PendingOperation): string {
+  if (op.status === "in_progress") {
+    return "Заявка на продажу уже выставлена на бирже — отмените её в очереди действий";
+  }
+  return "Продажа в очереди — подтвердите или уберите в блоке «Очередь действий»";
+}
 
 export function PositionsTab({
   positions,
@@ -37,6 +53,25 @@ export function PositionsTab({
 
   const canSellInSandbox =
     isTrading && accountKind === "sandbox";
+
+  const { data: tradingSync } = useQuery({
+    queryKey: ["trading-sync", portfolioId],
+    queryFn: () => api.syncPortfolio(portfolioId),
+    enabled: canSellInSandbox,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const manualSellByIsin = useMemo(() => {
+    const map = new Map<string, PendingOperation>();
+    for (const op of tradingSync?.pending_operations ?? []) {
+      if (op.kind !== "manual_sell" || !ACTIVE_SELL_STATUSES.has(op.status)) {
+        continue;
+      }
+      map.set(op.isin, op);
+    }
+    return map;
+  }, [tradingSync?.pending_operations]);
 
   const visiblePositions = useMemo(
     () => (showClosed ? positions : positions.filter((p) => p.status !== "closed")),
@@ -121,6 +156,8 @@ export function PositionsTab({
               {visiblePositions.map((pos) => {
                 const status = pos.status ?? "active";
                 const bond = bondsByIsin.get(pos.isin);
+                const manualSell = manualSellByIsin.get(pos.isin);
+                const sellBlocked = manualSell != null;
                 return (
                 <tr
                   key={pos.isin}
@@ -150,20 +187,31 @@ export function PositionsTab({
                   </td>
                   {isTrading && (
                     <td className="px-3 py-2">
-                      <Badge
-                        variant={
-                          status === "active"
-                            ? "default"
-                            : status === "pending"
-                              ? "secondary"
-                              : status === "drift"
-                                ? "destructive"
-                                : "outline"
-                        }
-                        className="text-[10px] font-normal"
-                      >
-                        {POSITION_STATUS_LABELS[status] ?? status}
-                      </Badge>
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Badge
+                          variant={
+                            status === "active"
+                              ? "default"
+                              : status === "pending"
+                                ? "secondary"
+                                : status === "drift"
+                                  ? "destructive"
+                                  : "outline"
+                          }
+                          className="text-[10px] font-normal"
+                        >
+                          {POSITION_STATUS_LABELS[status] ?? status}
+                        </Badge>
+                        {manualSell && (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] font-normal"
+                            data-testid={`sell-pending-badge-${pos.isin}`}
+                          >
+                            {manualSell.status === "in_progress" ? "SELL на бирже" : "SELL в очереди"}
+                          </Badge>
+                        )}
+                      </div>
                     </td>
                   )}
                   <td
@@ -217,19 +265,34 @@ export function PositionsTab({
                   {canSellInSandbox && (
                     <td className="px-2 py-2">
                       {(pos.actual_lots ?? 0) > 0 && pos.status !== "closed" && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="h-7 px-2 text-xs"
-                          data-testid={`sell-position-${pos.isin}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSellPosition(pos);
-                          }}
-                        >
-                          Продать
-                        </Button>
+                        sellBlocked && manualSell ? (
+                          <Tooltip content={manualSellHint(manualSell)}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 max-w-[120px] truncate px-2 text-xs"
+                              data-testid={`sell-position-${pos.isin}`}
+                              disabled
+                            >
+                              {manualSellLabel(manualSell)}
+                            </Button>
+                          </Tooltip>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            data-testid={`sell-position-${pos.isin}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSellPosition(pos);
+                            }}
+                          >
+                            Продать
+                          </Button>
+                        )
                       )}
                     </td>
                   )}

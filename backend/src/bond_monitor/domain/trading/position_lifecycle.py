@@ -16,6 +16,10 @@ from bond_monitor.domain.portfolio.models import (
 )
 from bond_monitor.domain.trading.models import PendingOperation
 from bond_monitor.domain.portfolio.position_factory import position_from_bond
+from bond_monitor.domain.portfolio.reinvestment import (
+    reinvest_buy_stable_id,
+    reinvest_slot_stable_id,
+)
 from bond_monitor.domain.trading.ids import stable_id
 from bond_monitor.domain.trading.ports import BrokerSnapshot
 
@@ -53,11 +57,7 @@ def _reinvest_source_from_slot(slot: ReinvestmentSlot) -> PositionSourceType:
 
 
 def _reinvest_op_id(portfolio: Portfolio, slot: ReinvestmentSlot, target_isin: str) -> str:
-    return stable_id(
-        portfolio.id,
-        "reinvest_buy",
-        target_isin + slot.trigger_date.isoformat(),
-    )
+    return reinvest_buy_stable_id(portfolio, slot)
 
 
 def _open_position_for_isin(
@@ -84,16 +84,17 @@ def find_reinvest_slot_for_op(
     if not op.slot_id:
         return None
     for slot in slots:
-        target_isin = slot.confirmed_isin or slot.suggested_isin
-        if not target_isin:
-            continue
-        slot_id = stable_id(
-            portfolio.id,
-            "reinvest_slot",
-            target_isin + slot.trigger_date.isoformat(),
-        )
-        if slot_id == op.slot_id:
+        if reinvest_slot_stable_id(portfolio, slot) == op.slot_id:
             return slot
+        target_isin = slot.confirmed_isin or slot.suggested_isin
+        if target_isin:
+            legacy_id = stable_id(
+                portfolio.id,
+                "reinvest_slot",
+                target_isin + slot.trigger_date.isoformat(),
+            )
+            if legacy_id == op.slot_id:
+                return slot
     return None
 
 

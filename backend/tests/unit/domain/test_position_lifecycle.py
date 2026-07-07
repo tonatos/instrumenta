@@ -21,6 +21,7 @@ from bond_monitor.domain.trading.models import (
 )
 from bond_monitor.domain.portfolio.position_status import position_status
 from bond_monitor.domain.shared.money import Rub
+from bond_monitor.domain.portfolio.reinvestment import reinvest_buy_stable_id
 from bond_monitor.domain.trading.ids import stable_id
 from bond_monitor.domain.trading.position_lifecycle import (
     apply_filled_reinvest_buys,
@@ -245,7 +246,18 @@ def test_apply_filled_reinvest_buys_creates_position_from_fill() -> None:
     portfolio = _portfolio()
     target_isin = "RU000A002"
     trigger = date(2026, 6, 15)
-    op_id = stable_id(portfolio.id, "reinvest_buy", target_isin + trigger.isoformat())
+    portfolio.slots.append(
+        ReinvestmentSlot(
+            trigger_date=trigger,
+            trigger_reason=ReinvestmentTriggerReason.MATURITY,
+            expected_cash_rub=20_000.0,
+            suggested_isin=target_isin,
+            suggested_name="OFZ 2",
+            source_position_isin="RU000A001",
+        )
+    )
+    slot = portfolio.slots[0]
+    op_id = reinvest_buy_stable_id(portfolio, slot)
     portfolio.trade_records.append(
         TradeRecord(
             request_uid="uid-reinv",
@@ -260,16 +272,6 @@ def test_apply_filled_reinvest_buys_creates_position_from_fill() -> None:
             price_pct=95.0,
         )
     )
-    portfolio.slots.append(
-        ReinvestmentSlot(
-            trigger_date=trigger,
-            trigger_reason=ReinvestmentTriggerReason.MATURITY,
-            expected_cash_rub=20_000.0,
-            suggested_isin=target_isin,
-            suggested_name="OFZ 2",
-            source_position_isin="RU000A001",
-        )
-    )
     bond = _bond(isin=target_isin)
     created = apply_filled_reinvest_buys(
         portfolio,
@@ -280,3 +282,89 @@ def test_apply_filled_reinvest_buys_creates_position_from_fill() -> None:
     assert len(portfolio.positions) == 1
     assert portfolio.positions[0].isin == target_isin
     assert portfolio.positions[0].source == PositionSourceType.REINVEST_MATURITY
+
+
+def test_reinvest_buy_available_before_matured_position_closed() -> None:
+    """Погашенная позиция (actual_lots=0) ещё даёт reinvest_buy до close_matured."""
+    from bond_monitor.domain.portfolio.planner import build_plan
+    from bond_monitor.domain.trading.pending_operations import compute_pending_operations
+    from factories import make_account_snapshot, make_live_bond
+
+    today = date(2026, 7, 5)
+    maturing_isin = "RU000MAT01"
+    replacement_isin = "RU000REPL1"
+    maturing = make_live_bond(
+        isin=maturing_isin,
+        name="Maturing",
+        maturity=date(2026, 7, 1),
+        price=99.0,
+    )
+    maturing.figi = "FIGI_MAT"
+    replacement = make_live_bond(
+        isin=replacement_isin,
+        name="Replacement",
+        maturity=date(2027, 6, 1),
+        price=100.0,
+    )
+    replacement.figi = "FIGI_REPL"
+
+    portfolio = _portfolio(
+        positions=[
+            PortfolioPosition(
+                isin=maturing_isin,
+                secid="MAT01",
+                name="Maturing",
+                lots=5,
+                lot_size=1,
+                figi="FIGI_MAT",
+                actual_lots=0,
+                purchase_clean_price_pct=99.0,
+                purchase_dirty_price_rub=990.0,
+                purchase_aci_rub=0.0,
+                purchase_date=date(2026, 1, 1),
+                purchase_amount_rub=4_950.0,
+                coupon_rate=12.0,
+                face_value=1000.0,
+                maturity_date=date(2026, 7, 1),
+                offer_date=None,
+                coupon_period_days=182,
+                source=PositionSourceType.INITIAL,
+            )
+        ]
+    )
+    portfolio.trade_records.append(
+        TradeRecord(
+            request_uid="uid-buy",
+            account_id="acc-1",
+            account_kind=AccountKind.SANDBOX,
+            figi="FIGI_MAT",
+            direction="BUY",
+            lots=5,
+            status="EXECUTION_REPORT_STATUS_FILL",
+            lots_executed=5,
+        )
+    )
+    snapshot = make_account_snapshot(money_rub=5_000.0, fetched_at="2026-07-05T12:00:00+00:00")
+
+    plan = build_plan(
+        portfolio,
+        [maturing, replacement],
+        today=today,
+        key_rate=16.0,
+        tax_rate=0.13,
+        account_snapshot_money_rub=5_000.0,
+        assume_best_put_outcome=False,
+    )
+    pending = compute_pending_operations(
+        portfolio,
+        snapshot,
+        today,
+        universe=[maturing, replacement],
+        resolved_slots=plan.resolved_slots,
+    )
+    reinvest_ops = [op for op in pending if op.kind == "reinvest_buy"]
+    assert reinvest_ops, "должен появиться reinvest_buy до архивации позиции"
+
+    closed = close_matured_positions(portfolio, snapshot, today=today)
+    assert closed == 1
+    assert portfolio.positions[0].closed_at == today

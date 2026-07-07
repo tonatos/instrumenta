@@ -24,9 +24,11 @@ from bond_monitor.domain.trading.models import (
 )
 from bond_monitor.domain.shared.money import PriceUnitPct, Rub
 from bond_monitor.domain.trading.reconciler import (
+    TopUpDetection,
     detect_top_up,
     reconcile_acknowledged_top_ups,
     reconcile_positions,
+    top_up_amount_to_distribute,
     validate_account_for_attach,
 )
 from bond_monitor.infrastructure.tinvest.trading_client import (
@@ -315,6 +317,31 @@ def test_detect_top_up_limited_by_cash() -> None:
     assert result.pending_top_up_rub == 100_000.0
     # available ограничено реальным cash: 20 000 × (1 − 0.005) = 19 900
     assert result.available_for_distribution_rub == pytest.approx(19_900.0)
+
+
+def test_top_up_amount_to_distribute_prefers_fresh_input() -> None:
+    detection = TopUpDetection(
+        pending_top_up_rub=Rub(50_000.0),
+        available_for_distribution_rub=Rub(40_000.0),
+        input_operations=[],
+        from_date=date(2025, 1, 1),
+    )
+    amount, note = top_up_amount_to_distribute(detection, free_cash_rub=30_000.0)
+    assert amount == pytest.approx(30_000.0)
+    assert note is None
+
+
+def test_top_up_amount_to_distribute_orphan_cash_without_input() -> None:
+    detection = TopUpDetection(
+        pending_top_up_rub=Rub(0.0),
+        available_for_distribution_rub=Rub(0.0),
+        input_operations=[],
+        from_date=date(2025, 6, 1),
+    )
+    amount, note = top_up_amount_to_distribute(detection, free_cash_rub=182_000.0)
+    assert amount == pytest.approx(182_000.0)
+    assert note is not None
+    assert "Свободный кэш" in note
 
 
 def test_reconcile_acknowledged_top_ups_from_positions() -> None:

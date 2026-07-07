@@ -10,6 +10,7 @@ from bond_monitor.application.trading.types import TradingSyncResult
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio
 from bond_monitor.domain.portfolio.planner import PortfolioPlan, build_plan, distribute_top_up
+from bond_monitor.domain.portfolio.reinvestment import refresh_due_reinvest_slot_suggestions
 from bond_monitor.domain.trading.broker_orders import reconcile_active_broker_orders
 from bond_monitor.domain.trading.cash_constraints import available_cash_for_new_purchases_rub
 from bond_monitor.domain.trading.pending_operations import (
@@ -22,7 +23,7 @@ from bond_monitor.domain.trading.position_lifecycle import (
     apply_filled_reinvest_buys,
     close_matured_positions,
 )
-from bond_monitor.domain.trading.reconciler import detect_top_up, reconcile_positions
+from bond_monitor.domain.trading.reconciler import detect_top_up, reconcile_positions, top_up_amount_to_distribute
 from bond_monitor.domain.trading.top_up import (
     apply_top_up_distribution,
     has_active_top_up_batch,
@@ -161,7 +162,6 @@ class SyncUseCase:
         self._import_active_broker_orders(portfolio, token, universe_by_isin=universe_by_isin)
         self._refresh_trade_record_states(portfolio, token)
         apply_filled_reinvest_buys(portfolio, universe_by_isin, today)
-        close_matured_positions(portfolio, snapshot, today)
         sweep_completed_pending(portfolio)
         _refresh_position_figis_from_universe(portfolio, universe_by_isin)
         sweep_non_api_tradable_pending(portfolio, universe_by_isin)
@@ -172,41 +172,43 @@ class SyncUseCase:
         top_up_distributed_rub = 0.0
         top_up_notes: list[str] = []
 
-        if (
-            top_up.has_pending_top_up
-            and not has_active_top_up_batch(portfolio)
-            and not skip_auto_top_up
-        ):
+        if not has_active_top_up_batch(portfolio) and not skip_auto_top_up:
             free_cash = available_cash_for_new_purchases_rub(
                 float(snapshot.money_rub),
                 portfolio,
                 universe_by_isin,
             )
-            amount = min(float(top_up.available_for_distribution_rub), free_cash)
-            allocations, dist_notes = distribute_top_up(
-                portfolio=portfolio,
-                universe=universe,
-                top_up_amount_rub=amount,
-                today=today,
-                key_rate=key_rate,
-                tax_rate=tax_rate,
+            amount, orphan_note = top_up_amount_to_distribute(
+                top_up,
+                free_cash_rub=free_cash,
             )
-            if allocations:
-                batch_id = new_top_up_batch_id()
-                processed_at = datetime.now(UTC).isoformat()
-                distributed = sum(a.estimated_amount_rub for a in allocations)
-                apply_notes = apply_top_up_distribution(
-                    portfolio,
-                    allocations,
-                    distributed_amount_rub=distributed,
-                    batch_id=batch_id,
-                    processed_at_iso=processed_at,
-                    universe_by_isin=universe_by_isin,
+            if orphan_note:
+                top_up_notes.append(orphan_note)
+            if amount > 0:
+                allocations, dist_notes = distribute_top_up(
+                    portfolio=portfolio,
+                    universe=universe,
+                    top_up_amount_rub=amount,
                     today=today,
+                    key_rate=key_rate,
+                    tax_rate=tax_rate,
                 )
-                top_up_auto_applied = True
-                top_up_distributed_rub = distributed
-                top_up_notes = [*dist_notes, *apply_notes]
+                if allocations:
+                    batch_id = new_top_up_batch_id()
+                    processed_at = datetime.now(UTC).isoformat()
+                    distributed = sum(a.estimated_amount_rub for a in allocations)
+                    apply_notes = apply_top_up_distribution(
+                        portfolio,
+                        allocations,
+                        distributed_amount_rub=distributed,
+                        batch_id=batch_id,
+                        processed_at_iso=processed_at,
+                        universe_by_isin=universe_by_isin,
+                        today=today,
+                    )
+                    top_up_auto_applied = True
+                    top_up_distributed_rub = distributed
+                    top_up_notes = [*top_up_notes, *dist_notes, *apply_notes]
 
         plan = reuse_plan
         if plan is None or top_up_auto_applied:
@@ -220,6 +222,15 @@ class SyncUseCase:
                 assume_best_put_outcome=False,
             )
 
+        refresh_due_reinvest_slot_suggestions(
+            plan.resolved_slots,
+            portfolio=portfolio,
+            universe=universe,
+            today=today,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+        )
+
         pending = compute_pending_operations(
             portfolio,
             snapshot,
@@ -229,6 +240,8 @@ class SyncUseCase:
         )
         if block_non_api_tradable_pending is not None:
             block_non_api_tradable_pending(portfolio, token, pending, infra_snapshot)
+
+        close_matured_positions(portfolio, snapshot, today)
 
         top_up_after = detect_top_up(portfolio, operations, snapshot)
         portfolio.touch()
