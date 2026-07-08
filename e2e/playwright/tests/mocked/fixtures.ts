@@ -13,7 +13,7 @@ export const MOCK_CONFIG = {
   sandbox_configured: true,
   production_configured: false,
   auth_enabled: false,
-  telegram_bot_username: "",
+  telegram_oidc_configured: false,
 };
 
 export async function seedAuth(page: Page, token = "mock-e2e-token"): Promise<void> {

@@ -7,10 +7,11 @@ from pyinfra.operations import apt, docker, files, git, server
 
 APP_DIR = host.data.app_dir
 PROJECT_NAME = host.data.get("project_name", "bond-monitor")
-COMPOSE_FILES = host.data.get(
+COMPOSE_FILE_NAMES = host.data.get(
     "compose_files",
     ["docker-compose.yml", "docker-compose.prod.yml"],
 )
+COMPOSE_FILES = [f"{APP_DIR}/{name}" for name in COMPOSE_FILE_NAMES]
 GIT_REPO = host.data.git_repo
 GIT_BRANCH = host.data.get("git_branch", "main")
 
@@ -33,17 +34,6 @@ server.shell(
     commands=[
         "command -v docker >/dev/null 2>&1 || curl -fsSL https://get.docker.com | sh",
         "docker compose version >/dev/null 2>&1 || apt-get update && apt-get install -y docker-compose-plugin",
-    ],
-    _sudo=True,
-)
-
-# One-time migration from the old files.sync layout (no .git in app dir).
-server.shell(
-    name="Migrate legacy sync directory to git clone",
-    commands=[
-        f"test -d {APP_DIR}/.git && exit 0",
-        f"test -d {APP_DIR}/cache && mv {APP_DIR}/cache /tmp/bond-monitor-cache-migrate || true",
-        f"rm -rf {APP_DIR}",
     ],
     _sudo=True,
 )
@@ -87,8 +77,9 @@ files.template(
     log_level=host.data.get("log_level", "INFO"),
     auth_disabled=str(host.data.get("auth_disabled", False)).lower(),
     auth_secret=host.data.get("auth_secret", ""),
-    telegram_bot_token=host.data.get("telegram_bot_token", ""),
-    telegram_bot_username=host.data.get("telegram_bot_username", ""),
+    public_app_url=f"https://{host.data.domain}",
+    telegram_oidc_client_id=host.data.get("telegram_oidc_client_id", ""),
+    telegram_oidc_client_secret=host.data.get("telegram_oidc_client_secret", ""),
     allowed_telegram_ids=_allowed_telegram_ids(),
     _sudo=True,
 )
@@ -100,5 +91,6 @@ docker.compose(
     files=COMPOSE_FILES,
     build=True,
     pull="missing",
+    _chdir=APP_DIR,
     _sudo=True,
 )

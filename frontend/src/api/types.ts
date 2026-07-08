@@ -48,7 +48,16 @@ export interface ConfigResponse {
   sandbox_configured: boolean;
   production_configured: boolean;
   auth_enabled: boolean;
-  telegram_bot_username: string;
+  telegram_oidc_configured: boolean;
+}
+
+export interface TelegramOidcStartResponse {
+  authorization_url: string;
+}
+
+export interface TelegramOidcCallbackRequest {
+  code: string;
+  state: string;
 }
 
 export interface AuthTokenResponse {

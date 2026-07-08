@@ -10,7 +10,7 @@ test.describe("auth login", () => {
         json: {
           ...MOCK_CONFIG,
           auth_enabled: true,
-          telegram_bot_username: "bond_monitor_bot",
+          telegram_oidc_configured: true,
         },
       });
     });
@@ -20,17 +20,17 @@ test.describe("auth login", () => {
     await expect(page.getByText("Войдите через Telegram")).toBeVisible();
   });
 
-  test("allows access after mocked telegram login", async ({ page }) => {
+  test("allows access after mocked telegram oidc callback", async ({ page }) => {
     await page.route("**/api/v1/config/", async (route) => {
       await route.fulfill({
         json: {
           ...MOCK_CONFIG,
           auth_enabled: true,
-          telegram_bot_username: "bond_monitor_bot",
+          telegram_oidc_configured: true,
         },
       });
     });
-    await page.route("**/api/v1/auth/telegram", async (route) => {
+    await page.route("**/api/v1/auth/telegram/callback", async (route) => {
       await route.fulfill({
         status: 201,
         json: { access_token: "mock-e2e-token", token_type: "bearer" },
@@ -48,20 +48,7 @@ test.describe("auth login", () => {
       await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });
     });
 
-    await page.goto("/login");
-    await expect(page.getByText("Войдите через Telegram")).toBeVisible();
-    await page.waitForFunction(
-      () => typeof (window as Window & { TelegramLoginCallback?: unknown }).TelegramLoginCallback === "function",
-    );
-    await page.evaluate(() => {
-      (window as Window & { TelegramLoginCallback?: (user: unknown) => void }).TelegramLoginCallback?.({
-        id: 42,
-        first_name: "E2E User",
-        auth_date: Math.floor(Date.now() / 1000),
-        hash: "mock",
-      });
-    });
-
+    await page.goto("/login/callback?code=mock-code&state=mock-state");
     await expect(page).toHaveURL("/");
     await expect(page.getByRole("heading", { name: "Скринер облигаций" })).toBeVisible();
   });

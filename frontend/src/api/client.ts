@@ -1,6 +1,8 @@
 import type {
   AuthMeResponse,
   AuthTokenResponse,
+  TelegramOidcCallbackRequest,
+  TelegramOidcStartResponse,
   AccountOperationsResponse,
   AccountPreview,
   Bond,
@@ -77,16 +79,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   getConfig: () => request<ConfigResponse>("/config/"),
 
-  loginWithTelegram: (body: {
-    id: number;
-    first_name: string;
-    auth_date: number;
-    hash: string;
-    last_name?: string;
-    username?: string;
-    photo_url?: string;
-  }) =>
-    request<AuthTokenResponse>("/auth/telegram", {
+  startTelegramLogin: () => request<TelegramOidcStartResponse>("/auth/telegram/start"),
+  completeTelegramLogin: (body: TelegramOidcCallbackRequest) =>
+    request<AuthTokenResponse>("/auth/telegram/callback", {
       method: "POST",
       body: JSON.stringify(body),
     }),

@@ -1,57 +1,28 @@
-import { useEffect, useRef } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth, type TelegramAuthPayload } from "./AuthContext";
-
-declare global {
-  interface Window {
-    TelegramLoginCallback?: (user: TelegramAuthPayload) => void;
-  }
-}
+import { useAuth } from "./AuthContext";
 
 export function LoginPage() {
-  const { loginWithTelegram, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const location = useLocation();
-  const widgetRef = useRef<HTMLDivElement>(null);
-  const { data: config } = useQuery({
+  const { data: config, isLoading, isError } = useQuery({
     queryKey: ["config"],
     queryFn: api.getConfig,
   });
-
-  useEffect(() => {
-    const botUsername = config?.telegram_bot_username;
-    const container = widgetRef.current;
-    if (!botUsername || !container) return;
-
-    container.replaceChildren();
-    window.TelegramLoginCallback = (user) => {
-      void loginWithTelegram(user).catch((error: unknown) => {
-        console.error("Telegram login failed", error);
-      });
-    };
-
-    const script = document.createElement("script");
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.async = true;
-    script.setAttribute("data-telegram-login", botUsername);
-    script.setAttribute("data-size", "large");
-    script.setAttribute("data-radius", "8");
-    script.setAttribute("data-onauth", "TelegramLoginCallback(user)");
-    container.appendChild(script);
-
-    return () => {
-      delete window.TelegramLoginCallback;
-      container.replaceChildren();
-    };
-  }, [config?.telegram_bot_username, loginWithTelegram]);
 
   if (isAuthenticated) {
     const redirectTo =
       (location.state as { from?: { pathname?: string } } | null)?.from?.pathname ?? "/";
     return <Navigate to={redirectTo} replace />;
   }
+
+  const startLogin = async () => {
+    const { authorization_url } = await api.startTelegramLogin();
+    window.location.assign(authorization_url);
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -61,12 +32,18 @@ export function LoginPage() {
           <CardDescription>Войдите через Telegram, чтобы открыть приложение.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-4">
-          {config?.telegram_bot_username ? (
-            <div ref={widgetRef} />
+          {isLoading ? (
+            <p className="text-sm text-muted-foreground">Загрузка...</p>
+          ) : config?.telegram_oidc_configured ? (
+            <Button onClick={() => void startLogin()}>Войти через Telegram</Button>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Telegram-бот не настроен. Укажите TELEGRAM_BOT_USERNAME и TELEGRAM_BOT_TOKEN в .env.
+              Telegram OIDC не настроен. Укажите TELEGRAM_OIDC_CLIENT_ID, TELEGRAM_OIDC_CLIENT_SECRET
+              и TELEGRAM_OIDC_REDIRECT_URI в .env.
             </p>
+          )}
+          {isError && (
+            <p className="text-sm text-destructive">Не удалось загрузить конфигурацию приложения.</p>
           )}
         </CardContent>
       </Card>

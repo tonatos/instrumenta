@@ -79,11 +79,9 @@ Production-стек: **Caddy** (HTTPS, Let's Encrypt) → **nginx** (SPA + `/api
 # 1. Скопировать и заполнить inventory (host, domain, токены)
 cp deploy/inventory.py.example deploy/inventory.py
 
-# 2. Установить pyinfra
+# 2. Установить task (go-task) и pyinfra
+brew install go-task   # macOS; см. https://taskfile.dev/installation/
 uv sync --group deploy
-
-# 3. Перейти в каталог deploy (для group_data и относительных путей)
-cd deploy
 ```
 
 В `deploy/inventory.py` укажите IP сервера (без `user@`), `ssh_user`, домен и при необходимости токены. Репозиторий и ветка по умолчанию — в `deploy/group_data/all.py` (`git@github.com:tonatos/bond-monitor.git`, `main`).
@@ -107,15 +105,14 @@ cat ~/.ssh/id_ed25519.pub
 
 ### Деплой
 
+Из корня репозитория:
+
 ```bash
-cd deploy
-
-# Предпросмотр изменений
-uv run pyinfra inventory.py deploy.py --dry
-
-# Деплой
-uv run pyinfra inventory.py deploy.py
+task deploy:dry   # предпросмотр
+task deploy       # деплой
 ```
+
+Таски описаны в [`Taskfile.yml`](Taskfile.yml) ([go-task](https://taskfile.dev/)).
 
 Pyinfra на сервере:
 

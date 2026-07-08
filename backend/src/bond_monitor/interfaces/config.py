@@ -34,11 +34,13 @@ class Settings(BaseSettings):
     cache_dir: Path = _REPO_ROOT / "cache"
     ratings_json_path: Path = _REPO_ROOT / "data" / "ratings.json"
 
-    # Auth (Telegram Login Widget + JWT whitelist)
+    # Auth (Telegram OIDC + JWT whitelist)
     auth_disabled: bool = False
     auth_secret: str = ""
-    telegram_bot_token: str = ""
-    telegram_bot_username: str = ""
+    public_app_url: str = "http://localhost:5173"
+    telegram_oidc_client_id: str = ""
+    telegram_oidc_client_secret: str = ""
+    telegram_oidc_redirect_uri: str = ""
     allowed_telegram_ids: list[int] = Field(default_factory=list)
 
     # T-Invest tokens
@@ -66,6 +68,20 @@ class Settings(BaseSettings):
     @property
     def auth_enabled(self) -> bool:
         return not self.auth_disabled
+
+    @property
+    def telegram_oidc_redirect_uri_resolved(self) -> str:
+        if self.telegram_oidc_redirect_uri:
+            return self.telegram_oidc_redirect_uri
+        return f"{self.public_app_url.rstrip('/')}/login/callback"
+
+    @property
+    def telegram_oidc_configured(self) -> bool:
+        return bool(
+            self.telegram_oidc_client_id
+            and self.telegram_oidc_client_secret
+            and self.telegram_oidc_redirect_uri_resolved
+        )
 
     @property
     def tax_rate_fraction(self) -> float:

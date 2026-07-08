@@ -17,17 +17,16 @@ class ConfigResponse(BaseModel):
     sandbox_configured: bool
     production_configured: bool
     auth_enabled: bool = False
-    telegram_bot_username: str = ""
+    telegram_oidc_configured: bool = False
 
 
-class TelegramAuthRequest(BaseModel):
-    id: int
-    first_name: str
-    auth_date: int
-    hash: str
-    last_name: str | None = None
-    username: str | None = None
-    photo_url: str | None = None
+class TelegramOidcStartResponse(BaseModel):
+    authorization_url: str
+
+
+class TelegramOidcCallbackRequest(BaseModel):
+    code: str
+    state: str
 
 
 class AuthTokenResponse(BaseModel):

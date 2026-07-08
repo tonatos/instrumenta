@@ -2,40 +2,29 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
-import time
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from litestar.testing import TestClient
 
 from bond_monitor.interfaces.auth.jwt_auth import create_access_token, reset_jwt_auth_cache
-from bond_monitor.interfaces.auth.models import AuthUser
+from bond_monitor.interfaces.auth.models import AuthUser, TelegramUser
 from bond_monitor.interfaces.config import get_settings
 from bond_monitor.main import create_app
 
-BOT_TOKEN = "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-AUTH_SECRET = "test-auth-secret"
-
-
-def _sign_payload(payload: dict[str, str | int], bot_token: str = BOT_TOKEN) -> dict[str, str | int]:
-    data = {k: v for k, v in payload.items() if k != "hash"}
-    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
-    secret_key = hashlib.sha256(bot_token.encode()).digest()
-    signed = dict(data)
-    signed["hash"] = hmac.new(
-        secret_key,
-        data_check_string.encode(),
-        hashlib.sha256,
-    ).hexdigest()
-    return signed
+AUTH_SECRET = "test-auth-secret-at-least-32-bytes-long"
+CLIENT_ID = "123456789"
+CLIENT_SECRET = "oidc-client-secret"
+REDIRECT_URI = "http://localhost:5173/login/callback"
 
 
 @pytest.fixture
 def auth_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("AUTH_DISABLED", "false")
     monkeypatch.setenv("AUTH_SECRET", AUTH_SECRET)
-    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", BOT_TOKEN)
+    monkeypatch.setenv("TELEGRAM_OIDC_CLIENT_ID", CLIENT_ID)
+    monkeypatch.setenv("TELEGRAM_OIDC_CLIENT_SECRET", CLIENT_SECRET)
+    monkeypatch.setenv("TELEGRAM_OIDC_REDIRECT_URI", REDIRECT_URI)
     monkeypatch.setenv("ALLOWED_TELEGRAM_IDS", "42")
     get_settings.cache_clear()
     reset_jwt_auth_cache()
@@ -59,29 +48,51 @@ def test_portfolios_with_valid_jwt(auth_client: TestClient) -> None:
     assert response.status_code == 200
 
 
-def test_telegram_login_returns_token(auth_client: TestClient) -> None:
-    payload = _sign_payload(
-        {
-            "id": 42,
-            "first_name": "Test",
-            "username": "tester",
-            "auth_date": int(time.time()),
-        }
-    )
-    response = auth_client.post("/api/v1/auth/telegram", json=payload)
+def test_telegram_start_returns_authorization_url(auth_client: TestClient) -> None:
+    response = auth_client.get("/api/v1/auth/telegram/start")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["authorization_url"].startswith("https://oauth.telegram.org/auth?")
+    assert f"client_id={CLIENT_ID}" in body["authorization_url"]
+    assert "redirect_uri=" in body["authorization_url"]
+
+
+def test_telegram_callback_returns_token(auth_client: TestClient) -> None:
+    start = auth_client.get("/api/v1/auth/telegram/start")
+    state = _extract_query_param(start.json()["authorization_url"], "state")
+    with patch(
+        "bond_monitor.interfaces.api.controllers.auth.exchange_authorization_code",
+        new_callable=AsyncMock,
+        return_value=TelegramUser(telegram_id=42, display_name="Test"),
+    ):
+        response = auth_client.post(
+            "/api/v1/auth/telegram/callback",
+            json={"code": "auth-code", "state": state},
+        )
     assert response.status_code == 201, response.text
     body = response.json()
     assert body["access_token"]
     assert body["token_type"] == "bearer"
 
 
-def test_telegram_login_forbidden_for_non_whitelisted(auth_client: TestClient) -> None:
-    payload = _sign_payload(
-        {
-            "id": 99,
-            "first_name": "Other",
-            "auth_date": int(time.time()),
-        }
-    )
-    response = auth_client.post("/api/v1/auth/telegram", json=payload)
+def test_telegram_callback_forbidden_for_non_whitelisted(auth_client: TestClient) -> None:
+    from bond_monitor.interfaces.auth.telegram_oidc import TelegramOidcForbidden
+
+    start = auth_client.get("/api/v1/auth/telegram/start")
+    state = _extract_query_param(start.json()["authorization_url"], "state")
+    with patch(
+        "bond_monitor.interfaces.api.controllers.auth.exchange_authorization_code",
+        new_callable=AsyncMock,
+        side_effect=TelegramOidcForbidden("User not allowed"),
+    ):
+        response = auth_client.post(
+            "/api/v1/auth/telegram/callback",
+            json={"code": "auth-code", "state": state},
+        )
     assert response.status_code == 403
+
+
+def _extract_query_param(url: str, key: str) -> str:
+    from urllib.parse import parse_qs, urlparse
+
+    return parse_qs(urlparse(url).query)[key][0]

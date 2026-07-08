@@ -8,6 +8,7 @@ import { PortfolioPage } from "@/features/portfolio/PortfolioPage";
 import { CalculatorPage } from "@/features/calculator/CalculatorPage";
 import { AuthProvider } from "@/features/auth/AuthContext";
 import { LoginPage } from "@/features/auth/LoginPage";
+import { LoginCallbackPage } from "@/features/auth/LoginCallbackPage";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
 
 const queryClient = new QueryClient({
@@ -24,6 +25,7 @@ export function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/login/callback" element={<LoginCallbackPage />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppShell />}>
                   <Route index element={<ScreenerPage />} />

@@ -60,7 +60,7 @@ class ConfigController(Controller):
             sandbox_configured=bool(settings.t_trading_token_sandbox),
             production_configured=bool(settings.t_trading_token_production),
             auth_enabled=settings.auth_enabled,
-            telegram_bot_username=settings.telegram_bot_username,
+            telegram_oidc_configured=settings.telegram_oidc_configured,
         )
 
 
