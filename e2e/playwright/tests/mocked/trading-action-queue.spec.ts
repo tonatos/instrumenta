@@ -61,10 +61,46 @@ const buySuggestion = {
   lots: 5,
   figi: "FIGI_TEST",
   suggested_price_pct: 100.5,
+  market_price_pct: 100,
   due_date: null,
   reason: "Свободный кэш — рекомендуем докупить 5 лот(а)",
   urgency: "normal",
   chat_template: null,
+};
+
+const testBondDetail = {
+  secid: "TEST1",
+  isin: buySuggestion.isin,
+  name: buySuggestion.name,
+  figi: buySuggestion.figi,
+  maturity_date: "2027-06-01",
+  offer_date: null,
+  call_date: null,
+  effective_date: "2027-06-01",
+  days_to_maturity: 365,
+  ytm: 14.5,
+  ytm_net: 12.62,
+  coupon_rate: 10,
+  coupon_type: "fixed",
+  last_price: 100,
+  face_value: 1000,
+  lot_size: 1,
+  volume_rub: 1_000_000,
+  prev_volume_rub: 900_000,
+  credit_rating: "BBB",
+  risk_level: 2,
+  score: 78,
+  ytm_score: 80,
+  risk_score: 70,
+  liquidity_score: 75,
+  is_favorite: false,
+  has_warnings: false,
+  warnings: [],
+  tinvest_enriched: true,
+  issuer_name: buySuggestion.name,
+  instrument_full_name: buySuggestion.name,
+  sector: "",
+  description: "",
 };
 
 function adviceResponse(
@@ -86,19 +122,34 @@ function adviceResponse(
   };
 }
 
-const topUpBuySuggestion = {
-  id: "suggestion-topup-1",
-  kind: "buy",
-  isin: "RU000ATEST2",
-  name: "Тестовая облигация 2",
-  lots: 2,
-  figi: "FIGI_TOPUP",
-  suggested_price_pct: 101.0,
-  due_date: null,
-  reason: "Свободный кэш — рекомендуем докупить",
-  urgency: "normal",
-  chat_template: null,
-};
+const diversifiedBuySuggestions = [
+  {
+    id: "suggestion-buy-2",
+    kind: "buy",
+    isin: "RU000ATEST2",
+    name: "Тестовая облигация 2",
+    lots: 2,
+    figi: "FIGI-2",
+    suggested_price_pct: 101.0,
+    due_date: null,
+    reason: "Свободный кэш — рекомендуем докупить по стратегии портфеля",
+    urgency: "normal",
+    chat_template: null,
+  },
+  {
+    id: "suggestion-buy-3",
+    kind: "buy",
+    isin: "RU000ATEST3",
+    name: "Тестовая облигация 3",
+    lots: 3,
+    figi: "FIGI-3",
+    suggested_price_pct: 100.8,
+    due_date: null,
+    reason: "Свободный кэш — рекомендуем докупить по стратегии портфеля",
+    urgency: "normal",
+    chat_template: null,
+  },
+];
 
 test.describe("Советы по торговле", () => {
   test.beforeEach(async ({ page }) => {
@@ -116,8 +167,23 @@ test.describe("Советы по торговле", () => {
       });
     });
 
-    await page.route("**/api/v1/bonds/**", async (route) => {
-      await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });
+    await page.route("**/api/v1/bonds/?*", async (route) => {
+      await route.fulfill({
+        json: {
+          bonds: [testBondDetail],
+          source: "mock",
+          count: 1,
+        },
+      });
+    });
+
+    await page.route("**/api/v1/bonds/TEST1", async (route) => {
+      await route.fulfill({
+        json: {
+          bond: testBondDetail,
+          coupons: [],
+        },
+      });
     });
 
     await page.route("**/api/v1/portfolios/", async (route) => {
@@ -229,6 +295,8 @@ test.describe("Советы по торговле", () => {
     });
     const confirmDialog = page.getByRole("dialog", { name: "Подтвердить покупку" });
     await expect(confirmDialog.getByText(/чистой.*цене/i)).toBeVisible();
+    await expect(confirmDialog.getByText(/Рынок.*100\.00%.*1.*000.*лот/i)).toBeVisible();
+    await expect(confirmDialog.getByText(/лимит на 0\.50% выше рынка/i)).toBeVisible();
     await expect(confirmDialog.getByText(/≈.*1.*005.*чистая.*1.*010.*с НКД за лот/)).toBeVisible();
     await expect(confirmDialog.getByText("Расчёт брокера")).toBeVisible({ timeout: 10_000 });
     await expect(confirmDialog.getByText("Итого к списанию")).toBeVisible();
@@ -242,10 +310,10 @@ test.describe("Советы по торговле", () => {
     await expect(page.getByText(/5[\s\u00a0]055/)).toBeVisible();
   });
 
-  test("advice со свободным кэшем показывает баннер и рекомендацию покупки", async ({ page }) => {
+  test("advice со свободным кэшем показывает баннер и рекомендации покупки", async ({ page }) => {
     await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
       await route.fulfill({
-        json: adviceResponse([topUpBuySuggestion], {
+        json: adviceResponse(diversifiedBuySuggestions, {
           available_money_rub: 20_000,
           money_rub: 20_000,
         }),
@@ -257,8 +325,21 @@ test.describe("Советы по торговле", () => {
     await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/старт.*100/)).toBeVisible();
     await expect(page.getByText(/капитал.*200/)).toBeVisible();
-    await expect(page.getByText(/Свободный кэш.*рекомендуем/i).first()).toBeVisible();
-    await expect(page.getByText("Покупка", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Свободный кэш.*рекомендуем.*Тестовая облигация 2.*Тестовая облигация 3/i)).toBeVisible();
+    await expect(page.getByText("Покупки")).toBeVisible();
+    await expect(page.getByText("2", { exact: true })).toBeVisible();
+  });
+
+  test("клик по названию в секции «Покупки» открывает карточку облигации", async ({ page }) => {
+    await page.goto(`/portfolio/${PORTFOLIO_ID}`);
+
+    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId(`suggestion-bond-title-${SUGGESTION_ID}`).click();
+
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toBeVisible({ timeout: 10_000 });
+    await expect(sheet.getByText(buySuggestion.name)).toBeVisible();
+    await expect(sheet.getByText("12.62%")).toBeVisible();
   });
 
   test("модалка покупки показывает грязную сумму с НКД по расчёту брокера", async ({ page }) => {
@@ -336,7 +417,7 @@ test.describe("Советы по торговле", () => {
     await expect(page.getByRole("button", { name: "Копировать текст" })).toBeVisible();
   });
 
-  test("в песочнице можно добавить средства для теста пополнения", async ({ page }) => {
+  test("в песочнице можно добавить средства на счёт", async ({ page }) => {
     let adviceCalls = 0;
 
     await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sandbox-pay-in`, async (route) => {
@@ -349,7 +430,7 @@ test.describe("Советы по торговле", () => {
     await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
       adviceCalls += 1;
       await route.fulfill({
-        json: adviceResponse([topUpBuySuggestion], {
+        json: adviceResponse(diversifiedBuySuggestions, {
           money_rub: adviceCalls > 1 ? 150_000 : 100_000,
           available_money_rub: adviceCalls > 1 ? 150_000 : 100_000,
         }),

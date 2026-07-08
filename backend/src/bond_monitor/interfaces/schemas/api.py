@@ -233,6 +233,7 @@ class SuggestionResponse(BaseModel):
     lots: int
     figi: str | None = None
     suggested_price_pct: float | None = None
+    market_price_pct: float | None = None
     reason: str = ""
     due_date: str | None = None
     source_isin: str | None = None
@@ -312,6 +313,8 @@ class OrderPreviewResponse(BaseModel):
     money_rub: float
     sufficient_cash: bool
     preview_source: str = "moex"
+    market_price_pct: float | None = None
+    face_value_rub: float = 1000.0
 
 
 class SellPositionRequest(BaseModel):

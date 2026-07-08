@@ -28,7 +28,6 @@ export const SUGGESTION_KIND_LABELS: Record<string, string> = {
 export const KIND_LABELS: Record<string, string> = {
   initial_buy: "Стартовая покупка",
   reinvest_buy: "Реинвестиция",
-  top_up_buy: "Покупка (пополнение)",
   put_offer_submit: "Пут-оферта",
   manual_sell: "Продажа",
 };

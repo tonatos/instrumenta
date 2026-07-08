@@ -109,6 +109,8 @@ export function TradingModeWizard({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["portfolios"] });
       queryClient.invalidateQueries({ queryKey: ["plan", portfolio.id] });
+      queryClient.invalidateQueries({ queryKey: ["trading-advice", portfolio.id] });
+      queryClient.invalidateQueries({ queryKey: ["account-operations", portfolio.id] });
       setOpen(false);
       resetWizard();
     },

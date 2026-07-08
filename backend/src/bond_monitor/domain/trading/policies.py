@@ -41,3 +41,17 @@ def sell_limit_price_buffer(account_kind: AccountKind | None) -> float:
 def suggested_sell_limit_price_pct(base_pct: float, buffer: float) -> PriceUnitPct:
     """Рекомендуемая лимитная цена продажи: рынок − buffer."""
     return PriceUnitPct(round(base_pct * (1 - buffer), 4))
+
+
+def reference_market_price_pct(
+    *,
+    bond_last_price: float | None,
+    broker_current_price_pct: float | None,
+    fallback: float = 100.0,
+) -> float:
+    """Базовая рыночная цена для сравнения с лимитом (% от номинала)."""
+    if broker_current_price_pct is not None and broker_current_price_pct > 0:
+        return broker_current_price_pct
+    if bond_last_price is not None and bond_last_price > 0:
+        return bond_last_price
+    return fallback

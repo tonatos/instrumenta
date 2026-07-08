@@ -11,6 +11,7 @@ from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.cashflow import CashflowEvent, cashflow_event_description, event_sort_key
 from bond_monitor.domain.portfolio.coupon_schedule import coupon_dates_in_range, coupon_payment_per_event
 from bond_monitor.domain.portfolio.models import Portfolio, PortfolioPosition, PositionSourceType, RiskProfile
+from bond_monitor.domain.portfolio.auto_compose import compose_buy_allocations
 from bond_monitor.domain.portfolio.policies import (
     DEFAULT_BOND_SELECTION_POLICY,
     DEFAULT_PLANNING_POLICY,
@@ -29,7 +30,6 @@ from bond_monitor.domain.trading.yield_calc import ActualPerformance, summarize_
 
 SuggestionKind = Literal["buy", "reinvest", "put_offer_reminder", "sell"]
 
-_MAX_BUY_SUGGESTIONS = 5
 _MIN_BUY_CASH_RUB = 5_000.0
 _REINVEST_LOOKAHEAD_DAYS = 14
 
@@ -57,7 +57,11 @@ def validate_attach_soft(
         warnings.append(
             "На счёте уже есть облигации — рекомендации строятся от фактических позиций."
         )
-    effective = max(portfolio.initial_amount_rub, float(snapshot.money_rub))
+    deployed = _holdings_deployed_value(holdings, universe_by_isin)
+    effective = max(
+        portfolio.initial_amount_rub,
+        float(snapshot.money_rub) + deployed,
+    )
     return AttachPreviewValidation(
         can_attach=True,
         blockers=[],
@@ -96,6 +100,7 @@ class Suggestion:
     figi: str | None
     suggested_price_pct: float | None
     reason: str
+    market_price_pct: float | None = None
     due_date: date | None = None
     source_isin: str | None = None
     chat_template: str | None = None
@@ -183,13 +188,27 @@ def build_holdings(
     return holdings
 
 
+def _apply_average_purchase_price(
+    position: PortfolioPosition,
+    average_price_pct: float,
+) -> None:
+    """Подставить среднюю цену покупки с брокерского счёта в позицию плана."""
+    clean_pct = average_price_pct
+    dirty_per_bond = clean_pct / 100.0 * position.face_value + position.purchase_aci_rub
+    position.purchase_clean_price_pct = clean_pct
+    position.purchase_dirty_price_rub = dirty_per_bond
+    position.purchase_amount_rub = dirty_per_bond * position.bonds_count
+
+
 def holdings_to_positions(
     holdings: list[HoldingView],
     universe_by_isin: dict[str, BondRecord],
     *,
     purchase_date: date,
+    average_price_pct_by_figi: dict[str, float] | None = None,
 ) -> list[PortfolioPosition]:
     """Эфемерные позиции для cashflow/yield из holdings."""
+    avg_by_figi = average_price_pct_by_figi or {}
     positions: list[PortfolioPosition] = []
     for holding in holdings:
         bond = universe_by_isin.get(holding.isin)
@@ -203,8 +222,41 @@ def holdings_to_positions(
         )
         position.figi = holding.figi
         sync_put_offer_from_bond(position, bond)
+        avg_pct = avg_by_figi.get(holding.figi)
+        if avg_pct is not None:
+            _apply_average_purchase_price(position, avg_pct)
         positions.append(position)
     return positions
+
+
+def effective_trading_positions(
+    portfolio: Portfolio,
+    snapshot: BrokerSnapshot,
+    universe: Sequence[BondRecord],
+    *,
+    purchase_date: date,
+) -> list[PortfolioPosition]:
+    """Live-позиции: факт со счёта (ADOPTED) + плановые INITIAL, ещё не купленные."""
+    universe_by_isin = _universe_by_isin(universe)
+    holdings = build_holdings(snapshot, universe)
+    avg_by_figi = {
+        figi: float(pos.average_price_pct)
+        for figi, pos in snapshot.bond_positions.items()
+        if pos.average_price_pct is not None
+    }
+    adopted = holdings_to_positions(
+        holdings,
+        universe_by_isin,
+        purchase_date=purchase_date,
+        average_price_pct_by_figi=avg_by_figi,
+    )
+    adopted_isins = {p.isin for p in adopted}
+    pending_plan = [
+        p
+        for p in portfolio.positions
+        if p.source == PositionSourceType.INITIAL and p.isin not in adopted_isins
+    ]
+    return adopted + pending_plan
 
 
 def build_holdings_cashflow(
@@ -264,62 +316,76 @@ def build_holdings_cashflow(
     return events
 
 
+def _holdings_deployed_value(
+    holdings: list[HoldingView],
+    universe_by_isin: dict[str, BondRecord],
+) -> float:
+    total = 0.0
+    for holding in holdings:
+        if holding.market_value_rub is not None:
+            total += holding.market_value_rub
+            continue
+        bond = universe_by_isin.get(holding.isin)
+        lot_cost = bond.price_per_lot_rub if bond else 0.0
+        if lot_cost > 0:
+            total += holding.lots * lot_cost
+    return total
+
+
 def _buy_suggestions(
     portfolio: Portfolio,
+    holdings: list[HoldingView],
     universe: Sequence[BondRecord],
+    universe_by_isin: dict[str, BondRecord],
     *,
     available_cash: float,
     today: date,
     key_rate: float,
     tax_rate: float,
-    policy: BondSelectionPolicy,
 ) -> list[Suggestion]:
     if available_cash < _MIN_BUY_CASH_RUB:
         return []
-    ctx = BondSelectionContext(
+
+    holdings_value = _holdings_deployed_value(holdings, universe_by_isin)
+    total_budget = holdings_value + available_cash
+    current_lots = {h.isin: h.lots for h in holdings if h.isin}
+
+    allocations, notes = compose_buy_allocations(
+        total_budget_rub=total_budget,
+        cash_to_deploy_rub=available_cash,
+        current_lots_by_isin=current_lots,
+        universe=universe,
         profile=portfolio.risk_profile,
         horizon_date=portfolio.horizon_date,
-        purchase_date=today,
-        budget_rub=available_cash,
-        api_trade_only=portfolio.api_trade_only,
-    )
-    selection = select_ranked_bonds(
-        universe,
-        ctx,
-        policy,
+        today=today,
         key_rate=key_rate,
         tax_rate=tax_rate,
+        api_trade_only=portfolio.api_trade_only,
+        account_kind=portfolio.account_kind,
     )
+    if not allocations:
+        return []
+
+    base_reason = "Свободный кэш на счёте — рекомендуем докупить по стратегии портфеля"
+    note_suffix = f" ({notes[-1]})" if notes else ""
+    universe_by_isin = _universe_by_isin(universe)
     suggestions: list[Suggestion] = []
-    for bond in selection.bonds[:_MAX_BUY_SUGGESTIONS]:
-        lot_cost = bond.price_per_lot_rub or 0.0
-        if lot_cost <= 0 or lot_cost > available_cash:
-            continue
-        lots = max(1, int(available_cash // lot_cost))
-        if lots <= 0:
-            continue
-        price_pct = float(
-            suggested_buy_limit_price_pct(
-                bond.last_price or 100.0,
-                buy_limit_price_buffer(portfolio.account_kind),
-            )
-        )
-        reason = "Свободный кэш на счёте — рекомендуем докупить"
-        if selection.fallback_note:
-            reason = f"{reason}. {selection.fallback_note}"
+    for allocation in allocations:
+        bond = universe_by_isin.get(allocation.isin)
+        market_price = bond.last_price if bond is not None and bond.last_price else None
         suggestions.append(
             Suggestion(
-                id=stable_id(portfolio.id, "buy", bond.isin),
+                id=stable_id(portfolio.id, "buy", allocation.isin),
                 kind="buy",
-                isin=bond.isin,
-                name=bond.name,
-                lots=lots,
-                figi=bond.figi,
-                suggested_price_pct=price_pct,
-                reason=reason,
+                isin=allocation.isin,
+                name=allocation.name,
+                lots=allocation.lots,
+                figi=allocation.figi,
+                suggested_price_pct=allocation.suggested_price_pct,
+                market_price_pct=market_price,
+                reason=f"{base_reason}{note_suffix}",
             )
         )
-        break  # одна рекомендация на весь свободный кэш
     return suggestions
 
 
@@ -364,9 +430,10 @@ def _reinvest_suggestions(
         if not selection.bonds:
             continue
         replacement = selection.bonds[0]
+        market_price = replacement.last_price if replacement.last_price else None
         price_pct = float(
             suggested_buy_limit_price_pct(
-                replacement.last_price or 100.0,
+                market_price or 100.0,
                 buy_limit_price_buffer(portfolio.account_kind),
             )
         )
@@ -380,6 +447,7 @@ def _reinvest_suggestions(
                 lots=1,
                 figi=replacement.figi,
                 suggested_price_pct=price_pct,
+                market_price_pct=market_price,
                 reason=(
                     f"Погашение {position.name} {end.strftime('%d.%m.%Y')} "
                     f"(≈{expected_cash:,.0f} ₽) — рекомендуем реинвестировать"
@@ -461,7 +529,12 @@ def advise(
     universe_by_isin = _universe_by_isin(universe)
 
     holdings = build_holdings(snapshot, universe)
-    positions = holdings_to_positions(holdings, universe_by_isin, purchase_date=today)
+    positions = effective_trading_positions(
+        portfolio,
+        snapshot,
+        universe,
+        purchase_date=today,
+    )
     cashflow = build_holdings_cashflow(
         positions,
         horizon_date=portfolio.horizon_date,
@@ -490,12 +563,13 @@ def advise(
     available = float(snapshot.available_money_rub)
     buy_suggestions = _buy_suggestions(
         portfolio,
+        holdings,
         universe,
+        universe_by_isin,
         available_cash=available,
         today=today,
         key_rate=key_rate,
         tax_rate=tax_rate,
-        policy=selection_policy,
     )
     reinvest_suggestions = _reinvest_suggestions(
         portfolio,
@@ -535,6 +609,7 @@ __all__ = [
     "build_holdings",
     "build_holdings_cashflow",
     "collect_account_warnings",
+    "effective_trading_positions",
     "holdings_to_positions",
     "validate_attach_soft",
 ]

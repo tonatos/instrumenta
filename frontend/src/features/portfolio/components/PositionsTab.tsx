@@ -2,10 +2,11 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, X } from "lucide-react";
 import { api } from "@/api/client";
-import type { Bond, PortfolioPosition } from "@/api/types";
+import type { Bond, PortfolioPosition, TradingAdviceResponse } from "@/api/types";
 import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
 import { POSITION_STATUS_LABELS, SOURCE_LABELS } from "@/features/portfolio/labels";
 import { SellPositionDialog } from "@/features/portfolio/trading/SellPositionDialog";
+import { buildTradingDisplayPositions } from "@/features/portfolio/trading/buildTradingDisplayPositions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
@@ -42,10 +43,10 @@ export function PositionsTab({
 
   const canSellInTrading = isTrading;
 
-  const { data: tradingAdvice } = useQuery({
+  const { data: tradingAdvice, isLoading: adviceLoading } = useQuery<TradingAdviceResponse>({
     queryKey: ["trading-advice", portfolioId],
     queryFn: () => api.getAdvice(portfolioId),
-    enabled: canSellInTrading,
+    enabled: isTrading,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
@@ -72,7 +73,24 @@ export function PositionsTab({
     return map;
   }, [tradingAdvice?.holdings]);
 
-  const visiblePositions = positions;
+  const bondsByIsin = useMemo(
+    () => new Map(bonds.map((b) => [b.isin, b])),
+    [bonds],
+  );
+
+  const visiblePositions = useMemo(() => {
+    if (!isTrading) {
+      return positions;
+    }
+    if (adviceLoading || !tradingAdvice) {
+      return positions;
+    }
+    return buildTradingDisplayPositions(
+      tradingAdvice.holdings,
+      positions,
+      bondsByIsin,
+    );
+  }, [isTrading, positions, tradingAdvice, adviceLoading, bondsByIsin]);
 
   const removeMutation = useMutation({
     mutationFn: (isin: string) => api.removePosition(portfolioId, isin),
@@ -90,11 +108,6 @@ export function PositionsTab({
       setSelectedIsin(null);
     },
   });
-
-  const bondsByIsin = useMemo(
-    () => new Map(bonds.map((b) => [b.isin, b])),
-    [bonds],
-  );
 
   const bondOptions: ComboboxOption[] = bonds.map((b) => ({
     value: b.isin,

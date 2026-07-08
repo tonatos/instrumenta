@@ -10,6 +10,7 @@ from bond_monitor.application.trading.types import OrderPreviewResult, PlaceOrde
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, Rub, order_amount_rub
 from bond_monitor.domain.trading.models import OrderDirection
+from bond_monitor.domain.trading.policies import reference_market_price_pct
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import broker_snapshot_from_infrastructure
 from bond_monitor.application.trading import broker
 from bond_monitor.infrastructure.tinvest.trading_client import (
@@ -153,6 +154,16 @@ class OrderUseCase:
         else:
             sufficient_cash = money_rub + 0.01 >= required_cash
 
+        broker_current_price = (
+            float(broker_pos.current_price_pct)
+            if broker_pos is not None and broker_pos.current_price_pct is not None
+            else None
+        )
+        market_price_pct = reference_market_price_pct(
+            bond_last_price=bond.last_price if bond else None,
+            broker_current_price_pct=broker_current_price,
+        )
+
         return OrderPreviewResult(
             order_lots=lots,
             order_bonds=lots * lot_size,
@@ -168,6 +179,8 @@ class OrderUseCase:
             money_rub=money_rub,
             sufficient_cash=sufficient_cash,
             preview_source=preview_source,
+            market_price_pct=market_price_pct,
+            face_value_rub=face_value,
         )
 
     async def place_order(

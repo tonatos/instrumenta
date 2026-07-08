@@ -99,9 +99,7 @@ def _invested_capital_baseline(
     deployed = sum(
         position_cost_basis(position) for position in open_positions(portfolio.positions)
     )
-    # Факт на счёте: купленные бумаги + свободный кэш. Это и есть вложенный
-    # капитал; метаданные acknowledged_top_ups могут завышаться (отменённые
-    # batch, частичное исполнение) или отставать (покупки вне batch).
+    # Факт на счёте: купленные бумаги + свободный кэш.
     return deployed + float(account_snapshot_money_rub)
 
 

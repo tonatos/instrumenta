@@ -32,7 +32,7 @@ test.describe("Скринер — фильтры", () => {
     // Wait for table to populate
     await expect(page.getByText(/\d+ из \d+/)).toBeVisible({ timeout: TIMEOUT });
 
-    const searchInput = page.getByPlaceholder("Поиск по названию или SECID…");
+    const searchInput = page.getByPlaceholder("Поиск по названию, SECID или ISIN…");
     await searchInput.fill("XXX_NONEXISTENT_BOND_12345");
 
     await expect(page.getByText("Нет бумаг по заданным фильтрам")).toBeVisible({

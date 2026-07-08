@@ -9,7 +9,7 @@ from datetime import UTC, date, datetime
 from bond_monitor.application.trading.context import TradingContext
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio, PortfolioMode
-from bond_monitor.domain.portfolio.planner import build_plan
+from bond_monitor.application.trading.plan_from_broker import build_trading_plan
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, Rub
 from bond_monitor.domain.trading.advisory import AttachPreviewValidation, validate_attach_soft
 from bond_monitor.domain.trading.models import AccountKind, FrozenForecast
@@ -302,14 +302,13 @@ class AttachUseCase:
         for pos in portfolio.positions:
             if not pos.figi:
                 pos.figi = broker.resolve_figi_for_isin(token, pos.isin) or ""
-        plan = build_plan(
+        plan = build_trading_plan(
             portfolio,
+            broker_snapshot_from_infrastructure(snapshot),
             universe,
-            today=today,
             key_rate=key_rate,
             tax_rate=tax_rate,
-            account_snapshot_money_rub=snapshot.money_rub,
-            assume_best_put_outcome=False,
+            today=today,
         )
         now_iso = datetime.now(UTC).isoformat(timespec="seconds")
         portfolio.mode = PortfolioMode.TRADING

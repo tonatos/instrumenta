@@ -114,7 +114,7 @@ class PortfolioPlan:
     final_portfolio_value_rub: float = 0.0
     total_net_profit_rub: float = 0.0
     total_net_profit_with_held_rub: float = 0.0
-    # База вложенного капитала для расчёта прибыли и доходности (старт + top-up).
+    # База вложенного капитала для расчёта прибыли и доходности.
     invested_capital_rub: float = 0.0
     # «Чистая YTM» текущих INITIAL-позиций, взвешенная по сумме покупки.
     # Это годовая доходность ТЕКУЩИХ позиций к их собственному

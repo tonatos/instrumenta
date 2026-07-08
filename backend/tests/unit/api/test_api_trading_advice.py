@@ -58,15 +58,20 @@ def test_advice_returns_400_for_simulation_portfolio() -> None:
 
 def test_advice_suggests_buy_with_free_cash() -> None:
     from bond_monitor.application.bonds.bond_service import BondService
+    from bond_monitor.domain.portfolio.plan_models import MIN_AUTO_POSITIONS
 
-    bond = make_bond(
-        isin="RU000ADV",
-        figi="FIGI-ADV",
-        price=95.0,
-        ytm=20.0,
-        maturity=date(2026, 12, 1),
-    )
-    universe = type("U", (), {"bonds": [bond]})()
+    bonds = [
+        make_bond(
+            isin=f"RU000A{i:03d}",
+            figi=f"FIGI-{i}",
+            price=100.0,
+            ytm=18.0 + i,
+            score=80.0 + i,
+            maturity=date(2026, 12, 1),
+        )
+        for i in range(8)
+    ]
+    universe = type("U", (), {"bonds": bonds})()
     with portfolio_client("Advice Buy") as (client, pid):
         attach_trading_portfolio(client, pid, money_rub=80_000.0, auto_compose=False)
         with (
@@ -89,7 +94,7 @@ def test_advice_suggests_buy_with_free_cash() -> None:
         assert resp.status_code == 200, resp.text
         suggestions = resp.json()["suggestions"]
         buy = [s for s in suggestions if s["kind"] == "buy"]
-        assert buy, "expected buy suggestion for free cash"
+        assert len(buy) >= MIN_AUTO_POSITIONS, "expected diversified buy suggestions for free cash"
 
 
 def test_advice_passes_from_date_to_operations() -> None:

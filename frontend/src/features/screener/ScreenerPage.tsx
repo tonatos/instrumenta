@@ -7,6 +7,7 @@ import {
   getFilteredRowModel,
   getSortedRowModel,
   useReactTable,
+  type FilterFn,
   type VisibilityState,
   type SortingState,
 } from "@tanstack/react-table";
@@ -55,6 +56,17 @@ const RISK_LEVELS = [
 ];
 
 const STORAGE_KEY = "screener_column_visibility";
+
+const bondSearchFilter: FilterFn<Bond> = (row, _columnId, filterValue) => {
+  const q = String(filterValue).trim().toLowerCase();
+  if (!q) return true;
+  const bond = row.original;
+  return (
+    bond.name.toLowerCase().includes(q) ||
+    bond.secid.toLowerCase().includes(q) ||
+    bond.isin.toLowerCase().includes(q)
+  );
+};
 
 function loadColumnVisibility(): VisibilityState {
   try {
@@ -311,7 +323,7 @@ export function ScreenerPage() {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
-    globalFilterFn: "includesString",
+    globalFilterFn: bondSearchFilter,
   });
 
   const exportCsv = () => {
@@ -376,7 +388,7 @@ export function ScreenerPage() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 className="pl-9"
-                placeholder="Поиск по названию или SECID…"
+                placeholder="Поиск по названию, SECID или ISIN…"
                 value={globalFilter}
                 onChange={(e) => setGlobalFilter(e.target.value)}
               />

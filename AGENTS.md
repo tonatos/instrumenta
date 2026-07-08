@@ -51,8 +51,9 @@ smart-lab ──► infrastructure/ratings/ ──┘
 
 | Модуль | Ответственность |
 |--------|-----------------|
-| `planner.py` | Facade: `auto_compose`, `build_plan`, `distribute_top_up` |
-| `selection.py` | Единый eligibility/ranking для compose, reinvest, top-up |
+| `auto_compose.py` | `auto_compose`, `compose_buy_allocations` — единый алгоритм; `compose_buy_allocations` учитывает `MAX_AUTO_POSITIONS` (10) с holdings: новых ISIN ≤ `10 − N`, при ≥10 — только докупка топ-10 держимых |
+| `planner.py` | Facade: `auto_compose`, `compose_buy_allocations`, `build_plan` |
+| `selection.py` | Единый eligibility/ranking для compose и reinvest |
 | `position_factory.py` | `position_from_bond`, `position_end_date` |
 | `coupon_schedule.py` | Расписание купонов |
 | `cashflow.py` | `CashflowEvent`, merge helpers |
@@ -67,7 +68,7 @@ smart-lab ──► infrastructure/ratings/ ──┘
 
 | Модуль | Ответственность |
 |--------|-----------------|
-| `advisory.py` | Stateless `advise()`: holdings, suggestions, active orders, cashflow |
+| `advisory.py` | Stateless `advise()`: holdings, suggestions, active orders, cashflow; buy — через `compose_buy_allocations` |
 | `models.py` | `AccountKind`, `FrozenForecast`, advisory DTO |
 | `ports.py` | `BrokerSnapshot`, `BrokerOperation` — порты без SDK |
 | `ids.py` | `stable_id()` для детерминированных ключей заявок |

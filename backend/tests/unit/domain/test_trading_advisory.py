@@ -4,9 +4,17 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
-from bond_monitor.domain.portfolio.models import RiskProfile
+import pytest
+
+from bond_monitor.domain.portfolio.models import PositionSourceType, RiskProfile
 from bond_monitor.domain.shared.money import PriceUnitPct, Rub
-from bond_monitor.domain.trading.advisory import advise, build_holdings, build_holdings_cashflow
+from bond_monitor.domain.trading.advisory import (
+    advise,
+    build_holdings,
+    build_holdings_cashflow,
+    effective_trading_positions,
+    validate_attach_soft,
+)
 from bond_monitor.domain.trading.ports import BrokerBondPosition
 from factories import make_account_snapshot, make_bond, make_portfolio
 
@@ -86,40 +94,44 @@ def test_advise_builds_cashflow_from_holdings() -> None:
 
 
 def test_advise_suggests_buy_when_free_cash_available() -> None:
-    bond_a = make_bond(isin="RU000A3", name="Cheap Bond", figi="FIGI-A", price=95.0, ytm=20.0)
-    bond_b = make_bond(
-        isin="RU000B1",
-        name="Candidate",
-        figi="FIGI-B",
-        price=96.0,
-        ytm=22.0,
-        score=90.0,
-        maturity=date.today() + timedelta(days=200),
-    )
+    from bond_monitor.domain.portfolio.plan_models import MIN_AUTO_POSITIONS
+
+    universe = [
+        make_bond(
+            isin=f"RU000A{i:03d}",
+            name=f"Bond {i}",
+            figi=f"FIGI-{i}",
+            price=100.0,
+            ytm=18.0 + i,
+            score=80.0 + i,
+            maturity=date.today() + timedelta(days=200 + i),
+        )
+        for i in range(8)
+    ]
     portfolio = make_portfolio(
         initial_amount_rub=100_000.0,
         horizon_date=date.today() + timedelta(days=400),
         risk_profile=RiskProfile.NORMAL,
         account_kind="sandbox",
+        api_trade_only=False,
     )
-    snapshot = make_account_snapshot(
-        80_000.0,
-        bond_positions={"FIGI-A": _bond_position(figi="FIGI-A")},
-    )
+    snapshot = make_account_snapshot(80_000.0)
     advice = advise(
         portfolio,
         snapshot,
         active_orders=[],
         operations=[],
-        universe=[bond_a, bond_b],
+        universe=universe,
         key_rate=16.0,
         tax_rate=0.13,
         today=date.today(),
     )
     buy_suggestions = [s for s in advice.suggestions if s.kind == "buy"]
-    assert buy_suggestions
-    assert buy_suggestions[0].lots >= 1
-    assert buy_suggestions[0].suggested_price_pct is not None
+    assert len(buy_suggestions) >= MIN_AUTO_POSITIONS
+    assert len({s.isin for s in buy_suggestions}) == len(buy_suggestions)
+    assert all(s.lots >= 1 for s in buy_suggestions)
+    assert all(s.suggested_price_pct is not None for s in buy_suggestions)
+    assert all(s.market_price_pct is not None for s in buy_suggestions)
 
 
 def test_advise_put_offer_reminder_for_near_offer() -> None:
@@ -198,3 +210,66 @@ def test_advise_includes_performance_and_active_orders() -> None:
 def test_build_holdings_cashflow_empty_for_no_positions() -> None:
     events = build_holdings_cashflow([], horizon_date=date.today() + timedelta(days=365), today=date.today())
     assert events == []
+
+
+def test_effective_trading_positions_adopts_broker_holdings_with_average_price() -> None:
+    bond = make_bond(isin="RU000A1", figi="FIGI-HOLD", name="Hold Bond")
+    snapshot = make_account_snapshot(
+        50_000.0,
+        bond_positions={"FIGI-HOLD": _bond_position(figi="FIGI-HOLD", lots=3, quantity=3)},
+    )
+    portfolio = make_portfolio()
+    positions = effective_trading_positions(
+        portfolio,
+        snapshot,
+        [bond],
+        purchase_date=date.today(),
+    )
+    assert len(positions) == 1
+    assert positions[0].source == PositionSourceType.ADOPTED
+    assert positions[0].lots == 3
+    assert positions[0].purchase_clean_price_pct == pytest.approx(95.0)
+
+
+def test_effective_trading_positions_keeps_pending_plan_not_on_account() -> None:
+    bond = make_bond(isin="RU000ON", figi="FIGI-ON")
+    pending_bond = make_bond(isin="RU000PEND", figi="FIGI-PEND", name="Pending")
+    from bond_monitor.domain.portfolio.position_factory import position_from_bond
+
+    portfolio = make_portfolio()
+    portfolio.positions = [
+        position_from_bond(
+            pending_bond,
+            lots=2,
+            purchase_date=date.today(),
+            source=PositionSourceType.INITIAL,
+        )
+    ]
+    snapshot = make_account_snapshot(
+        10_000.0,
+        bond_positions={"FIGI-ON": _bond_position(figi="FIGI-ON", lots=1, quantity=1)},
+    )
+    positions = effective_trading_positions(
+        portfolio,
+        snapshot,
+        [bond, pending_bond],
+        purchase_date=date.today(),
+    )
+    assert len(positions) == 2
+    adopted = [p for p in positions if p.isin == "RU000ON"]
+    pending = [p for p in positions if p.isin == "RU000PEND"]
+    assert len(adopted) == 1
+    assert adopted[0].source == PositionSourceType.ADOPTED
+    assert len(pending) == 1
+    assert pending[0].source == PositionSourceType.INITIAL
+
+
+def test_validate_attach_soft_counts_deployed_bonds_in_effective_initial() -> None:
+    bond = make_bond(isin="RU000A1", figi="FIGI-HOLD")
+    snapshot = make_account_snapshot(
+        20_000.0,
+        bond_positions={"FIGI-HOLD": _bond_position(figi="FIGI-HOLD", lots=2, quantity=2)},
+    )
+    portfolio = make_portfolio(initial_amount_rub=100_000.0)
+    validation = validate_attach_soft(snapshot, portfolio, [bond])
+    assert validation.effective_initial_amount_rub > 20_000.0

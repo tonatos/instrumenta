@@ -5,14 +5,18 @@
 
 * :mod:`plan_models` — типы плана и константы политик.
 * :mod:`reinvestment` — слоты реинвестиции и подбор замен.
-* :mod:`auto_compose` — автосостав начального портфеля.
+* :mod:`auto_compose` — автосостав портфеля и развёртывание доступного кэша.
 * :mod:`plan_builder` — построение cashflow-плана.
-* :mod:`top_up_distribution` — распределение top-up.
 """
 
 from __future__ import annotations
 
-from bond_monitor.domain.portfolio.auto_compose import auto_compose, format_share
+from bond_monitor.domain.portfolio.auto_compose import (
+    BuyAllocation,
+    auto_compose,
+    compose_buy_allocations,
+    format_share,
+)
 from bond_monitor.domain.portfolio.cashflow import CashflowEvent, merge_cashflow_events
 from bond_monitor.domain.portfolio.plan_builder import _net_redemption_amount, build_plan
 from bond_monitor.domain.portfolio.plan_models import (
@@ -35,8 +39,6 @@ from bond_monitor.domain.portfolio.selection import (
     portfolio_universe_filter,
     risk_profile_filter,
 )
-from bond_monitor.domain.portfolio.top_up_distribution import TopUpAllocation, distribute_top_up
-
 # Backward compatibility for tests importing private merge helper from planner.
 _merge_cashflow_events = merge_cashflow_events
 
@@ -47,13 +49,13 @@ __all__ = [
     "HeldPositionAtHorizon",
     "PortfolioPlan",
     "PortfolioValuePoint",
-    "TopUpAllocation",
+    "BuyAllocation",
     "UpcomingPutOffer",
     "api_tradable_filter",
     "auto_compose",
     "build_plan",
     "clear_downstream_slot_overrides",
-    "distribute_top_up",
+    "compose_buy_allocations",
     "enrich_reinvestment_slot",
     "format_share",
     "portfolio_universe_filter",

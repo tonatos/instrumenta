@@ -1,6 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
+import { api } from "@/api/client";
 import type { Bond, PlanResponse, Portfolio, PortfolioPosition } from "@/api/types";
+import { buildTradingDisplayPositions } from "@/features/portfolio/trading/buildTradingDisplayPositions";
 import { AccountOperationsTable } from "@/features/portfolio/AccountOperationsTable";
 import { CashflowTable } from "@/features/portfolio/CashflowTable";
 import { PositionsTab } from "@/features/portfolio/components/PositionsTab";
@@ -38,14 +41,44 @@ export function PortfolioTabs({
     isFetching: accountOperationsFetching,
   } = useAccountOperations(active.id, operationsEnabled);
 
+  const bondsByIsin = useMemo(
+    () => new Map(bondsList.map((b) => [b.isin, b])),
+    [bondsList],
+  );
+
+  const { data: tradingAdvice } = useQuery({
+    queryKey: ["trading-advice", active.id],
+    queryFn: () => api.getAdvice(active.id),
+    enabled: isTrading && Boolean(active.account_id),
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const positionsBadgeCount = useMemo(() => {
+    if (!isTrading) {
+      return active.positions_count;
+    }
+    return buildTradingDisplayPositions(
+      tradingAdvice?.holdings ?? [],
+      positions,
+      bondsByIsin,
+    ).length;
+  }, [
+    isTrading,
+    active.positions_count,
+    tradingAdvice?.holdings,
+    positions,
+    bondsByIsin,
+  ]);
+
   return (
     <TabsRoot value={activeTab} onValueChange={setActiveTab}>
       <TabsList className="w-full sm:w-auto">
         <TabsTrigger value="positions">
           Позиции
-          {active.positions_count > 0 && (
+          {positionsBadgeCount > 0 && (
             <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-mono">
-              {active.positions_count}
+              {positionsBadgeCount}
             </span>
           )}
         </TabsTrigger>

@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import date
 
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import PortfolioPosition, RiskProfile
+from bond_monitor.domain.trading.models import AccountKind
+from bond_monitor.domain.trading.policies import (
+    buy_limit_price_buffer,
+    suggested_buy_limit_price_pct,
+)
 from bond_monitor.domain.portfolio.plan_models import (
     MAX_AUTO_POSITIONS,
     MAX_POSITION_SHARE,
@@ -228,3 +234,171 @@ def format_share(value: float, total: float) -> str:
         return f"{value:,.0f} ₽"
     pct = value / total * 100
     return f"{pct:.0f}% ({value:,.0f} ₽)"
+
+
+@dataclass
+class BuyAllocation:
+    """Одна покупка при развёртывании доступного кэша по ``auto_compose``."""
+
+    isin: str
+    figi: str | None
+    name: str
+    lots: int
+    suggested_price_pct: float
+    estimated_amount_rub: float
+    is_existing_position: bool
+
+
+def _top_scored_existing_bonds(
+    universe: Sequence[BondRecord],
+    existing_isins: set[str],
+    *,
+    profile: RiskProfile,
+    horizon_date: date,
+    today: date,
+    key_rate: float,
+    tax_rate: float,
+    api_trade_only: bool,
+) -> list[BondRecord]:
+    """Топ ``MAX_AUTO_POSITIONS`` держимых бумаг по скорингу."""
+    selection_ctx = selection_context(
+        profile=profile,
+        horizon_date=horizon_date,
+        purchase_date=today,
+        api_trade_only=api_trade_only,
+    )
+    scored = select_ranked_bonds(
+        universe,
+        selection_ctx,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+    ).bonds
+    result: list[BondRecord] = []
+    for bond in scored:
+        if bond.isin not in existing_isins:
+            continue
+        result.append(bond)
+        if len(result) >= MAX_AUTO_POSITIONS:
+            break
+    return result
+
+
+def compose_buy_allocations(
+    *,
+    total_budget_rub: float,
+    cash_to_deploy_rub: float,
+    current_lots_by_isin: dict[str, int],
+    universe: Sequence[BondRecord],
+    profile: RiskProfile,
+    horizon_date: date,
+    today: date,
+    key_rate: float,
+    tax_rate: float,
+    api_trade_only: bool,
+    account_kind: AccountKind | None,
+) -> tuple[list[BuyAllocation], list[str]]:
+    """Развернуть доступный кэш по целевой структуре ``auto_compose``.
+
+    1. Строим целевой портфель на ``total_budget_rub`` (holdings + cash).
+    2. Считаем diff по лотам относительно ``current_lots_by_isin``.
+    3. Покупаем в пределах ``cash_to_deploy_rub`` (новые ISIN, затем докупки).
+    """
+    if cash_to_deploy_rub <= 0:
+        return [], ["Сумма к развёртыванию ≤ 0 — нечего распределять."]
+
+    existing_isins = set(current_lots_by_isin)
+    existing_count = len(existing_isins)
+    new_slots = max(0, MAX_AUTO_POSITIONS - existing_count)
+    notes: list[str] = []
+
+    if existing_count >= MAX_AUTO_POSITIONS:
+        deploy_universe = _top_scored_existing_bonds(
+            universe,
+            existing_isins,
+            profile=profile,
+            horizon_date=horizon_date,
+            today=today,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            api_trade_only=api_trade_only,
+        )
+        notes.append("Лимит 10 позиций — докупаем только существующие бумаги.")
+    else:
+        deploy_universe = universe
+
+    target_positions, _, compose_notes = auto_compose(
+        initial_amount=total_budget_rub,
+        universe=deploy_universe,
+        profile=profile,
+        horizon_date=horizon_date,
+        today=today,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+        api_trade_only=api_trade_only,
+    )
+    notes.extend(compose_notes)
+    if not target_positions:
+        notes.append("Кэш не распределён: не удалось построить целевую структуру.")
+        return [], notes
+
+    target_lots_by_isin = {p.isin: p.lots for p in target_positions}
+    target_order = [p.isin for p in target_positions]
+    universe_by_isin = {b.isin: b for b in universe}
+    current_lots = dict(current_lots_by_isin)
+    allocations: list[BuyAllocation] = []
+    remaining = cash_to_deploy_rub
+    buffer = buy_limit_price_buffer(account_kind)
+
+    def _allocate_isin(isin: str, target_lots: int) -> None:
+        nonlocal remaining
+        if remaining <= 0:
+            return
+        bond = universe_by_isin.get(isin)
+        if bond is None:
+            return
+        lot_cost = bond.price_per_lot_rub or 0.0
+        if lot_cost <= 0:
+            return
+        needed_lots = max(0, target_lots - current_lots.get(isin, 0))
+        if needed_lots < 1:
+            return
+        lots = min(needed_lots, int(remaining // lot_cost))
+        if lots < 1:
+            return
+        cost = lots * lot_cost
+        last_price = bond.last_price if bond.last_price is not None else 100.0
+        allocations.append(
+            BuyAllocation(
+                isin=bond.isin,
+                figi=bond.figi or None,
+                name=bond.name,
+                lots=lots,
+                suggested_price_pct=float(
+                    suggested_buy_limit_price_pct(last_price, buffer)
+                ),
+                estimated_amount_rub=cost,
+                is_existing_position=isin in current_lots_by_isin,
+            )
+        )
+        current_lots[isin] = current_lots.get(isin, 0) + lots
+        remaining -= cost
+
+    new_targets = [
+        isin for isin in target_order if isin not in existing_isins
+    ][:new_slots]
+    existing_targets = [isin for isin in target_order if isin in existing_isins]
+    for isin in new_targets:
+        _allocate_isin(isin, target_lots_by_isin[isin])
+    for isin in existing_targets:
+        _allocate_isin(isin, target_lots_by_isin[isin])
+
+    if not allocations:
+        notes.append("Кэш не распределён: нет подходящих бумаг или сумма слишком мала.")
+        return [], notes
+
+    distributed = cash_to_deploy_rub - remaining
+    notes.append(
+        f"Распределено {distributed:,.0f} ₽ из {cash_to_deploy_rub:,.0f} ₽ по "
+        f"{len(allocations)} бумагам. Остаток: {remaining:,.0f} ₽."
+    )
+    return allocations, notes

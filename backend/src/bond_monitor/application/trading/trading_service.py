@@ -17,10 +17,14 @@ from bond_monitor.application.trading.types import (
     SellQuoteResult,
     TradingAdviceResult,
 )
+from bond_monitor.application.trading.plan_from_broker import build_trading_plan
+from bond_monitor.application.trading import broker
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio
+from bond_monitor.domain.portfolio.planner import PortfolioPlan
 from bond_monitor.domain.trading.models import AccountKind, OrderDirection
 from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
+from bond_monitor.infrastructure.tinvest.snapshot_adapter import broker_snapshot_from_infrastructure
 from bond_monitor.infrastructure.tinvest.trading_client import OperationRecord
 
 
@@ -35,6 +39,7 @@ class TradingService:
         production_token: str,
     ) -> None:
         ctx = TradingContext(repo, sandbox_token=sandbox_token, production_token=production_token)
+        self._ctx = ctx
         self._attach = AttachUseCase(ctx)
         self._advise = AdviseUseCase(ctx)
         self._order = OrderUseCase(ctx)
@@ -128,6 +133,28 @@ class TradingService:
     ) -> TradingAdviceResult:
         return await self._advise.get_advice(
             portfolio_id,
+            universe,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            today=today,
+        )
+
+    async def build_trading_plan(
+        self,
+        portfolio_id: str,
+        universe: list[BondRecord],
+        *,
+        key_rate: float,
+        tax_rate: float,
+        today: date,
+    ) -> PortfolioPlan:
+        portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
+        token = self._ctx.token(portfolio.account_kind)  # type: ignore[arg-type]
+        account_id = portfolio.account_id  # type: ignore[assignment]
+        snapshot = broker.get_account_snapshot(token, portfolio.account_kind, account_id)  # type: ignore[arg-type]
+        return build_trading_plan(
+            portfolio,
+            broker_snapshot_from_infrastructure(snapshot),
             universe,
             key_rate=key_rate,
             tax_rate=tax_rate,

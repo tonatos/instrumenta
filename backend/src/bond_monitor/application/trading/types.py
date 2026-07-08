@@ -23,6 +23,8 @@ class OrderPreviewResult:
     money_rub: float
     sufficient_cash: bool
     preview_source: str = "moex"
+    market_price_pct: float | None = None
+    face_value_rub: float = 1000.0
 
 
 @dataclass
@@ -83,6 +85,7 @@ class SuggestionResponse:
     figi: str | None
     suggested_price_pct: float | None
     reason: str
+    market_price_pct: float | None = None
     due_date: str | None = None
     source_isin: str | None = None
     chat_template: str | None = None

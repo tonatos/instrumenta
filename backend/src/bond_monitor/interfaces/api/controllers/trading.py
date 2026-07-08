@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bond_monitor.application.bonds.bond_service import BondService
 from bond_monitor.application.trading.trading_service import TradingService
 from bond_monitor.application.trading.types import TradingAdviceResult
-from bond_monitor.domain.trading.models import AccountKind, OrderDirection
+from bond_monitor.domain.trading.models import AccountKind
 from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
 from bond_monitor.interfaces.api.controllers.bonds import provide_bond_service
 from bond_monitor.interfaces.config import Settings
@@ -257,7 +257,7 @@ class TradingController(Controller):
                 portfolio_id,
                 universe,
                 isin=data.isin,
-                direction=OrderDirection(data.direction),
+                direction=data.direction,
                 lots=data.lots,
                 price_pct=data.price_pct,
                 figi=data.figi,
@@ -283,7 +283,7 @@ class TradingController(Controller):
                 portfolio_id,
                 universe,
                 isin=data.isin,
-                direction=OrderDirection(data.direction),
+                direction=data.direction,
                 lots=data.lots,
                 price_pct=data.price_pct,
                 figi=data.figi,

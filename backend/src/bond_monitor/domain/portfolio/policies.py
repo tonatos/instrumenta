@@ -23,7 +23,7 @@ DEFAULT_PLANNING_POLICY = PlanningPolicy()
 
 @dataclass(frozen=True)
 class PortfolioAllocationPolicy:
-    """Diversification limits for auto-compose and top-up."""
+    """Diversification limits for auto-compose and cash deployment."""
 
     max_position_share: float = 0.30
     target_position_share: float = 0.18
@@ -38,7 +38,7 @@ DEFAULT_PORTFOLIO_ALLOCATION_POLICY = PortfolioAllocationPolicy()
 
 @dataclass(frozen=True)
 class BondSelectionPolicy:
-    """Unified eligibility rules for compose / reinvest / top-up."""
+    """Unified eligibility rules for compose / reinvest."""
 
     min_clean_price_pct: float = 85.0
     min_replacement_horizon_days: int = 10

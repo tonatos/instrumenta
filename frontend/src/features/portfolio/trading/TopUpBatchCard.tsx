@@ -22,7 +22,7 @@ export function SandboxPayInPanel({
     mutationFn: async () => {
       const amount = Number(amountRub.replace(/\s/g, "").replace(",", "."));
       if (!Number.isFinite(amount) || amount <= 0) {
-        throw new Error("Укажите корректную сумму пополнения");
+        throw new Error("Укажите корректную сумму");
       }
       return api.sandboxPayIn(portfolioId, { amount_rub: amount });
     },
@@ -42,8 +42,8 @@ export function SandboxPayInPanel({
         Песочница · добавить средства
       </p>
       <p className="text-xs text-muted-foreground">
-        Имитирует пополнение брокерского счёта. После добавления нажмите «Обновить счёт» —
-        появятся рекомендации на покупку при наличии свободного кэша.
+        Имитирует ввод средств на брокерский счёт в песочнице. После добавления нажмите
+        «Обновить счёт» — появятся рекомендации на покупку при наличии свободного кэша.
       </p>
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[140px] flex-1 space-y-1">

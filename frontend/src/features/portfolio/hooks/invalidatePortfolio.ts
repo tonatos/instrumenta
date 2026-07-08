@@ -16,6 +16,7 @@ export function invalidateAfterTradingMutation(
   options?: { refreshPlan?: boolean; refreshOperations?: boolean },
 ) {
   void queryClient.invalidateQueries({ queryKey: ["portfolios"] });
+  void queryClient.invalidateQueries({ queryKey: ["trading-advice", portfolioId] });
   if (options?.refreshPlan) {
     void queryClient.invalidateQueries({ queryKey: ["plan", portfolioId] });
   }

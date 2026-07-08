@@ -7,7 +7,7 @@ import {
   suggestionDirection,
   useOrderPreview,
 } from "@/features/portfolio/trading/hooks/useOrderPreview";
-import { formatLotPriceHint } from "@/features/portfolio/trading/pricing";
+import { formatLotPriceHint, formatLimitVsMarket } from "@/features/portfolio/trading/pricing";
 import { Button } from "@/components/ui/button";
 import {
   DialogContent,
@@ -83,7 +83,9 @@ export function ConfirmOrderDialog({
 
   const direction = suggestionDirection(suggestion.kind);
   const lotSize = preview?.lot_size ?? 1;
-  const faceValueRub = 1000;
+  const faceValueRub = preview?.face_value_rub ?? 1000;
+  const marketPricePct =
+    preview?.market_price_pct ?? suggestion.market_price_pct ?? null;
   const previewApplies =
     preview != null &&
     Number.isFinite(parsedPricePct) &&
@@ -106,6 +108,22 @@ export function ConfirmOrderDialog({
           lotSize,
           aciRubPerBond,
         })
+      : null;
+  const marketLotPriceHint =
+    marketPricePct != null
+      ? formatLotPriceHint({
+          pricePct: marketPricePct,
+          faceValueRub,
+          lotSize,
+          aciRubPerBond,
+        })
+      : null;
+  const limitVsMarketHint =
+    isBuy &&
+    marketPricePct != null &&
+    Number.isFinite(parsedPricePct) &&
+    parsedPricePct > 0
+      ? formatLimitVsMarket(marketPricePct, parsedPricePct)
       : null;
   const brokerPreview =
     previewApplies && preview?.preview_source === "broker" ? preview : null;
@@ -147,6 +165,22 @@ export function ConfirmOrderDialog({
               Лимитная заявка на продажу по{" "}
               <span className="font-medium text-foreground">чистой</span> цене. НКД и
               комиссия учтутся при исполнении.
+            </p>
+          )}
+
+          {isBuy && marketPricePct != null && (
+            <p className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+              Рынок (посл. сделка):{" "}
+              <span className="font-medium text-foreground">
+                {formatPct(marketPricePct)}
+              </span>
+              {marketLotPriceHint ? ` · ≈ ${marketLotPriceHint}/лот` : ""}
+              {limitVsMarketHint ? (
+                <>
+                  {" "}
+                  · <span className="text-foreground">{limitVsMarketHint}</span>
+                </>
+              ) : null}
             </p>
           )}
 

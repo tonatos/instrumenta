@@ -13,6 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bond_monitor.application.bonds.bond_service import BondService
 from bond_monitor.application.portfolio.errors import SlotOverrideValidationError
 from bond_monitor.application.portfolio.portfolio_service import PortfolioService
+from bond_monitor.application.trading.trading_service import TradingService
+from bond_monitor.interfaces.api.controllers.trading import provide_trading_service
 from bond_monitor.domain.portfolio.calculator import calculate_portfolio_budget
 from bond_monitor.domain.portfolio.models import RiskProfile
 from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
@@ -65,6 +67,7 @@ class PortfoliosController(Controller):
     dependencies = {
         "portfolio_service": Provide(provide_portfolio_service),
         "bond_service": Provide(provide_bond_service),
+        "trading_service": Provide(provide_trading_service),
     }
 
     @get("/")
@@ -246,16 +249,29 @@ class PortfoliosController(Controller):
         portfolio_id: str,
         portfolio_service: PortfolioService,
         bond_service: BondService,
+        trading_service: TradingService,
         settings: Settings,
     ) -> PlanResponse:
         universe = bond_service.load_universe().bonds
-        plan = await portfolio_service.build_portfolio_plan(
-            portfolio_id,
-            universe,
-            key_rate=settings.key_rate,
-            tax_rate=settings.tax_rate_fraction,
-            today=date.today(),
-        )
+        portfolio = await portfolio_service.get_portfolio(portfolio_id)
+        if portfolio is None:
+            raise NotFoundException(detail="Portfolio not found")
+        if portfolio.is_trading:
+            plan = await trading_service.build_trading_plan(
+                portfolio_id,
+                universe,
+                key_rate=settings.key_rate,
+                tax_rate=settings.tax_rate_fraction,
+                today=date.today(),
+            )
+        else:
+            plan = await portfolio_service.build_portfolio_plan(
+                portfolio_id,
+                universe,
+                key_rate=settings.key_rate,
+                tax_rate=settings.tax_rate_fraction,
+                today=date.today(),
+            )
         return plan_to_response(plan)
 
 

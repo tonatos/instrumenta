@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, date, datetime, timedelta
 
 from bond_monitor.application.trading.context import TradingContext
@@ -23,16 +22,13 @@ from bond_monitor.infrastructure.tinvest.snapshot_adapter import (
 from bond_monitor.application.trading import broker
 from bond_monitor.infrastructure.tinvest.trading_client import OperationRecord
 
-logger = logging.getLogger(__name__)
+_OPERATIONS_LOOKBACK_DAYS = 365
 
 
 def operations_from_date(portfolio, *, today: date) -> date:
-    if portfolio.trading_started_at:
-        try:
-            return datetime.fromisoformat(portfolio.trading_started_at).date()
-        except ValueError:
-            logger.warning("Invalid trading_started_at: %s", portfolio.trading_started_at)
-    return today - timedelta(days=365)
+    """Нижняя граница истории операций — полный год, не момент attach."""
+    del portfolio
+    return today - timedelta(days=_OPERATIONS_LOOKBACK_DAYS)
 
 
 def _holding_to_response(h) -> HoldingResponse:
@@ -61,6 +57,7 @@ def _suggestion_to_response(s) -> SuggestionResponse:
         lots=s.lots,
         figi=s.figi,
         suggested_price_pct=s.suggested_price_pct,
+        market_price_pct=s.market_price_pct,
         reason=s.reason,
         due_date=s.due_date.isoformat() if s.due_date else None,
         source_isin=s.source_isin,

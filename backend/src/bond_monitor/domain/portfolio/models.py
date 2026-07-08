@@ -340,7 +340,7 @@ class Portfolio:
     initial_amount_rub: float
     horizon_date: date
     risk_profile: RiskProfile
-    # Если True (по умолчанию) — в автосборе, top-up и реинвесте только бумаги
+    # Если True (по умолчанию) — в автосборе и реинвесте только бумаги
     # с ``api_trade_available_flag`` из T-Invest (торгуемые через API).
     api_trade_only: bool = True
     id: str = field(default_factory=_new_portfolio_id)

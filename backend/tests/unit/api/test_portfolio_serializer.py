@@ -82,7 +82,6 @@ def test_portfolio_from_dict_ignores_removed_trading_shadow_fields() -> None:
             "cash_balance_rub": 10_000.0,
             "pending_operations": [{"id": "old-op", "kind": "initial_buy"}],
             "trade_records": [{"id": "old-trade"}],
-            "acknowledged_top_ups_rub": 5_000.0,
             "instrument_trade_cache": {"FIGI": {"api_trade_available": True}},
             "positions": [
                 {

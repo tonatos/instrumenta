@@ -36,11 +36,13 @@ export function SuggestionCard({
   suggestion,
   isProduction,
   onConfirm,
+  onOpenDetail,
   isPending,
 }: {
   suggestion: Suggestion;
   isProduction: boolean;
   onConfirm: (s: Suggestion) => void;
+  onOpenDetail?: () => void;
   isPending: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -66,7 +68,18 @@ export function SuggestionCard({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="font-medium text-sm">{suggestion.name}</p>
+          {onOpenDetail ? (
+            <button
+              type="button"
+              className="text-left font-medium text-sm hover:underline"
+              onClick={onOpenDetail}
+              data-testid={`suggestion-bond-title-${suggestion.id}`}
+            >
+              {suggestion.name}
+            </button>
+          ) : (
+            <p className="font-medium text-sm">{suggestion.name}</p>
+          )}
           <p className="text-xs text-muted-foreground">{suggestion.isin}</p>
         </div>
         <Badge variant="outline" className="text-xs">

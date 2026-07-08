@@ -302,6 +302,7 @@ export interface Suggestion {
   lots: number;
   figi: string | null;
   suggested_price_pct: number | null;
+  market_price_pct?: number | null;
   reason: string;
   due_date: string | null;
   source_isin?: string | null;
@@ -382,6 +383,8 @@ export interface OrderPreviewResponse {
   money_rub: number;
   sufficient_cash: boolean;
   preview_source: "broker" | "moex";
+  market_price_pct?: number | null;
+  face_value_rub?: number;
 }
 
 export interface SellPositionPreviewResponse extends OrderPreviewResponse {

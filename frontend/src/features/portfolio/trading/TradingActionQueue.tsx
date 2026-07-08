@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Loader2,
@@ -7,7 +8,10 @@ import {
   Sparkles,
   XCircle,
 } from "lucide-react";
+import { api } from "@/api/client";
 import type { Portfolio, Suggestion } from "@/api/types";
+import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
+import { STALE } from "@/features/portfolio/hooks/queryConfig";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, formatRub } from "@/lib/utils";
@@ -29,7 +33,28 @@ interface Props {
 export function TradingActionQueue({ portfolio, suggestionConfirmId }: Props) {
   const [confirmSuggestion, setConfirmSuggestion] = useState<Suggestion | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [detailSecid, setDetailSecid] = useState<string | null>(null);
   const isProduction = portfolio.account_kind === "production";
+
+  const { data: bondsData } = useQuery({
+    queryKey: ["bonds"],
+    queryFn: () => api.getBonds(),
+    staleTime: STALE.bonds,
+    refetchOnWindowFocus: false,
+  });
+
+  const secidByIsin = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const bond of bondsData?.bonds ?? []) {
+      map.set(bond.isin, bond.secid);
+    }
+    for (const position of portfolio.data?.positions ?? []) {
+      if (position.secid && !map.has(position.isin)) {
+        map.set(position.isin, position.secid);
+      }
+    }
+    return map;
+  }, [bondsData?.bonds, portfolio.data?.positions]);
 
   const {
     data,
@@ -215,6 +240,10 @@ export function TradingActionQueue({ portfolio, suggestionConfirmId }: Props) {
               suggestion={s}
               isProduction={isProduction}
               isPending={isPending}
+              onOpenDetail={() => {
+                const secid = secidByIsin.get(s.isin);
+                if (secid) setDetailSecid(secid);
+              }}
               onConfirm={(item) => {
                 setConfirmError(null);
                 setConfirmSuggestion(item);
@@ -240,6 +269,8 @@ export function TradingActionQueue({ portfolio, suggestionConfirmId }: Props) {
 
         {sandboxPayInPanel}
       </div>
+
+      <BondDetailSheet secid={detailSecid} onClose={() => setDetailSecid(null)} />
 
       <ConfirmOrderDialog
         suggestion={confirmSuggestion}

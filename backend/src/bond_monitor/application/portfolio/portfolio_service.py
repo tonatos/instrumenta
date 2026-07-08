@@ -13,7 +13,6 @@ from bond_monitor.domain.portfolio.planner import (
     auto_compose,
     build_plan,
     clear_downstream_slot_overrides,
-    distribute_top_up,
     validate_slot_replacement,
 )
 from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
@@ -292,25 +291,3 @@ class PortfolioService:
             portfolio.touch()
             return await self._repo.save(portfolio)
         return portfolio
-
-    async def preview_top_up(
-        self,
-        portfolio_id: str,
-        universe: list[BondRecord],
-        amount_rub: float,
-        *,
-        key_rate: float,
-        tax_rate: float,
-        today: date,
-    ):
-        portfolio = await self._repo.get_by_id(portfolio_id)
-        if portfolio is None:
-            raise ValueError(f"Portfolio {portfolio_id} not found")
-        return distribute_top_up(
-            portfolio=portfolio,
-            universe=universe,
-            top_up_amount_rub=amount_rub,
-            today=today,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-        )

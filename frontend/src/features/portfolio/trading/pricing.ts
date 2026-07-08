@@ -47,3 +47,14 @@ export function formatLotPriceHint({
   }
   return `${formatRub(clean)} чистая`;
 }
+
+/** Подпись отклонения лимита от рыночной цены (для покупки). */
+export function formatLimitVsMarket(
+  marketPricePct: number,
+  limitPricePct: number,
+): string {
+  const delta = marketPricePct - limitPricePct;
+  if (Math.abs(delta) < 0.0001) return "лимит по рынку";
+  if (delta > 0) return `лимит на ${delta.toFixed(2)}% ниже рынка`;
+  return `лимит на ${Math.abs(delta).toFixed(2)}% выше рынка`;
+}

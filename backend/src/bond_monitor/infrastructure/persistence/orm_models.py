@@ -26,7 +26,6 @@ class PortfolioRow(Base):
     mode: Mapped[str] = mapped_column(String(32), default="simulation")
     account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     account_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    last_top_up_processed_at: Mapped[str | None] = mapped_column(String(64), nullable=True)
     data: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
