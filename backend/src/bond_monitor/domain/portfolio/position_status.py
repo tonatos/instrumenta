@@ -16,21 +16,11 @@ def position_status(
     is_trading: bool,
     today: date,
 ) -> PositionStatus:
-    """Статус позиции в TRADING; в SIMULATION всегда ``active``."""
+    """Статус позиции; в TRADING плановые позиции — active (факт на счёте в advice)."""
+    del today
     if not is_trading:
         return "active"
-    if position.closed_at is not None:
-        return "closed"
-    actual = position.actual_lots
-    if actual is None:
-        return "active"
-    if actual < position.lots:
-        return "pending"
-    if actual > position.lots:
-        return "drift"
-    if actual == position.lots and actual > 0:
-        return "active"
-    return "pending"
+    return "active"
 
 
 def position_to_api_dict(
@@ -46,8 +36,8 @@ def position_to_api_dict(
 
 
 def open_positions(positions: list[PortfolioPosition]) -> list[PortfolioPosition]:
-    """Позиции, не помеченные как закрытые."""
-    return [p for p in positions if p.closed_at is None]
+    """Все позиции плана (факт на счёте — в advisory holdings)."""
+    return list(positions)
 
 
 __all__ = [

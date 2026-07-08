@@ -351,7 +351,7 @@ export function PortfolioPage() {
           {isTrading && (
             <TradingActionQueue
               portfolio={active}
-              pendingConfirmId={searchParams.get("pending_confirm")}
+              suggestionConfirmId={searchParams.get("suggestion_confirm")}
             />
           )}
 

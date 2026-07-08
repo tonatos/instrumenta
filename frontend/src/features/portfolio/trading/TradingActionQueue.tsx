@@ -4,30 +4,30 @@ import {
   Loader2,
   RefreshCw,
   ShoppingCart,
-  Tag,
+  Sparkles,
   XCircle,
 } from "lucide-react";
-import type { PendingOperation, Portfolio } from "@/api/types";
+import type { Portfolio, Suggestion } from "@/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, formatRub } from "@/lib/utils";
 import { ConfirmOrderDialog } from "@/features/portfolio/trading/ConfirmOrderDialog";
 import {
-  groupOperations,
-  OperationCard,
-  OperationSection,
+  ActiveOrderCard,
+  AdvisorySection,
+  groupSuggestions,
+  SuggestionCard,
 } from "@/features/portfolio/trading/OperationGroups";
-import { parseApiError } from "@/features/portfolio/trading/hooks/useOrderPreview";
-import { useTradingSync } from "@/features/portfolio/trading/hooks/useTradingSync";
+import { useTradingAdvice } from "@/features/portfolio/trading/hooks/useTradingAdvice";
 import { SandboxPayInPanel } from "@/features/portfolio/trading/TopUpBatchCard";
 
 interface Props {
   portfolio: Portfolio;
-  pendingConfirmId?: string | null;
+  suggestionConfirmId?: string | null;
 }
 
-export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
-  const [confirmOp, setConfirmOp] = useState<PendingOperation | null>(null);
+export function TradingActionQueue({ portfolio, suggestionConfirmId }: Props) {
+  const [confirmSuggestion, setConfirmSuggestion] = useState<Suggestion | null>(null);
   const [confirmError, setConfirmError] = useState<string | null>(null);
   const isProduction = portfolio.account_kind === "production";
 
@@ -39,59 +39,31 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
     isFetching,
     refetch,
     dataUpdatedAt,
-    confirmMutation,
+    placeMutation,
     cancelMutation,
-    putOfferMutation,
-    dismissMutation,
     isPending,
-  } = useTradingSync(portfolio);
+    parseApiError,
+  } = useTradingAdvice(portfolio);
 
-  const ops = data?.pending_operations ?? [];
-  const groups = useMemo(() => groupOperations(ops), [ops]);
+  const suggestions = data?.suggestions ?? [];
+  const groups = useMemo(() => groupSuggestions(suggestions), [suggestions]);
+  const activeOrders = data?.active_orders ?? [];
 
-  const attentionCount = ops.filter(
-    (op) => op.status === "action_required" || op.status === "overdue",
-  ).length;
-
-  const apiTradeWarnings = useMemo(
-    () =>
-      (data?.notes ?? []).filter((note) => note.includes("не торгуется через T-Invest API")),
-    [data?.notes],
-  );
+  const urgentCount = groups.urgent.length;
 
   useEffect(() => {
-    if (!pendingConfirmId || !ops.length) return;
-    const target = ops.find((op) => op.id === pendingConfirmId);
+    if (!suggestionConfirmId || !suggestions.length) return;
+    const target = suggestions.find((s) => s.id === suggestionConfirmId);
     if (!target) return;
-    document.getElementById(`pending-op-${target.id}`)?.scrollIntoView({ behavior: "smooth" });
-    if (
-      target.kind !== "put_offer_submit" &&
-      target.status !== "blocked" &&
-      target.status !== "in_progress"
-    ) {
-      setConfirmOp(target);
+    document.getElementById(`suggestion-${target.id}`)?.scrollIntoView({ behavior: "smooth" });
+    if (target.kind !== "put_offer_reminder") {
+      setConfirmSuggestion(target);
     }
-  }, [pendingConfirmId, ops]);
+  }, [suggestionConfirmId, suggestions]);
 
-  const syncTime = dataUpdatedAt
+  const adviceTime = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
     : null;
-
-  const renderCard = (op: PendingOperation) => (
-    <OperationCard
-      key={op.id}
-      op={op}
-      isProduction={isProduction}
-      isPending={isPending}
-      onConfirm={(o) => {
-        setConfirmError(null);
-        setConfirmOp(o);
-      }}
-      onCancel={(o) => cancelMutation.mutate(o.id)}
-      onDismiss={(o) => dismissMutation.mutate(o.id)}
-      onPutOffer={(o, decision) => putOfferMutation.mutate({ isin: o.isin, decision })}
-    />
-  );
 
   const sandboxPayInPanel = !isProduction ? (
     <SandboxPayInPanel
@@ -105,7 +77,7 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
     return (
       <div className="flex items-center gap-2 rounded-xl border border-border p-4 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Синхронизация со счётом…
+        Загружаем данные счёта…
       </div>
     );
   }
@@ -132,14 +104,16 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
   }
 
   const hasContent =
-    ops.length > 0 || (data?.drifts?.length ?? 0) > 0 || apiTradeWarnings.length > 0;
+    suggestions.length > 0 ||
+    activeOrders.length > 0 ||
+    (data?.warnings.length ?? 0) > 0;
 
   if (!hasContent) {
     return (
       <div className="space-y-3 rounded-xl border border-green-400/30 bg-green-500/5 px-4 py-3 text-sm">
         <div className="flex items-center justify-between gap-3">
           <span className="text-green-800 dark:text-green-300">
-            Очередь действий пуста — все операции выполнены
+            Рекомендаций нет — портфель в порядке
           </span>
           <Button
             variant="ghost"
@@ -157,29 +131,28 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
     );
   }
 
+  const freeCash = data?.available_money_rub ?? data?.money_rub ?? portfolio.cash_balance_rub;
+  const buySuggestions = groups.buys;
+
   return (
     <>
       <div className="space-y-4 rounded-xl border border-amber-400/40 bg-amber-500/5 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="space-y-0.5">
             <p className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
-              <Tag className="h-4 w-4" />
-              Очередь действий
-              {attentionCount > 0 && (
+              <Sparkles className="h-4 w-4" />
+              Советы по торговле
+              {urgentCount > 0 && (
                 <Badge className="bg-amber-500/20 text-amber-900 dark:text-amber-200">
-                  {attentionCount} требуют внимания
+                  {urgentCount} срочных
                 </Badge>
               )}
             </p>
             <p className="text-xs text-muted-foreground">
-              Свободно{" "}
-              {formatRub(
-                data?.available_money_rub ??
-                  (data?.money_rub ?? portfolio.cash_balance_rub),
-              )}
+              Свободно {formatRub(freeCash)}
               {(data?.blocked_money_rub ?? 0) > 0 &&
                 ` · заблокировано ${formatRub(data!.blocked_money_rub)}`}
-              {syncTime && ` · обновлено ${syncTime}`}
+              {adviceTime && ` · обновлено ${adviceTime}`}
             </p>
           </div>
           <Button
@@ -194,84 +167,109 @@ export function TradingActionQueue({ portfolio, pendingConfirmId }: Props) {
           </Button>
         </div>
 
-        {data?.top_up_auto_applied && data.top_up_distributed_rub > 0 && (
+        {freeCash > 0 && buySuggestions.length > 0 && (
           <div className="rounded-lg border border-blue-400/40 bg-blue-500/10 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
-            Обнаружено пополнение {formatRub(data.top_up_distributed_rub)} — заявки на покупку
-            добавлены в очередь
+            Свободный кэш {formatRub(freeCash)} — рекомендуем:{" "}
+            {buySuggestions.map((s) => s.name).join(", ")}
           </div>
         )}
 
-        {apiTradeWarnings.length > 0 && (
+        {(data?.warnings.length ?? 0) > 0 && (
           <div className="space-y-1 rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100">
-            <p className="font-medium">Позиции недоступны для покупки через API</p>
-            <p className="text-xs text-amber-900/80 dark:text-amber-200/80">
-              Они остались в плане до автосбора с фильтром «только API». Удалите вручную или
-              пересоберите портфель.
-            </p>
+            <p className="font-medium">Предупреждения</p>
             <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs">
-              {apiTradeWarnings.map((note) => (
-                <li key={note}>{note}</li>
+              {data!.warnings.map((w) => (
+                <li key={w}>{w}</li>
               ))}
             </ul>
           </div>
         )}
 
-        <OperationSection title="Срочно" icon={<AlertTriangle className="h-3.5 w-3.5" />} ops={groups.urgent}>
-          {groups.urgent.map(renderCard)}
-        </OperationSection>
+        <AdvisorySection
+          title="Срочно"
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          count={groups.urgent.length}
+        >
+          {groups.urgent.map((s) => (
+            <SuggestionCard
+              key={s.id}
+              suggestion={s}
+              isProduction={isProduction}
+              isPending={isPending}
+              onConfirm={(item) => {
+                setConfirmError(null);
+                setConfirmSuggestion(item);
+              }}
+            />
+          ))}
+        </AdvisorySection>
 
-        <OperationSection title="Покупки" icon={<ShoppingCart className="h-3.5 w-3.5" />} ops={groups.buys}>
-          {groups.buys.map(renderCard)}
-        </OperationSection>
+        <AdvisorySection
+          title="Покупки"
+          icon={<ShoppingCart className="h-3.5 w-3.5" />}
+          count={groups.buys.length}
+        >
+          {groups.buys.map((s) => (
+            <SuggestionCard
+              key={s.id}
+              suggestion={s}
+              isProduction={isProduction}
+              isPending={isPending}
+              onConfirm={(item) => {
+                setConfirmError(null);
+                setConfirmSuggestion(item);
+              }}
+            />
+          ))}
+        </AdvisorySection>
 
-        <OperationSection title="Продажи" icon={<Tag className="h-3.5 w-3.5" />} ops={groups.sells}>
-          {groups.sells.map(renderCard)}
-        </OperationSection>
-
-        {data?.drifts && data.drifts.length > 0 && (
-          <div className="space-y-2 border-t border-border/60 pt-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Расхождения со счётом
-            </p>
-            {data.drifts.map((d) => (
-              <div
-                key={`${d.isin}-${d.name}`}
-                className={cn(
-                  "rounded-lg px-3 py-2 text-xs",
-                  d.severity === "critical"
-                    ? "bg-red-500/10 text-red-800 dark:text-red-300"
-                    : "bg-muted/50 text-muted-foreground",
-                )}
-              >
-                {d.message}
-              </div>
-            ))}
-          </div>
-        )}
+        <AdvisorySection
+          title="Активные заявки"
+          icon={<Sparkles className="h-3.5 w-3.5" />}
+          count={activeOrders.length}
+        >
+          {activeOrders.map((order) => (
+            <ActiveOrderCard
+              key={order.order_id}
+              order={order}
+              isPending={isPending}
+              onCancel={(o) => cancelMutation.mutate(o.order_id)}
+            />
+          ))}
+        </AdvisorySection>
 
         {sandboxPayInPanel}
       </div>
 
       <ConfirmOrderDialog
-        op={confirmOp}
+        suggestion={confirmSuggestion}
         portfolioId={portfolio.id}
-        open={confirmOp !== null}
+        open={confirmSuggestion !== null}
         onOpenChange={(open) => {
           if (!open) {
-            setConfirmOp(null);
+            setConfirmSuggestion(null);
             setConfirmError(null);
           }
         }}
         isProduction={isProduction}
-        isPending={confirmMutation.isPending}
+        isPending={placeMutation.isPending}
         error={confirmError}
         onSubmit={(lots, pricePct) => {
-          if (!confirmOp) return;
-          confirmMutation.mutate(
-            { opId: confirmOp.id, lots, pricePct },
+          if (!confirmSuggestion) return;
+          const direction =
+            confirmSuggestion.kind === "sell" ? "SELL" : "BUY";
+          placeMutation.mutate(
+            {
+              isin: confirmSuggestion.isin,
+              direction,
+              lots,
+              price_pct: pricePct,
+              figi: confirmSuggestion.figi,
+              suggestion_id: confirmSuggestion.id,
+            },
             {
               onSuccess: () => {
-                setConfirmOp(null);
+                setConfirmSuggestion(null);
                 setConfirmError(null);
               },
               onError: (err: Error) => {

@@ -18,6 +18,13 @@ export const POSITION_STATUS_LABELS: Record<string, string> = {
   closed: "Закрыта",
 };
 
+export const SUGGESTION_KIND_LABELS: Record<string, string> = {
+  buy: "Покупка",
+  reinvest: "Реинвестиция",
+  put_offer_reminder: "Пут-оферта",
+  sell: "Продажа",
+};
+
 export const KIND_LABELS: Record<string, string> = {
   initial_buy: "Стартовая покупка",
   reinvest_buy: "Реинвестиция",

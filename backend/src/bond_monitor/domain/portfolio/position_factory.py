@@ -8,7 +8,6 @@ from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import (
     PortfolioPosition,
     PositionSourceType,
-    PutOfferDecision,
 )
 from bond_monitor.domain.portfolio.put_offer import (
     put_offer_buy_blocked,
@@ -65,7 +64,6 @@ def position_from_bond(
         coupon_period_days=bond.coupon_period_days,
         next_coupon_date=bond.next_coupon_date,
         source=source,
-        put_offer_decision=PutOfferDecision.PENDING,
     )
 
 
@@ -88,36 +86,16 @@ def position_end_date(
 ) -> date | None:
     """Эффективная дата возврата номинала по позиции.
 
-    В режиме TRADING (по умолчанию): дата оферты учитывается ТОЛЬКО при
-    явном решении пользователя ``EXERCISE``. Это соответствует
-    реальности — без подачи заявки через чат брокера оферта не
-    сработает (см. AGENTS.md «Режим торговли → Пут-оферты»).
-
-    В режиме SIMULATION с ``assume_best_put_outcome=True`` для
-    ``PENDING`` оферт выбирается выгоднейший сценарий: если оферта
-    выгоднее (offer_price_pct ≥ 100% и есть таксая разница), берём
-    `offer_date`; иначе оставляем `maturity_date`. Это даёт пользователю
-    «оптимистичную» прогнозную доходность без необходимости щёлкать
-    EXERCISE/HOLD по каждой бумаге.
+    В simulation с ``assume_best_put_outcome=True`` для оферт выбирается
+    выгоднейший сценарий по расписанию MOEX.
     """
     if (
-        position.put_offer_decision == PutOfferDecision.EXERCISE
-        and position.offer_date is not None
-        and not put_offer_submission_closed(position, today)
-    ):
-        return position.offer_date
-
-    # SIMULATION: для PENDING рассматриваем лучший исход.
-    if (
         assume_best_put_outcome
-        and position.put_offer_decision == PutOfferDecision.PENDING
         and position.offer_date is not None
         and position.offer_date > today
         and not put_offer_submission_closed(position, today)
         and position.offer_date <= horizon
     ):
-        # Подаём оферту, если цена выкупа ≥ 100%. Если меньше — лучше
-        # держать до погашения (там 100%).
         offer_price = position.offer_price_pct if position.offer_price_pct is not None else 100.0
         if offer_price >= 100.0:
             return position.offer_date

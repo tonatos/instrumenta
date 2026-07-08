@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, Loader2 } from "lucide-react";
-import type { OrderPreviewResponse, PendingOperation } from "@/api/types";
-import { KIND_LABELS } from "@/features/portfolio/labels";
+import type { OrderPreviewResponse, Suggestion } from "@/api/types";
+import { SUGGESTION_KIND_LABELS } from "@/features/portfolio/labels";
 import {
   previewMatchesForm,
+  suggestionDirection,
   useOrderPreview,
 } from "@/features/portfolio/trading/hooks/useOrderPreview";
-import {
-  formatLotPriceHint,
-} from "@/features/portfolio/trading/pricing";
+import { formatLotPriceHint } from "@/features/portfolio/trading/pricing";
 import { Button } from "@/components/ui/button";
 import {
   DialogContent,
@@ -42,7 +41,7 @@ function PricingRow({
 }
 
 export function ConfirmOrderDialog({
-  op,
+  suggestion,
   portfolioId,
   open,
   onOpenChange,
@@ -51,7 +50,7 @@ export function ConfirmOrderDialog({
   isPending,
   error,
 }: {
-  op: PendingOperation | null;
+  suggestion: Suggestion | null;
   portfolioId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -65,35 +64,31 @@ export function ConfirmOrderDialog({
   const parsedPricePct = parseFloat(pricePct);
 
   useEffect(() => {
-    if (op) {
-      setLots(op.lots);
-      const initialPrice =
-        op.active_order_price_pct ?? op.suggested_price_pct ?? null;
+    if (suggestion) {
+      setLots(suggestion.lots);
+      const initialPrice = suggestion.suggested_price_pct ?? null;
       setPricePct(initialPrice != null ? initialPrice.toFixed(4) : "");
     }
-  }, [op]);
+  }, [suggestion]);
 
   const { preview, previewLoading, previewError, isBuy, isSell } = useOrderPreview({
     open,
-    op,
+    suggestion,
     portfolioId,
     lots,
     parsedPricePct,
   });
 
-  if (!op) return null;
+  if (!suggestion) return null;
 
-  const isSellOp = op.kind === "manual_sell";
-  const lotSize = op.lot_size ?? 1;
-  const faceValueRub = op.face_value_rub ?? 1000;
+  const direction = suggestionDirection(suggestion.kind);
+  const lotSize = preview?.lot_size ?? 1;
+  const faceValueRub = 1000;
   const previewApplies =
     preview != null &&
     Number.isFinite(parsedPricePct) &&
     previewMatchesForm(preview, lots, parsedPricePct);
-  const aciRubPerBond =
-    (previewApplies ? preview?.aci_rub_per_bond : null) ??
-    op.aci_rub_per_bond ??
-    0;
+  const aciRubPerBond = previewApplies ? preview.aci_rub_per_bond : 0;
   const pricePerLotHint =
     Number.isFinite(parsedPricePct) && parsedPricePct > 0
       ? formatLotPriceHint({
@@ -104,12 +99,12 @@ export function ConfirmOrderDialog({
         })
       : null;
   const suggestedLotPriceHint =
-    op.suggested_price_pct != null
+    suggestion.suggested_price_pct != null
       ? formatLotPriceHint({
-          pricePct: op.suggested_price_pct,
+          pricePct: suggestion.suggested_price_pct,
           faceValueRub,
           lotSize,
-          aciRubPerBond: op.aci_rub_per_bond ?? 0,
+          aciRubPerBond,
         })
       : null;
   const brokerPreview =
@@ -124,10 +119,10 @@ export function ConfirmOrderDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isSellOp ? "Подтвердить продажу" : "Подтвердить покупку"}
+            {isSell ? "Подтвердить продажу" : "Подтвердить покупку"}
           </DialogTitle>
           <DialogDescription>
-            {op.name} · {KIND_LABELS[op.kind]}
+            {suggestion.name} · {SUGGESTION_KIND_LABELS[suggestion.kind] ?? suggestion.kind}
           </DialogDescription>
         </DialogHeader>
 
@@ -147,7 +142,7 @@ export function ConfirmOrderDialog({
             </p>
           )}
 
-          {isSellOp && (
+          {isSell && (
             <p className="rounded-lg border border-border/70 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
               Лимитная заявка на продажу по{" "}
               <span className="font-medium text-foreground">чистой</span> цене. НКД и
@@ -191,20 +186,20 @@ export function ConfirmOrderDialog({
             </div>
           </div>
 
-          {(isBuy || isSellOp) && op.suggested_price_pct != null && (
+          {direction && suggestion.suggested_price_pct != null && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 px-2 text-xs"
-              onClick={() => setPricePct(op.suggested_price_pct!.toFixed(4))}
+              onClick={() => setPricePct(suggestion.suggested_price_pct!.toFixed(4))}
             >
-              Сбросить к рекомендуемой ({op.suggested_price_pct.toFixed(4)}%
+              Сбросить к рекомендуемой ({suggestion.suggested_price_pct.toFixed(4)}%
               {suggestedLotPriceHint ? ` · ≈ ${suggestedLotPriceHint}/лот` : ""})
             </Button>
           )}
 
-          {(isBuy || isSellOp) && (previewLoading || previewApplies || previewError) && (
+          {direction && (previewLoading || previewApplies || previewError) && (
             <div className="space-y-2 rounded-lg border border-blue-400/30 bg-blue-500/5 p-3">
               <p className="text-xs font-medium text-blue-900 dark:text-blue-200">
                 {brokerPreview ? "Расчёт брокера" : "Оценка по MOEX"}
@@ -222,7 +217,7 @@ export function ConfirmOrderDialog({
                 <PreviewDetails
                   preview={preview}
                   brokerPreview={brokerPreview}
-                  isSell={isSellOp}
+                  isSell={isSell}
                 />
               )}
             </div>
@@ -232,16 +227,16 @@ export function ConfirmOrderDialog({
             <p className="flex items-start gap-1.5 text-sm text-amber-800 dark:text-amber-300">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               По оценке брокера на счёте может не хватить средств
-              {totalToPay != null ? ` (~${formatRub(totalToPay)} при ${formatRub(preview!.money_rub)} на счёте)` : ""}.
-              Заявку всё равно можно отправить — биржа примет или отклонит.
+              {totalToPay != null
+                ? ` (~${formatRub(totalToPay)} при ${formatRub(preview!.money_rub)} на счёте)`
+                : ""}
+              . Заявку всё равно можно отправить — биржа примет или отклонит.
             </p>
           )}
 
-          <p className="text-xs text-muted-foreground">{op.reason}</p>
+          <p className="text-xs text-muted-foreground">{suggestion.reason}</p>
 
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
 
         <DialogFooter>
@@ -250,11 +245,7 @@ export function ConfirmOrderDialog({
           </Button>
           <Button
             onClick={() => onSubmit(lots, parseFloat(pricePct))}
-            disabled={
-              isPending ||
-              !pricePct ||
-              Number.isNaN(parseFloat(pricePct))
-            }
+            disabled={isPending || !pricePct || Number.isNaN(parseFloat(pricePct))}
           >
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Отправить заявку
@@ -326,16 +317,10 @@ function PreviewDetails({
       <PricingRow
         label={isSell ? "Итого к зачислению" : "Итого к списанию"}
         value={formatRub(
-          brokerPreview?.broker_total_amount_rub ??
-            preview.local_total_amount_rub,
+          brokerPreview?.broker_total_amount_rub ?? preview.local_total_amount_rub,
         )}
       />
-      {!isSell && (
-        <PricingRow
-          label="На счёте"
-          value={formatRub(preview.money_rub)}
-        />
-      )}
+      {!isSell && <PricingRow label="На счёте" value={formatRub(preview.money_rub)} />}
     </div>
   );
 }

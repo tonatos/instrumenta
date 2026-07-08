@@ -1,11 +1,11 @@
 /**
- * E2E: очередь действий в режиме торговли — sync, confirm dialog, in_progress.
+ * E2E: advisory-панель в режиме торговли — advice, confirm dialog, active orders.
  */
 
 import { test, expect } from "@playwright/test";
 
 const PORTFOLIO_ID = "trading-portfolio-1";
-const PENDING_OP_ID = "pending-op-initial-1";
+const SUGGESTION_ID = "suggestion-buy-1";
 
 const tradingPortfolio = {
   id: PORTFOLIO_ID,
@@ -49,73 +49,58 @@ const tradingPortfolio = {
     mode: "trading",
     account_id: "acc-e2e",
     account_kind: "sandbox",
-    acknowledged_top_ups_rub: 100_000,
     frozen_forecast: null,
-    pending_operations: [],
   },
 };
 
-const pendingBuy = {
-  id: PENDING_OP_ID,
-  kind: "initial_buy",
+const buySuggestion = {
+  id: SUGGESTION_ID,
+  kind: "buy",
   isin: "RU000ATEST1",
   name: "Тестовая облигация",
   lots: 5,
   figi: "FIGI_TEST",
   suggested_price_pct: 100.5,
   due_date: null,
-  reason: "Стартовая покупка: 5 лот(а) из 5",
-  status: "action_required",
-  block_reason: null,
-  estimated_amount_rub: 5050,
-  face_value_rub: 1000,
-  lot_size: 1,
-  aci_rub_per_bond: 5,
-  active_order_id: null,
-  active_order_status: null,
+  reason: "Свободный кэш — рекомендуем докупить 5 лот(а)",
   urgency: "normal",
   chat_template: null,
 };
 
-function syncResponse(pending = [pendingBuy], overrides: Record<string, unknown> = {}) {
+function adviceResponse(
+  suggestions = [buySuggestion],
+  overrides: Record<string, unknown> = {},
+) {
   return {
-    pending_operations: pending,
-    drifts: [],
+    holdings: [],
+    cashflow: [],
+    performance: null,
+    suggestions,
+    active_orders: [],
     money_rub: 100_000,
     available_money_rub: 100_000,
     blocked_money_rub: 0,
-    last_synced_at: new Date().toISOString(),
-    has_pending_top_up: false,
-    pending_top_up_rub: 0,
-    top_up_auto_applied: false,
-    top_up_distributed_rub: 0,
-    top_up_notes: [],
-    notes: [],
+    warnings: [],
+    as_of: new Date().toISOString(),
     ...overrides,
   };
 }
 
-const topUpBuy = {
-  id: "pending-op-topup-1",
-  kind: "top_up_buy",
+const topUpBuySuggestion = {
+  id: "suggestion-topup-1",
+  kind: "buy",
   isin: "RU000ATEST2",
   name: "Тестовая облигация 2",
   lots: 2,
   figi: "FIGI_TOPUP",
   suggested_price_pct: 101.0,
   due_date: null,
-  reason: "Пополнение счёта — автораспределение",
-  top_up_batch_id: "batch-e2e-1",
-  status: "action_required",
-  block_reason: null,
-  estimated_amount_rub: 2020,
-  active_order_id: null,
-  active_order_status: null,
+  reason: "Свободный кэш — рекомендуем докупить",
   urgency: "normal",
   chat_template: null,
 };
 
-test.describe("Очередь действий (торговля)", () => {
+test.describe("Советы по торговле", () => {
   test.beforeEach(async ({ page }) => {
     await page.route("**/api/v1/config/", async (route) => {
       await route.fulfill({
@@ -149,6 +134,7 @@ test.describe("Очередь действий (торговля)", () => {
           total_net_profit_rub: 10_000,
           total_net_profit_with_held_rub: 10_000,
           invested_capital_rub: 200_000,
+          total_invested_rub: 200_000,
           final_cash_balance: 0,
           final_portfolio_value: 110_000,
           expected_xirr_pct: 12,
@@ -161,93 +147,83 @@ test.describe("Очередь действий (торговля)", () => {
       });
     });
 
-    let syncCount = 0;
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sync`, async (route) => {
-      syncCount += 1;
-      if (syncCount === 1) {
-        await route.fulfill({ json: syncResponse() });
+    let adviceCount = 0;
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
+      adviceCount += 1;
+      if (adviceCount === 1) {
+        await route.fulfill({ json: adviceResponse() });
         return;
       }
       await route.fulfill({
-        json: syncResponse([
-          {
-            ...pendingBuy,
-            status: "in_progress",
-            active_order_id: "order-e2e-123",
-            active_order_status: "EXECUTION_REPORT_STATUS_NEW",
-            active_order_lots: 5,
-            active_order_price_pct: 100.5,
-            active_order_total_rub: 5055,
-            active_order_commission_rub: 5,
-            active_order_lots_executed: 0,
-            active_order_bonds_count: 5,
-          },
-        ]),
+        json: adviceResponse([], {
+          active_orders: [
+            {
+              order_id: "order-e2e-123",
+              request_uid: "req-e2e-1",
+              figi: "FIGI_TEST",
+              direction: "BUY",
+              lots_requested: 5,
+              lots_executed: 0,
+              status: "EXECUTION_REPORT_STATUS_NEW",
+              price_pct: 100.5,
+              total_order_amount_rub: 5055,
+              initial_commission_rub: 5,
+            },
+          ],
+        }),
       });
     });
 
-    await page.route(
-      `**/api/v1/portfolios/${PORTFOLIO_ID}/pending-operations/**/preview`,
-      async (route) => {
-        const body = route.request().postDataJSON() as { lots?: number; price_pct?: number };
-        const lots = body.lots ?? pendingBuy.lots;
-        const pricePct = body.price_pct ?? pendingBuy.suggested_price_pct;
-        const aciPerBond = pendingBuy.aci_rub_per_bond ?? 0;
-        const cleanAmount = (lots * 1000 * pricePct) / 100;
-        const dirtyAmount = cleanAmount + aciPerBond * lots;
-        const commission = 10;
-        await route.fulfill({
-          json: {
-            order_lots: lots,
-            order_bonds: lots * (pendingBuy.lot_size ?? 1),
-            lot_size: pendingBuy.lot_size ?? 1,
-            order_price_pct: pricePct,
-            clean_amount_rub: cleanAmount,
-            aci_rub_per_bond: aciPerBond,
-            local_total_amount_rub: dirtyAmount,
-            broker_clean_amount_rub: cleanAmount,
-            broker_aci_amount_rub: aciPerBond * lots * (pendingBuy.lot_size ?? 1),
-            broker_total_amount_rub: dirtyAmount + commission,
-            broker_commission_rub: commission,
-            money_rub: 100_000,
-            sufficient_cash: true,
-            preview_source: "broker",
-          },
-        });
-      },
-    );
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/preview`, async (route) => {
+      const body = route.request().postDataJSON() as { lots?: number; price_pct?: number };
+      const lots = body.lots ?? buySuggestion.lots;
+      const pricePct = body.price_pct ?? buySuggestion.suggested_price_pct;
+      const aciPerBond = 5;
+      const cleanAmount = (lots * 1000 * pricePct) / 100;
+      const dirtyAmount = cleanAmount + aciPerBond * lots;
+      const commission = 10;
+      await route.fulfill({
+        json: {
+          order_lots: lots,
+          order_bonds: lots,
+          lot_size: 1,
+          order_price_pct: pricePct,
+          clean_amount_rub: cleanAmount,
+          aci_rub_per_bond: aciPerBond,
+          local_total_amount_rub: dirtyAmount,
+          broker_clean_amount_rub: cleanAmount,
+          broker_aci_amount_rub: aciPerBond * lots,
+          broker_total_amount_rub: dirtyAmount + commission,
+          broker_commission_rub: commission,
+          money_rub: 100_000,
+          sufficient_cash: true,
+          preview_source: "broker",
+        },
+      });
+    });
 
-    await page.route(
-      `**/api/v1/portfolios/${PORTFOLIO_ID}/pending-operations/${PENDING_OP_ID}/confirm`,
-      async (route) => {
-        await route.fulfill({
-          json: syncResponse([
-            {
-              ...pendingBuy,
-              status: "in_progress",
-              active_order_id: "order-e2e-123",
-              active_order_status: "EXECUTION_REPORT_STATUS_NEW",
-              active_order_lots: 5,
-              active_order_price_pct: 100.5,
-              active_order_total_rub: 5055,
-              active_order_commission_rub: 5,
-              active_order_lots_executed: 0,
-              active_order_bonds_count: 5,
-            },
-          ]),
-        });
-      },
-    );
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/place`, async (route) => {
+      await route.fulfill({
+        json: {
+          order_id: "order-e2e-123",
+          status: "EXECUTION_REPORT_STATUS_NEW",
+          request_uid: "req-e2e-1",
+          lots_requested: 5,
+          lots_executed: 0,
+          total_order_amount_rub: 5055,
+          initial_commission_rub: 5,
+        },
+      });
+    });
   });
 
-  test("sync показывает покупку, confirm-диалог отправляет заявку", async ({ page }) => {
-    await page.goto(`/portfolio/${PORTFOLIO_ID}?pending_confirm=${PENDING_OP_ID}`);
+  test("advice показывает покупку, confirm-диалог отправляет заявку", async ({ page }) => {
+    await page.goto(`/portfolio/${PORTFOLIO_ID}?suggestion_confirm=${SUGGESTION_ID}`);
 
-    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
-    const opCard = page.locator(`#pending-op-${PENDING_OP_ID}`);
-    await expect(opCard).toBeVisible();
+    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    const suggestionCard = page.locator(`#suggestion-${SUGGESTION_ID}`);
+    await expect(suggestionCard).toBeVisible();
 
-    // Deep-link opens confirm dialog after sync
     await expect(page.getByRole("heading", { name: "Подтвердить покупку" })).toBeVisible({
       timeout: 10_000,
     });
@@ -262,74 +238,65 @@ test.describe("Очередь действий (торговля)", () => {
 
     await expect(page.getByRole("dialog")).not.toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("На бирже").first()).toBeVisible({ timeout: 10_000 });
-    await expect(opCard.getByText(/5[\s\u00a0]055/)).toBeVisible();
-    await expect(opCard.getByText("5 лот.")).toBeVisible();
-    await expect(opCard.getByText("Новая")).toBeVisible();
-    await opCard.getByRole("button", { name: "Детали заявки" }).click();
-    await expect(opCard.getByText("order-e2e-123")).toBeVisible();
-    await expect(opCard.getByText("Сумма заявки")).toBeVisible();
-    await expect(opCard.getByText(/5[\s\u00a0]055/).nth(1)).toBeVisible();
+    await expect(page.getByText("order-e2e-123")).toBeVisible();
+    await expect(page.getByText(/5[\s\u00a0]055/)).toBeVisible();
   });
 
-  test("sync с top-up показывает баннер и покупку пополнения", async ({ page }) => {
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sync`, async (route) => {
+  test("advice со свободным кэшем показывает баннер и рекомендацию покупки", async ({ page }) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
       await route.fulfill({
-        json: syncResponse([topUpBuy], {
-          top_up_auto_applied: true,
-          top_up_distributed_rub: 20_000,
+        json: adviceResponse([topUpBuySuggestion], {
+          available_money_rub: 20_000,
+          money_rub: 20_000,
         }),
       });
     });
 
     await page.goto(`/portfolio/${PORTFOLIO_ID}`);
 
-    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/старт.*100/)).toBeVisible();
     await expect(page.getByText(/капитал.*200/)).toBeVisible();
-    await expect(page.getByText(/Обнаружено пополнение/)).toBeVisible();
-    await expect(page.getByText("Покупка (пополнение)")).toBeVisible();
+    await expect(page.getByText(/Свободный кэш.*рекомендуем/i).first()).toBeVisible();
+    await expect(page.getByText("Покупка", { exact: true })).toBeVisible();
   });
 
   test("модалка покупки показывает грязную сумму с НКД по расчёту брокера", async ({ page }) => {
     const mtsBuy = {
-      ...pendingBuy,
-      id: "pending-op-mts",
+      ...buySuggestion,
+      id: "suggestion-mts",
       name: "МТС-Банк05",
       lots: 1,
       suggested_price_pct: 100.4095,
-      aci_rub_per_bond: 285,
-      estimated_amount_rub: 1289.1,
+      reason: "Свободный кэш",
     };
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sync`, async (route) => {
-      await route.fulfill({ json: syncResponse([mtsBuy]) });
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
+      await route.fulfill({ json: adviceResponse([mtsBuy]) });
     });
 
-    await page.route(
-      `**/api/v1/portfolios/${PORTFOLIO_ID}/pending-operations/pending-op-mts/preview`,
-      async (route) => {
-        await route.fulfill({
-          json: {
-            order_lots: 1,
-            order_bonds: 1,
-            lot_size: 1,
-            order_price_pct: 100.4095,
-            clean_amount_rub: 1004.1,
-            aci_rub_per_bond: 285,
-            local_total_amount_rub: 1289.1,
-            broker_clean_amount_rub: 1004.1,
-            broker_aci_amount_rub: 285,
-            broker_total_amount_rub: 1294.1,
-            broker_commission_rub: 5,
-            money_rub: 100_000,
-            sufficient_cash: true,
-            preview_source: "broker",
-          },
-        });
-      },
-    );
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/preview`, async (route) => {
+      await route.fulfill({
+        json: {
+          order_lots: 1,
+          order_bonds: 1,
+          lot_size: 1,
+          order_price_pct: 100.4095,
+          clean_amount_rub: 1004.1,
+          aci_rub_per_bond: 285,
+          local_total_amount_rub: 1289.1,
+          broker_clean_amount_rub: 1004.1,
+          broker_aci_amount_rub: 285,
+          broker_total_amount_rub: 1294.1,
+          broker_commission_rub: 5,
+          money_rub: 100_000,
+          sufficient_cash: true,
+          preview_source: "broker",
+        },
+      });
+    });
 
-    await page.goto(`/portfolio/${PORTFOLIO_ID}?pending_confirm=pending-op-mts`);
+    await page.goto(`/portfolio/${PORTFOLIO_ID}?suggestion_confirm=suggestion-mts`);
 
     const confirmDialog = page.getByRole("dialog", { name: "Подтвердить покупку" });
     await expect(confirmDialog).toBeVisible({ timeout: 10_000 });
@@ -341,10 +308,10 @@ test.describe("Очередь действий (торговля)", () => {
     await expect(confirmDialog.getByText("Расчёт брокера")).toBeVisible();
   });
 
-  test("пут-оферта в последние дни показывает срочное напоминание", async ({ page }) => {
-    const putOfferOp = {
-      id: "pending-op-put-urgent",
-      kind: "put_offer_submit",
+  test("пут-оферта показывает срочное напоминание", async ({ page }) => {
+    const putOfferSuggestion = {
+      id: "suggestion-put-urgent",
+      kind: "put_offer_reminder",
       isin: "RU000ATEST1",
       name: "Тестовая облигация",
       lots: 5,
@@ -352,31 +319,25 @@ test.describe("Очередь действий (торговля)", () => {
       suggested_price_pct: 100.0,
       due_date: "2026-07-09",
       reason:
-        "Пут-оферта 20 июля по цене 100.00%. Подайте заявку через чат брокера (API не умеет). " +
-        "Срочно: предъявите бумаги до 9 июля включительно, если ещё не подали заявку.",
-      status: "action_required",
-      block_reason: null,
-      estimated_amount_rub: null,
-      active_order_id: null,
-      active_order_status: null,
+        "Скоро пут-оферта 20.07.2026 — предъявите бумаги до 9 июля включительно",
       urgency: "critical",
       chat_template: "Текст для чата",
     };
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sync`, async (route) => {
-      await route.fulfill({ json: syncResponse([putOfferOp]) });
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
+      await route.fulfill({ json: adviceResponse([putOfferSuggestion]) });
     });
 
     await page.goto(`/portfolio/${PORTFOLIO_ID}`);
 
-    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/Осталось мало времени/)).toBeVisible();
+    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/предъявите бумаги/i)).toBeVisible();
-    await expect(page.getByText("Я подал оферту")).toBeVisible();
+    await expect(page.getByText("Пут-оферта", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Копировать текст" })).toBeVisible();
   });
 
   test("в песочнице можно добавить средства для теста пополнения", async ({ page }) => {
-    let syncCalls = 0;
+    let adviceCalls = 0;
 
     await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sandbox-pay-in`, async (route) => {
       await route.fulfill({
@@ -385,13 +346,12 @@ test.describe("Очередь действий (торговля)", () => {
       });
     });
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sync`, async (route) => {
-      syncCalls += 1;
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
+      adviceCalls += 1;
       await route.fulfill({
-        json: syncResponse([topUpBuy], {
-          money_rub: 150_000,
-          top_up_auto_applied: true,
-          top_up_distributed_rub: 50_000,
+        json: adviceResponse([topUpBuySuggestion], {
+          money_rub: adviceCalls > 1 ? 150_000 : 100_000,
+          available_money_rub: adviceCalls > 1 ? 150_000 : 100_000,
         }),
       });
     });
@@ -400,23 +360,14 @@ test.describe("Очередь действий (торговля)", () => {
 
     await expect(page.getByText("Песочница · добавить средства")).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Добавить средства" }).click();
-    await expect(page.getByText(/Обнаружено пополнение/)).toBeVisible({ timeout: 10_000 });
-    expect(syncCalls).toBeGreaterThanOrEqual(1);
+    await expect(page.getByText(/Свободный кэш.*₽ — рекомендуем/i).first()).toBeVisible({ timeout: 10_000 });
+    expect(adviceCalls).toBeGreaterThanOrEqual(2);
   });
 
-  test("показывает свободный и заблокированный кэш; покупки сверх доступного — «Заблокировано»", async ({
-    page,
-  }) => {
-    const blockedBuy = {
-      ...pendingBuy,
-      status: "blocked",
-      block_reason:
-        "Недостаточно свободных средств — деньги заблокированы под активные заявки",
-    };
-
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sync`, async (route) => {
+  test("показывает свободный и заблокированный кэш", async ({ page }) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
       await route.fulfill({
-        json: syncResponse([blockedBuy], {
+        json: adviceResponse([buySuggestion], {
           money_rub: 50_000,
           available_money_rub: 2_000,
           blocked_money_rub: 48_000,
@@ -424,12 +375,37 @@ test.describe("Очередь действий (торговля)", () => {
       });
     });
 
-    await page.goto(`/portfolio/${PORTFOLIO_ID}`);
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/preview`, async (route) => {
+      await route.fulfill({
+        json: {
+          order_lots: 5,
+          order_bonds: 5,
+          lot_size: 1,
+          order_price_pct: 100.5,
+          clean_amount_rub: 5025,
+          aci_rub_per_bond: 5,
+          local_total_amount_rub: 5050,
+          broker_clean_amount_rub: 5025,
+          broker_aci_amount_rub: 25,
+          broker_total_amount_rub: 5060,
+          broker_commission_rub: 10,
+          money_rub: 2_000,
+          sufficient_cash: false,
+          preview_source: "broker",
+        },
+      });
+    });
 
-    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
+    await page.goto(`/portfolio/${PORTFOLIO_ID}?suggestion_confirm=${SUGGESTION_ID}`);
+
+    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Свободно/)).toBeVisible();
     await expect(page.getByText(/заблокировано/)).toBeVisible();
-    await expect(page.getByText("Заблокировано", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Подтвердить покупку" })).toBeDisabled();
+
+    const confirmDialog = page.getByRole("dialog", { name: "Подтвердить покупку" });
+    await expect(confirmDialog).toBeVisible({ timeout: 10_000 });
+    await expect(confirmDialog.getByText(/может не хватить средств/i)).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });

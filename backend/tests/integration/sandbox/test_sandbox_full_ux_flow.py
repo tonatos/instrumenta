@@ -1,23 +1,13 @@
 """
-Полный UX-сценарий портфельного режима торговли в sandbox.
+Полный UX-сценарий trading-портфеля в sandbox (stateless advisory).
 
-Эмулирует то, что делает UI при переходе портфеля в TRADING:
-
-1. Создание свежего портфеля через ``data.portfolios.create_portfolio``.
-2. Открытие sandbox-счёта + пополнение.
-3. ``get_account_snapshot`` + ``validate_account_for_attach`` (strict).
-4. Минимальный «универс» из одной реальной ОФЗ + ``auto_compose`` -
-   симулирует то, что делает мастер перехода.
-5. Фиксация ``FrozenForecast``.
-6. ``compute_pending_operations`` → должен быть ``initial_buy``.
-7. ``post_limit_order`` BUY (по цене ниже рынка чтобы не сматчилось).
-8. ``reconcile_positions`` + ``summarize_actual_performance`` —
-   проверяем что фактическая доходность хотя бы инициализирована.
-9. Cleanup: cancel + close + удаление портфеля.
-
-Этот тест не запускает Streamlit, но проходит через те же чистые
-функции, что и UI-вкладка. Это финальный smoke перед закрытием задачи
-(см. план «portfolio-trading-mode», todo `sandbox-smoke`).
+1. create_portfolio → sandbox open + pay_in
+2. validate_attach_soft + attach
+3. build_plan + frozen_forecast
+4. advise() → buy suggestion
+5. post_limit_order по рекомендации
+6. advise() с active_orders + summarize_actual_performance
+7. cancel + cleanup
 """
 
 from __future__ import annotations
@@ -29,22 +19,11 @@ from datetime import date, timedelta
 import pytest
 
 from bond_monitor.domain.bonds.models import BondRecord, RiskLevel
-from bond_monitor.domain.shared.money import Lots, PriceUnitPct, Rub
-from bond_monitor.domain.trading.pending_operations import compute_pending_operations
-from bond_monitor.domain.portfolio.models import (
-    PortfolioMode,
-    PortfolioPosition,
-    PositionSourceType,
-    PutOfferDecision,
-    RiskProfile,
-)
-from bond_monitor.domain.trading.models import (
-    AccountKind,
-    FrozenForecast,
-    TradeRecord,
-)
+from bond_monitor.domain.portfolio.models import PortfolioMode, RiskProfile
 from bond_monitor.domain.portfolio.planner import build_plan
-from bond_monitor.domain.trading.reconciler import reconcile_positions, validate_account_for_attach
+from bond_monitor.domain.shared.money import Lots, PriceUnitPct, Rub
+from bond_monitor.domain.trading.advisory import advise, validate_attach_soft
+from bond_monitor.domain.trading.models import AccountKind, FrozenForecast
 from bond_monitor.domain.trading.yield_calc import summarize_actual_performance
 from bond_monitor.infrastructure.persistence.json_portfolios import create_portfolio, delete_portfolio, update_portfolio
 from bond_monitor.infrastructure.tinvest.trading_client import (
@@ -52,16 +31,16 @@ from bond_monitor.infrastructure.tinvest.trading_client import (
     close_sandbox_account,
     get_account_operations,
     get_account_snapshot,
+    get_active_orders,
     make_request_uid,
     open_sandbox_account,
     post_limit_order,
     sandbox_pay_in,
 )
 
-from helpers import find_liquid_ofz
+from .helpers import find_liquid_ofz
 
 pytestmark = pytest.mark.sandbox
-
 
 _SANDBOX_TOKEN: str = os.getenv("T_TRADING_TOKEN_SANDBOX", "").strip()
 
@@ -73,7 +52,6 @@ def _mini_universe(
     lot_size: int,
     face_value: float,
 ) -> list[BondRecord]:
-    """Однобумажный универс для auto_compose в smoke-тесте."""
     today = date.today()
     bond = BondRecord(
         secid=isin[:6],
@@ -99,7 +77,7 @@ def _mini_universe(
 
 @pytest.mark.skipif(not _SANDBOX_TOKEN, reason="T_TRADING_TOKEN_SANDBOX не задан")
 def test_full_ux_flow_in_sandbox() -> None:
-    """Программная эмуляция «создание → TRADING → buy → sync → XIRR»."""
+    """Программная эмуляция: create → TRADING → advise → buy → performance."""
     token = _SANDBOX_TOKEN
 
     ofz = find_liquid_ofz(token)
@@ -113,7 +91,6 @@ def test_full_ux_flow_in_sandbox() -> None:
         ofz.face_value,
     )
 
-    # 1. Создаём портфель в локальном JSON
     portfolio = create_portfolio(
         name=f"smoke-{date.today().isoformat()}",
         initial_amount_rub=50_000.0,
@@ -121,55 +98,24 @@ def test_full_ux_flow_in_sandbox() -> None:
         risk_profile=RiskProfile.NORMAL,
     )
 
-    # 2. Sandbox: открываем счёт + пополняем
     account_id = open_sandbox_account(token, name="bond-monitor-smoke")
 
     try:
         sandbox_pay_in(token, account_id, Rub(100_000.0))
 
-        # 3. Snapshot + validate (strict)
         snapshot = get_account_snapshot(token, AccountKind.SANDBOX, account_id)
-        validation = validate_account_for_attach(snapshot, portfolio)
-        assert validation.can_attach, (
-            f"validate_account_for_attach unexpectedly blocked: {validation.blockers}"
-        )
+        universe = _mini_universe(figi, isin, last_price_pct, lot_size, face_value)
+        validation = validate_attach_soft(snapshot, portfolio, universe)
+        assert validation.can_attach
         assert validation.effective_initial_amount_rub > 0
 
-        # 4. Привязываем счёт к портфелю + создаём одну позицию вручную
-        # (auto_compose с большим универсом тоже работает, но для smoke
-        # достаточно явной позиции, чтобы детерминированно проверить XIRR).
         portfolio.mode = PortfolioMode.TRADING
         portfolio.account_id = account_id
         portfolio.account_kind = AccountKind.SANDBOX
         portfolio.account_label = f"smoke-{account_id[:6]}"
         portfolio.initial_amount_rub = float(validation.effective_initial_amount_rub)
+        portfolio.trading_started_at = date.today().isoformat()
 
-        portfolio.positions = [
-            PortfolioPosition(
-                isin=isin,
-                secid=isin[:6],
-                name=f"OFZ {isin[-4:]}",
-                lots=1,
-                lot_size=lot_size,
-                purchase_clean_price_pct=float(last_price_pct),
-                purchase_dirty_price_rub=face_value * float(last_price_pct) / 100.0,
-                purchase_aci_rub=0.0,
-                purchase_date=date.today(),
-                purchase_amount_rub=face_value * float(last_price_pct) / 100.0 * lot_size,
-                coupon_rate=10.0,
-                face_value=face_value,
-                maturity_date=date.today() + timedelta(days=365 * 2),
-                offer_date=None,
-                coupon_period_days=180,
-                source=PositionSourceType.INITIAL,
-                put_offer_decision=PutOfferDecision.PENDING,
-                figi=figi,
-                actual_lots=0,
-            )
-        ]
-
-        # 5. Считаем план и фиксируем frozen_forecast
-        universe = _mini_universe(figi, isin, last_price_pct, lot_size, face_value)
         plan = build_plan(
             portfolio,
             universe,
@@ -187,53 +133,43 @@ def test_full_ux_flow_in_sandbox() -> None:
         )
         update_portfolio(portfolio)
 
-        # 6. compute_pending_operations: должна быть как минимум 1 initial_buy
-        pending = compute_pending_operations(portfolio, snapshot, date.today())
-        initial_buys = [op for op in pending if op.kind == "initial_buy"]
-        assert initial_buys, "Не сгенерировано ни одной initial_buy pending"
-        op = initial_buys[0]
-        assert op.figi == figi
+        advice_before = advise(
+            portfolio,
+            snapshot,
+            active_orders=[],
+            operations=[],
+            universe=universe,
+            key_rate=16.0,
+            tax_rate=0.13,
+            today=date.today(),
+        )
+        buy_suggestions = [s for s in advice_before.suggestions if s.kind == "buy"]
+        assert buy_suggestions, "advise() должен предложить покупку при свободном кэше"
+        suggestion = buy_suggestions[0]
+        assert suggestion.lots >= 1
 
-        # 7. post_limit_order BUY 1 лот по цене НИЖЕ рынка
         buy_price = PriceUnitPct(round(float(last_price_pct) * 0.93, 4))
+        order_figi = suggestion.figi or figi
         request_uid = make_request_uid(
             account_id=account_id,
-            figi=figi,
+            figi=order_figi,
             direction="BUY",
-            lots=op.lots,
-            pending_op_id=op.id,
+            lots=suggestion.lots,
+            order_key=suggestion.id,
         )
         result = post_limit_order(
             token,
             AccountKind.SANDBOX,
             account_id=account_id,
-            figi=figi,
+            figi=order_figi,
             direction="BUY",
-            lots=Lots(op.lots),
+            lots=Lots(suggestion.lots),
             price_pct=buy_price,
             face_value=face_value,
             request_uid=request_uid,
         )
         assert result.order_id
 
-        # Сохраняем TradeRecord (как делает UI)
-        portfolio.trade_records.append(
-            TradeRecord(
-                request_uid=request_uid,
-                order_id=result.order_id,
-                account_id=account_id,
-                account_kind=AccountKind.SANDBOX,
-                figi=figi,
-                direction="BUY",
-                lots=op.lots,
-                price_pct=buy_price,
-                status=result.execution_report_status,
-                pending_op_id=op.id,
-            )
-        )
-        update_portfolio(portfolio)
-
-        # 8. Cинхронизация: snapshot + operations + reconcile + XIRR
         snapshot_after = get_account_snapshot(token, AccountKind.SANDBOX, account_id)
         operations = get_account_operations(
             token,
@@ -241,16 +177,25 @@ def test_full_ux_flow_in_sandbox() -> None:
             account_id,
             from_date=date.today() - timedelta(days=1),
         )
-        reconcile_result = reconcile_positions(portfolio, snapshot_after, operations)
-        assert isinstance(reconcile_result.drifts, list)
+        active_orders = get_active_orders(token, AccountKind.SANDBOX, account_id)
 
-        # XIRR: на момент теста может быть None (только BUY, нет cashflow),
-        # главное — функция не падает и возвращает структуру.
+        advice_after = advise(
+            portfolio,
+            snapshot_after,
+            active_orders=active_orders,
+            operations=operations,
+            universe=universe,
+            key_rate=16.0,
+            tax_rate=0.13,
+            today=date.today(),
+        )
+        assert advice_after.performance is not None
+        assert advice_after.available_money_rub >= 0
+
         performance = summarize_actual_performance(portfolio, snapshot_after, operations)
         assert performance.unrealized_value_rub >= 0
         assert performance.coupons_received_rub >= 0
 
-        # 9. Отмена ордера если ещё активен.
         terminal = {
             "EXECUTION_REPORT_STATUS_FILL",
             "EXECUTION_REPORT_STATUS_CANCELLED",

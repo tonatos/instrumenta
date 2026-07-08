@@ -1,29 +1,18 @@
-"""Order preview, confirm, cancel and put-offer decisions."""
+"""Order preview, place and cancel — explicit parameters, no pending queue."""
 
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 from bond_monitor.application.trading.context import TradingContext
-from bond_monitor.application.trading.sync_use_case import SyncUseCase
-from bond_monitor.application.trading.types import OrderPreviewResult, TradingSyncResult
+from bond_monitor.application.trading.types import OrderPreviewResult, PlaceOrderResult
 from bond_monitor.domain.bonds.models import BondRecord
-from bond_monitor.domain.portfolio.models import Portfolio, PutOfferDecision
-from bond_monitor.domain.portfolio.planner import build_plan
-from bond_monitor.domain.portfolio.reinvestment import refresh_due_reinvest_slot_suggestions
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, Rub, order_amount_rub
-from bond_monitor.domain.trading.models import OrderDirection, PendingOperation, TradeRecord
-from bond_monitor.domain.trading.pending_operations import compute_pending_operations
-from bond_monitor.domain.trading.position_lifecycle import (
-    ensure_reinvest_position,
-    find_reinvest_slot_for_op,
-    reinvest_source_for_slot,
-)
+from bond_monitor.domain.trading.models import OrderDirection
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import broker_snapshot_from_infrastructure
 from bond_monitor.application.trading import broker
 from bond_monitor.infrastructure.tinvest.trading_client import (
-    AccountSnapshot,
     OrderTooLargeError,
     TradingClientError,
     TradingNotAvailableError,
@@ -39,153 +28,49 @@ def _position_instrument_uid(snapshot, figi: str | None) -> str:
     return broker_pos.instrument_uid if broker_pos is not None else ""
 
 
-def _instrument_trade_cache_key(isin: str, direction: str) -> str:
-    return f"{isin.upper()}:{direction}"
-
-
-def _store_instrument_trade_cache(
-    portfolio: Portfolio,
+def _resolve_figi(
+    token: str,
     *,
     isin: str,
-    direction: str,
-    api_tradable: bool,
     figi: str | None,
-    block_reason: str | None = None,
-) -> None:
-    portfolio.instrument_trade_cache[_instrument_trade_cache_key(isin, direction)] = {
-        "api_tradable": api_tradable,
-        "figi": figi,
-        "block_reason": block_reason,
-    }
-
-
-def block_non_api_tradable_pending(
-    portfolio: Portfolio,
-    token: str,
-    pending: list[PendingOperation],
-    snapshot: AccountSnapshot,
-) -> None:
-    """Пометить pending-операции недоступными для API-торговли до клика «Подтвердить»."""
-    broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
-    for op in pending:
-        if op.status in ("in_progress", "blocked"):
-            continue
-        if op.kind == "put_offer_submit":
-            continue
-        direction = "SELL" if op.kind == "manual_sell" else "BUY"
-        cache_key = _instrument_trade_cache_key(op.isin, direction)
-        cached = portfolio.instrument_trade_cache.get(cache_key)
-        if cached is not None:
-            if cached.get("api_tradable"):
-                if cached.get("figi"):
-                    op.figi = str(cached["figi"])
-                continue
-            op.status = "blocked"
-            op.block_reason = str(cached.get("block_reason") or "Operation is blocked")
-            op.urgency = "normal"
-            continue
-        try:
-            trade = broker.ensure_order_instrument(
-                token,
-                figi=op.figi,
-                instrument_uid=_position_instrument_uid(broker_snapshot, op.figi),
-                isin=op.isin,
-                direction=direction,  # type: ignore[arg-type]
-            )
-        except TradingNotAvailableError as exc:
-            _store_instrument_trade_cache(
-                portfolio,
-                isin=op.isin,
-                direction=direction,
-                api_tradable=False,
-                figi=op.figi,
-                block_reason=str(exc),
-            )
-            op.status = "blocked"
-            op.block_reason = str(exc)
-            op.urgency = "normal"
-        except ValueError:
-            pass
-        else:
-            resolved_figi = trade.figi or op.figi
-            _store_instrument_trade_cache(
-                portfolio,
-                isin=op.isin,
-                direction=direction,
-                api_tradable=True,
-                figi=resolved_figi,
-            )
-            if resolved_figi:
-                op.figi = resolved_figi
-
-
-def _order_request_uid(
-    portfolio: Portfolio,
-    *,
-    account_id: str,
-    figi: str,
     direction: OrderDirection,
-    lots: int,
-    pending_op_id: str,
-) -> str:
-    terminal = {
-        "EXECUTION_REPORT_STATUS_CANCELLED",
-        "EXECUTION_REPORT_STATUS_REJECTED",
-    }
-    prior_attempts = sum(
-        1
-        for tr in portfolio.trade_records
-        if tr.pending_op_id == pending_op_id and tr.status in terminal
-    )
-    salt = f"retry-{prior_attempts}" if prior_attempts else ""
-    return broker.make_request_uid(
-        account_id=account_id,
+    snapshot,
+) -> tuple[str, str]:
+    instrument_uid = _position_instrument_uid(snapshot, figi)
+    trade = broker.ensure_order_instrument(
+        token,
         figi=figi,
+        instrument_uid=instrument_uid,
+        isin=isin,
         direction=direction,
-        lots=lots,
-        pending_op_id=pending_op_id,
-        salt=salt,
     )
+    resolved_figi = trade.figi or figi
+    if not resolved_figi:
+        raise ValueError(f"FIGI not found for {isin}")
+    return resolved_figi, trade.instrument_uid
+
+
+def _available_lots_for_sell(snapshot, figi: str | None) -> int:
+    if not figi:
+        return 0
+    pos = snapshot.bond_positions.get(figi)
+    return pos.lots if pos is not None else 0
 
 
 class OrderUseCase:
-    def __init__(self, ctx: TradingContext, sync: SyncUseCase) -> None:
+    def __init__(self, ctx: TradingContext) -> None:
         self._ctx = ctx
-        self._sync = sync
 
-    def _find_pending_op(
-        self,
-        portfolio: Portfolio,
-        snapshot,
-        universe: list[BondRecord],
-        today: date,
-        op_id: str,
-        *,
-        resolved_slots,
-    ) -> PendingOperation | None:
-        pending = compute_pending_operations(
-            portfolio,
-            snapshot,
-            today,
-            universe=universe,
-            resolved_slots=resolved_slots,
-        )
-        for op in pending:
-            if op.id == op_id:
-                return op
-        return None
-
-    async def preview_pending_operation(
+    async def preview_order(
         self,
         portfolio_id: str,
-        op_id: str,
         universe: list[BondRecord],
         *,
-        key_rate: float,
-        tax_rate: float,
-        today: date,
-        lots: int | None = None,
-        price_pct: float | None = None,
+        isin: str,
+        direction: OrderDirection,
+        lots: int,
+        price_pct: float,
+        figi: str | None = None,
     ) -> OrderPreviewResult:
         portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
         token = self._ctx.token(portfolio.account_kind)  # type: ignore[arg-type]
@@ -193,69 +78,30 @@ class OrderUseCase:
 
         snapshot = broker.get_account_snapshot(token, portfolio.account_kind, account_id)  # type: ignore[arg-type]
         broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
-        plan = build_plan(
-            portfolio,
-            universe,
-            today=today,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-            account_snapshot_money_rub=snapshot.money_rub,
-            assume_best_put_outcome=False,
-        )
-        refresh_due_reinvest_slot_suggestions(
-            plan.resolved_slots,
-            portfolio=portfolio,
-            universe=universe,
-            today=today,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-        )
-        op = self._find_pending_op(
-            portfolio,
-            broker_snapshot,
-            universe,
-            today,
-            op_id,
-            resolved_slots=plan.resolved_slots,
-        )
-        if op is None:
-            raise ValueError(f"Pending operation {op_id} not found or already completed")
-        if op.kind == "put_offer_submit":
-            raise ValueError("Put-offer operations cannot be previewed via order API")
-        if op.status == "in_progress":
-            raise ValueError("Order already submitted and is in progress")
-        if op.status == "blocked":
-            raise ValueError(op.block_reason or "Operation is blocked")
 
-        direction: OrderDirection = "SELL" if op.kind == "manual_sell" else "BUY"
+        bond = next((b for b in universe if b.isin == isin), None)
+        order_figi = figi or (bond.figi if bond else None)
+        broker_pos = broker_snapshot.bond_positions.get(order_figi) if order_figi else None
 
-        order_lots = lots if lots is not None else op.lots
-        order_price = price_pct if price_pct is not None else op.suggested_price_pct
-        if order_lots is None or order_lots <= 0:
-            raise ValueError("Invalid lots")
-        if order_price is None:
-            raise ValueError("Price is required")
-
-        bond = next((b for b in universe if b.isin == op.isin), None)
-        face_value = bond.face_value if bond else (op.face_value_rub or 1000.0)
-        lot_size = bond.lot_size if bond else (op.lot_size or 1)
-        aci_rub = (bond.accrued_interest or 0.0) if bond else (op.aci_rub_per_bond or 0.0)
-        if not aci_rub and op.figi:
-            broker_pos = broker_snapshot.bond_positions.get(op.figi)
-            if broker_pos is not None and broker_pos.current_nkd_rub is not None:
-                aci_rub = float(broker_pos.current_nkd_rub)
+        face_value = bond.face_value if bond else 1000.0
+        lot_size = bond.lot_size if bond else (
+            max(1, broker_pos.quantity // max(broker_pos.lots, 1)) if broker_pos else 1
+        )
+        aci_rub = (bond.accrued_interest or 0.0) if bond else 0.0
+        if not aci_rub and broker_pos is not None and broker_pos.current_nkd_rub is not None:
+            aci_rub = float(broker_pos.current_nkd_rub)
 
         clean_amount_rub = round(
-            order_lots * lot_size * face_value * float(order_price) / 100.0,
+            lots * lot_size * face_value * float(price_pct) / 100.0,
             2,
         )
         local_total = round(
             float(
                 order_amount_rub(
-                    price_pct=PriceUnitPct(order_price),
+                    price_pct=PriceUnitPct(price_pct),
                     face_value=face_value,
                     lot_size=lot_size,
-                    lots=Lots(order_lots),
+                    lots=Lots(lots),
                     aci_rub=aci_rub,
                 )
             ),
@@ -268,17 +114,17 @@ class OrderUseCase:
         broker_commission: float | None = None
         preview_source = "moex"
 
-        if op.figi:
-            instrument_uid = _position_instrument_uid(broker_snapshot, op.figi)
+        if order_figi:
+            instrument_uid = _position_instrument_uid(broker_snapshot, order_figi)
             broker_preview = broker.preview_order_price(
                 token,
                 portfolio.account_kind,  # type: ignore[arg-type]
                 account_id=account_id,
-                figi=op.figi,
+                figi=order_figi,
                 instrument_uid=instrument_uid,
                 direction=direction,
-                lots=Lots(order_lots),
-                price_pct=PriceUnitPct(order_price),
+                lots=Lots(lots),
+                price_pct=PriceUnitPct(price_pct),
                 face_value=face_value,
             )
             if broker_preview is not None:
@@ -302,17 +148,16 @@ class OrderUseCase:
         required_cash = broker_total if broker_total is not None else local_total
         money_rub = float(snapshot.money_rub)
         if direction == "SELL":
-            position = next((p for p in portfolio.positions if p.isin == op.isin), None)
-            actual = position.actual_lots if position and position.actual_lots is not None else 0
-            sufficient_cash = order_lots <= actual
+            available = _available_lots_for_sell(broker_snapshot, order_figi)
+            sufficient_cash = lots <= available
         else:
             sufficient_cash = money_rub + 0.01 >= required_cash
 
         return OrderPreviewResult(
-            order_lots=order_lots,
-            order_bonds=order_lots * lot_size,
+            order_lots=lots,
+            order_bonds=lots * lot_size,
             lot_size=lot_size,
-            order_price_pct=float(order_price),
+            order_price_pct=float(price_pct),
             clean_amount_rub=clean_amount_rub,
             aci_rub_per_bond=aci_rub,
             local_total_amount_rub=local_total,
@@ -325,129 +170,73 @@ class OrderUseCase:
             preview_source=preview_source,
         )
 
-    async def confirm_pending_operation(
+    async def place_order(
         self,
         portfolio_id: str,
-        op_id: str,
         universe: list[BondRecord],
         *,
-        key_rate: float,
-        tax_rate: float,
-        today: date,
-        lots: int | None = None,
-        price_pct: float | None = None,
-    ) -> TradingSyncResult:
+        isin: str,
+        direction: OrderDirection,
+        lots: int,
+        price_pct: float,
+        figi: str | None = None,
+        suggestion_id: str | None = None,
+    ) -> PlaceOrderResult:
         portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
         token = self._ctx.token(portfolio.account_kind)  # type: ignore[arg-type]
         account_id = portfolio.account_id  # type: ignore[assignment]
 
-        snapshot = broker.get_account_snapshot(token, portfolio.account_kind, account_id)  # type: ignore[arg-type]
-        broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
-        plan = build_plan(
-            portfolio,
-            universe,
-            today=today,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-            account_snapshot_money_rub=snapshot.money_rub,
-            assume_best_put_outcome=False,
-        )
-        refresh_due_reinvest_slot_suggestions(
-            plan.resolved_slots,
-            portfolio=portfolio,
-            universe=universe,
-            today=today,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-        )
-        op = self._find_pending_op(
-            portfolio,
-            broker_snapshot,
-            universe,
-            today,
-            op_id,
-            resolved_slots=plan.resolved_slots,
-        )
-        if op is None:
-            raise ValueError(f"Pending operation {op_id} not found or already completed")
-        if op.kind == "put_offer_submit":
-            raise ValueError("Put-offer operations cannot be confirmed via order API")
-        if op.status == "in_progress":
-            raise ValueError("Order already submitted and is in progress")
-        if op.status == "blocked":
-            raise ValueError(op.block_reason or "Operation is blocked")
-
-        direction: OrderDirection = "SELL" if op.kind == "manual_sell" else "BUY"
-
-        order_lots = lots if lots is not None else op.lots
-        order_price = price_pct if price_pct is not None else op.suggested_price_pct
-        if order_lots is None or order_lots <= 0:
+        if lots <= 0:
             raise ValueError("Invalid lots")
-        if order_price is None:
+        if price_pct <= 0:
             raise ValueError("Price is required")
 
-        bond = next((b for b in universe if b.isin == op.isin), None)
+        bond = next((b for b in universe if b.isin == isin), None)
+        resolved_figi = figi or (bond.figi if bond else None)
 
-        if op.kind == "reinvest_buy":
-            slot = find_reinvest_slot_for_op(portfolio, plan.resolved_slots, op)
-            if slot is None:
-                raise ValueError("Reinvestment slot not found for this operation")
-            if bond is None:
-                raise ValueError(f"Bond {op.isin} not found in universe")
-            ensure_reinvest_position(
-                portfolio,
-                bond,
-                lots=order_lots,
-                source=reinvest_source_for_slot(slot),
-                figi=op.figi,
-                today=today,
-                purchase_price_pct=float(order_price),
-            )
-            await self._ctx.repo.save(portfolio)
+        snapshot = broker.get_account_snapshot(token, portfolio.account_kind, account_id)  # type: ignore[arg-type]
+        broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
 
-        instrument_uid = _position_instrument_uid(broker_snapshot, op.figi)
+        if direction == "SELL":
+            available = _available_lots_for_sell(broker_snapshot, resolved_figi)
+            if lots > available:
+                raise ValueError(f"Недостаточно лотов на счёте: доступно {available}")
+
         try:
-            trade = broker.ensure_order_instrument(
+            order_figi, instrument_uid = _resolve_figi(
                 token,
-                figi=op.figi,
-                instrument_uid=instrument_uid,
-                isin=op.isin,
+                isin=isin,
+                figi=resolved_figi,
                 direction=direction,
+                snapshot=broker_snapshot,
             )
         except TradingNotAvailableError as exc:
             raise ValueError(str(exc)) from exc
-        except ValueError as exc:
-            raise ValueError(str(exc)) from exc
 
-        op.figi = trade.figi or op.figi
-        _store_instrument_trade_cache(
-            portfolio,
-            isin=op.isin,
-            direction=direction,
-            api_tradable=True,
-            figi=op.figi,
-        )
-
-        if bond is None:
-            bond = next((b for b in universe if b.isin == op.isin), None)
         face_value = bond.face_value if bond else 1000.0
         lot_size = bond.lot_size if bond else 1
-        aci_rub = (bond.accrued_interest or 0.0) if bond else (op.aci_rub_per_bond or 0.0)
+        aci_rub = (bond.accrued_interest or 0.0) if bond else 0.0
+        if not aci_rub:
+            broker_pos = broker_snapshot.bond_positions.get(order_figi)
+            if broker_pos is not None and broker_pos.current_nkd_rub is not None:
+                aci_rub = float(broker_pos.current_nkd_rub)
+
         estimated = order_amount_rub(
-            price_pct=PriceUnitPct(order_price),
+            price_pct=PriceUnitPct(price_pct),
             face_value=face_value,
             lot_size=lot_size,
-            lots=Lots(order_lots),
+            lots=Lots(lots),
             aci_rub=aci_rub,
         )
 
-        request_uid = _order_request_uid(
-            portfolio,
+        idempotency_key = suggestion_id or f"{isin}:{direction}:{lots}"
+        request_uid = broker.make_request_uid(
             account_id=account_id,
-            figi=op.figi,
+            figi=order_figi,
             direction=direction,
-            lots=order_lots,
-            pending_op_id=op.id,
+            lots=lots,
+            order_key=idempotency_key,
+            salt=datetime.now(UTC).isoformat(timespec="seconds"),
         )
 
         try:
@@ -455,11 +244,11 @@ class OrderUseCase:
                 token,
                 portfolio.account_kind,  # type: ignore[arg-type]
                 account_id=account_id,
-                figi=op.figi,
-                instrument_uid=trade.instrument_uid,
+                figi=order_figi,
+                instrument_uid=instrument_uid,
                 direction=direction,
-                lots=Lots(order_lots),
-                price_pct=PriceUnitPct(order_price),
+                lots=Lots(lots),
+                price_pct=PriceUnitPct(price_pct),
                 face_value=face_value,
                 request_uid=request_uid,
                 estimated_total_amount_rub=estimated,
@@ -471,116 +260,35 @@ class OrderUseCase:
         except TradingClientError as exc:
             raise ValueError(str(exc)) from exc
 
-        portfolio.trade_records.append(
-            TradeRecord(
-                request_uid=request_uid,
-                account_id=account_id,
-                account_kind=portfolio.account_kind,  # type: ignore[arg-type]
-                figi=op.figi,
-                direction=direction,
-                lots=order_lots,
-                pending_op_id=op.id,
-                order_id=result.order_id,
-                price_pct=order_price,
-                status=result.execution_report_status,
-                total_order_amount_rub=(
-                    float(result.total_order_amount_rub)
-                    if result.total_order_amount_rub is not None
-                    else None
-                ),
-                initial_commission_rub=(
-                    float(result.initial_commission_rub)
-                    if result.initial_commission_rub is not None
-                    else None
-                ),
-                lots_executed=result.lots_executed,
-            )
-        )
-        await self._ctx.repo.save(portfolio)
-        return await self._sync.sync_portfolio(
-            portfolio_id,
-            universe,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-            today=today,
-            reuse_plan=plan,
-            block_non_api_tradable_pending=block_non_api_tradable_pending,
+        return PlaceOrderResult(
+            order_id=result.order_id,
+            status=result.execution_report_status,
+            request_uid=request_uid,
+            lots_requested=lots,
+            lots_executed=result.lots_executed,
+            total_order_amount_rub=(
+                float(result.total_order_amount_rub)
+                if result.total_order_amount_rub is not None
+                else None
+            ),
+            initial_commission_rub=(
+                float(result.initial_commission_rub)
+                if result.initial_commission_rub is not None
+                else None
+            ),
         )
 
-    async def cancel_pending_order(
+    async def cancel_order(
         self,
         portfolio_id: str,
-        op_id: str,
-        universe: list[BondRecord],
-        *,
-        key_rate: float,
-        tax_rate: float,
-        today: date,
-    ) -> TradingSyncResult:
+        order_id: str,
+    ) -> None:
         portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
         token = self._ctx.token(portfolio.account_kind)  # type: ignore[arg-type]
         account_id = portfolio.account_id  # type: ignore[assignment]
-
-        from bond_monitor.domain.trading.ids import stable_id
-
-        active: TradeRecord | None = None
-        for tr in portfolio.trade_records:
-            if not tr.is_active or not tr.order_id:
-                continue
-            if tr.pending_op_id == op_id or tr.order_id == op_id:
-                active = tr
-                break
-            if tr.order_id and op_id == stable_id(portfolio.id, "active_order", tr.order_id):
-                active = tr
-                break
-        if active is None:
-            raise ValueError("No active order found for this operation")
-
         broker.cancel_order(
             token,
             portfolio.account_kind,  # type: ignore[arg-type]
             account_id=account_id,
-            order_id=active.order_id,  # type: ignore[arg-type]
-        )
-        active.status = "EXECUTION_REPORT_STATUS_CANCELLED"
-        active.last_state_checked_at = datetime.now(UTC).isoformat(timespec="seconds")
-        await self._ctx.repo.save(portfolio)
-        return await self._sync.sync_portfolio(
-            portfolio_id,
-            universe,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-            today=today,
-            block_non_api_tradable_pending=block_non_api_tradable_pending,
-        )
-
-    async def set_put_offer_decision(
-        self,
-        portfolio_id: str,
-        isin: str,
-        decision: PutOfferDecision,
-        universe: list[BondRecord],
-        *,
-        key_rate: float,
-        tax_rate: float,
-        today: date,
-    ) -> TradingSyncResult:
-        portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
-        found = False
-        for pos in portfolio.positions:
-            if pos.isin == isin:
-                pos.put_offer_decision = decision
-                found = True
-                break
-        if not found:
-            raise ValueError(f"Position {isin} not found")
-        portfolio.touch()
-        await self._ctx.repo.save(portfolio)
-        return await self._sync.sync_portfolio(
-            portfolio_id,
-            universe,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-            today=today,
-            block_non_api_tradable_pending=block_non_api_tradable_pending,
+            order_id=order_id,
         )

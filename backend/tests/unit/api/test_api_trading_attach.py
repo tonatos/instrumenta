@@ -11,18 +11,26 @@ from conftest import portfolio_client
 from factories import make_account_snapshot
 
 
-def test_attach_returns_400_when_account_validation_fails(client: TestClient) -> None:
-    with portfolio_client("Attach Test") as (test_client, pid), patch(
-        "bond_monitor.application.trading.broker.get_account_snapshot",
-        return_value=make_account_snapshot(50_000.0),
+def test_attach_allows_account_with_less_cash_than_initial(client: TestClient) -> None:
+    """Soft attach: счёт с меньшим кэшем привязывается, effective_initial = max(план, счёт)."""
+    with (
+        portfolio_client("Attach Test", initial_amount_rub=100_000.0) as (test_client, pid),
+        patch(
+            "bond_monitor.application.trading.broker.get_account_snapshot",
+            return_value=make_account_snapshot(50_000.0),
+        ),
+        patch(
+            "bond_monitor.application.trading.broker.resolve_figi_for_isin",
+            return_value="FIGI123",
+        ),
     ):
         resp = test_client.post(
             f"/api/v1/portfolios/{pid}/attach",
             json={"account_id": "acc-clean", "kind": "sandbox"},
         )
 
-    assert resp.status_code == 400, resp.text
-    assert "не хватает" in resp.json()["detail"].lower()
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["initial_amount_rub"] == 100_000.0
 
 
 def test_attach_rejects_account_already_linked_to_other_portfolio(client: TestClient) -> None:

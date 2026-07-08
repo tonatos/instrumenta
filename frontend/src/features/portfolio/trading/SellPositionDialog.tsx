@@ -42,26 +42,35 @@ export function SellPositionDialog({
 
   useEffect(() => {
     if (position) {
-      setLots(position.actual_lots ?? 1);
+      setLots(1);
       setPricePct("");
     }
   }, [position]);
 
   useEffect(() => {
-    if (quote && open && pricePct === "") {
-      setPricePct(quote.suggested_price_pct.toFixed(4));
+    if (quote && open) {
+      if (pricePct === "") {
+        setPricePct(quote.suggested_price_pct.toFixed(4));
+      }
+      setLots(quote.available_lots);
     }
   }, [quote, open, pricePct]);
 
   const sellMutation = useMutation({
     mutationFn: ({ lots: sellLots, pricePct: sellPrice }: { lots: number; pricePct: number }) =>
-      api.queueManualSell(portfolioId, position!.isin, {
+      api.placeOrder(portfolioId, {
+        isin: position!.isin,
+        direction: "SELL",
         lots: sellLots,
         price_pct: sellPrice,
+        figi: position!.figi,
       }),
-    onSuccess: (data) => {
-      queryClient.setQueryData(["trading-sync", portfolioId], data);
-      invalidateAfterTradingMutation(queryClient, portfolioId);
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["trading-advice", portfolioId] });
+      invalidateAfterTradingMutation(queryClient, portfolioId, {
+        refreshPlan: true,
+        refreshOperations: true,
+      });
       onOpenChange(false);
     },
   });
@@ -69,7 +78,7 @@ export function SellPositionDialog({
   if (!position) return null;
 
   const lotSize = position.lot_size ?? 1;
-  const maxLots = position.actual_lots ?? 0;
+  const maxLots = quote?.available_lots ?? 0;
   const suggestedPrice = quote?.suggested_price_pct;
   const insufficientLots = lots > maxLots;
 
@@ -77,10 +86,10 @@ export function SellPositionDialog({
     <DialogRoot open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Поставить продажу в очередь</DialogTitle>
+          <DialogTitle>Продать позицию</DialogTitle>
           <DialogDescription>
-            {position.name} · на счёте {maxLots} лот(а). Стоимость и комиссию
-            покажем при подтверждении в очереди действий.
+            {position.name} · на счёте {maxLots} лот(а). Заявка отправится на биржу
+            сразу после подтверждения.
           </DialogDescription>
         </DialogHeader>
 
@@ -99,9 +108,7 @@ export function SellPositionDialog({
               Загружаем рыночную цену…
             </p>
           )}
-          {quoteError && (
-            <p className="text-xs text-destructive">{quoteError}</p>
-          )}
+          {quoteError && <p className="text-xs text-destructive">{quoteError}</p>}
 
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -114,12 +121,7 @@ export function SellPositionDialog({
                 max={maxLots}
                 value={lots}
                 onChange={(e) =>
-                  setLots(
-                    Math.min(
-                      maxLots,
-                      Math.max(1, Number(e.target.value)),
-                    ),
-                  )
+                  setLots(Math.min(maxLots, Math.max(1, Number(e.target.value))))
                 }
                 data-testid="sell-lots-input"
               />
@@ -180,9 +182,7 @@ export function SellPositionDialog({
           </Button>
           <Button
             data-testid="sell-position-submit"
-            onClick={() =>
-              sellMutation.mutate({ lots, pricePct: parseFloat(pricePct) })
-            }
+            onClick={() => sellMutation.mutate({ lots, pricePct: parseFloat(pricePct) })}
             disabled={
               sellMutation.isPending ||
               quoteLoading ||
@@ -193,7 +193,7 @@ export function SellPositionDialog({
             }
           >
             {sellMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Поставить SELL
+            Отправить SELL
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -16,7 +16,7 @@ smart-lab ──► infrastructure/ratings/ ──┘
          domain/screening (scorer)
                     ▼
     domain/portfolio (planner, selection, cashflow, …)
-    domain/trading (reconciler, pending, ports, models)
+    domain/trading (advisory, ports, models)
                     ▼
          application/ (use cases)
                     ▼
@@ -58,7 +58,7 @@ smart-lab ──► infrastructure/ratings/ ──┘
 | `cashflow.py` | `CashflowEvent`, merge helpers |
 | `put_offer.py` | Единые правила пут-оферт |
 | `invested_capital.py` | `invested_capital_rub()` для API |
-| `position_status.py` | Статус позиции (active/pending/closed) |
+| `position_status.py` | Статус позиции для API (план); факт на счёте — в advice |
 | `policies.py` | `PlanningPolicy`, `BondSelectionPolicy`, … |
 
 ---
@@ -67,12 +67,13 @@ smart-lab ──► infrastructure/ratings/ ──┘
 
 | Модуль | Ответственность |
 |--------|-----------------|
-| `models.py` | `PendingOperation`, `TradeRecord`, `AccountKind`, `FrozenForecast` |
+| `advisory.py` | Stateless `advise()`: holdings, suggestions, active orders, cashflow |
+| `models.py` | `AccountKind`, `FrozenForecast`, advisory DTO |
 | `ports.py` | `BrokerSnapshot`, `BrokerOperation` — порты без SDK |
-| `reconciler.py` | Attach validation, reconcile, top-up detection |
-| `pending_operations.py` | Генерация pending BUY/SELL/put-offer |
-| `ids.py` | `stable_id()` для детерминированных pending id |
+| `ids.py` | `stable_id()` для детерминированных ключей заявок |
 | `yield_calc.py` | XIRR из операций брокера |
+
+Факт позиций на счёте — только из брокерского снапшота (`advice.holdings`), не из shadow-полей плана.
 
 ---
 
@@ -81,11 +82,12 @@ smart-lab ──► infrastructure/ratings/ ──┘
 ```
 application/trading/
 ├── trading_service.py    # тонкий DI-facade
+├── advise_use_case.py      # GET /advice
 ├── attach_use_case.py
-├── sync_use_case.py
-├── order_use_case.py
+├── order_use_case.py       # preview / place / cancel
+├── sell_position_use_case.py
 ├── sandbox_use_case.py
-├── broker.py             # единая точка I/O к T-Invest
+├── broker.py               # единая точка I/O к T-Invest
 └── context.py
 ```
 
@@ -104,7 +106,7 @@ application/trading/
 | Favorites | `GET/PUT/DELETE /favorites/{isin}` |
 | Portfolios | CRUD `/portfolios/`, `POST .../auto-compose`, `GET .../plan` |
 | Calculator | `POST /calculator/portfolio` |
-| Trading | attach, sync, confirm, preview, sandbox, … |
+| Trading | attach, `GET /advice`, orders preview/place/cancel, sandbox, … |
 
 `PortfolioResponse` включает `invested_capital_rub`, `positions_count`, `closed_positions_count` и типизированный `data: PortfolioDataResponse`.
 
@@ -120,11 +122,11 @@ DI: `Provide(get_db_session)`, `Provide(provide_bond_service)`, `Provide(provide
 |------|------------|
 | `features/portfolio/PortfolioPage.tsx` | Оркестрация страницы |
 | `features/portfolio/components/` | Form, PositionsTab, ForecastMetrics, … |
-| `features/portfolio/trading/` | TradingActionQueue, ConfirmOrderDialog, … |
+| `features/portfolio/trading/` | TradingActionQueue, `useTradingAdvice`, ConfirmOrderDialog, … |
 | `features/portfolio/labels.ts` | Единые label maps (не дублировать в компонентах) |
 | `api/types.ts` | Ручное зеркало Pydantic DTO |
 
-**Правило:** бизнес-логика только на backend. Frontend использует `invested_capital_rub`, `positions_count`, `status` с API; pricing заявок — только через `/preview`.
+**Правило:** бизнес-логика только на backend. Frontend использует `invested_capital_rub`, `positions_count`, `GET /advice` для факта на счёте; pricing заявок — через `/orders/preview`.
 
 ---
 
@@ -137,7 +139,7 @@ backend/tests/
 ├── conftest.py           # client, portfolio_client, attach_trading_portfolio
 ├── factories.py          # make_bond, make_account_snapshot, aa19dfd_*
 └── unit/
-    ├── domain/           # planner, pending, reconciler, …
+    ├── domain/           # planner, advisory, …
     ├── api/              # test_api_*
     ├── infrastructure/   # moex, tinvest, serializers
     └── application/
@@ -166,7 +168,7 @@ cd e2e/playwright && npx playwright test tests/mocked
 cd e2e/playwright && npx playwright test tests/live
 ```
 
-Покрытие P0: `test_planner.py`, `test_scorer.py`, trading-модули, reconciler, pending, yield.
+Покрытие P0: `test_planner.py`, `test_scorer.py`, `test_trading_advisory.py`, yield.
 
 ---
 
@@ -203,5 +205,5 @@ class PlanningPolicy:
 | Новый API endpoint | `interfaces/api/controllers/` + schema |
 | Новая страница UI | `frontend/src/features/<name>/` + route в `App.tsx` |
 | Новая политика планирования | `domain/portfolio/policies.py` |
-| Новый pending kind | `domain/trading/pending_operations.py` |
+| Новая торговая рекомендация | `domain/trading/advisory.py` + `advise_use_case.py` |
 | Брокерский тип в domain | `domain/trading/ports.py` + adapter в infrastructure |

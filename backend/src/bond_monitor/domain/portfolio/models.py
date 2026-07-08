@@ -28,8 +28,6 @@ from uuid import uuid4
 from bond_monitor.domain.trading.models import (
     AccountKind,
     FrozenForecast,
-    PendingOperation,
-    TradeRecord,
 )
 
 
@@ -97,22 +95,6 @@ class PositionSourceType(StrEnum):
     REINVEST_COUPON_CASH = "reinvest_coupon_cash"
 
 
-class PutOfferDecision(StrEnum):
-    """Решение пользователя по пут-оферте конкретной позиции.
-
-    * ``PENDING`` — решение не принято; UI показывает напоминание, расчёт
-      по умолчанию идёт до даты погашения.
-    * ``EXERCISE`` — предъявить к выкупу: позиция закрывается в дату
-      оферты, освободившиеся деньги переходят в слот реинвестиции.
-    * ``HOLD`` — держать дальше: оферта игнорируется, расчёт идёт до
-      даты погашения.
-    """
-
-    PENDING = "pending"
-    EXERCISE = "exercise"
-    HOLD = "hold"
-
-
 class ReinvestmentTriggerReason(StrEnum):
     """Что освободило деньги для реинвестиции."""
 
@@ -160,38 +142,12 @@ class PortfolioPosition:
     offer_price_pct: float | None = None
     next_coupon_date: date | None = None
     source: PositionSourceType = PositionSourceType.INITIAL
-    put_offer_decision: PutOfferDecision = PutOfferDecision.PENDING
-    # Глобальный идентификатор инструмента T-Invest. Заполняется при
-    # переходе портфеля в режим торговли (через
-    # :func:`data.tinvest_client.resolve_figi_for_isin`); в симуляции
-    # обычно ``None``.
     figi: str | None = None
-    # Фактическое количество лотов на брокерском счёте, актуализируется
-    # :func:`core.portfolio_reconciler.reconcile_positions`. В симуляции
-    # совпадает с :attr:`lots`; в режиме торговли может отличаться
-    # (покупка ещё не подтверждена биржей, или произошла частичная
-    # продажа) — расхождение подсвечивается в UI.
-    actual_lots: int | None = None
-    # Дата архивации позиции (погашение / полная продажа) в TRADING.
-    closed_at: date | None = None
-
-    @property
-    def is_closed(self) -> bool:
-        return self.closed_at is not None
 
     @property
     def bonds_count(self) -> int:
         """Количество облигаций в позиции (lots * lot_size)."""
         return self.lots * self.lot_size
-
-    @property
-    def has_drift(self) -> bool:
-        """``True`` если фактических лотов на счёте меньше ожидаемого.
-
-        Используется только в режиме торговли — в симуляции
-        :attr:`actual_lots` всегда ``None`` и метод возвращает ``False``.
-        """
-        return self.actual_lots is not None and self.actual_lots != self.lots
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -221,10 +177,7 @@ class PortfolioPosition:
                 self.next_coupon_date.isoformat() if self.next_coupon_date else None
             ),
             "source": self.source.value,
-            "put_offer_decision": self.put_offer_decision.value,
             "figi": self.figi,
-            "actual_lots": self.actual_lots,
-            "closed_at": self.closed_at.isoformat() if self.closed_at else None,
         }
 
     @classmethod
@@ -276,14 +229,7 @@ class PortfolioPosition:
                 else None
             ),
             source=PositionSourceType(data.get("source", PositionSourceType.INITIAL.value)),
-            put_offer_decision=PutOfferDecision(
-                data.get("put_offer_decision", PutOfferDecision.PENDING.value)
-            ),
             figi=(str(data["figi"]) if data.get("figi") else None),
-            actual_lots=(int(data["actual_lots"]) if data.get("actual_lots") is not None else None),
-            closed_at=(
-                date.fromisoformat(str(data["closed_at"])) if data.get("closed_at") else None
-            ),
         )
 
 
@@ -411,21 +357,7 @@ class Portfolio:
     # ISO-таймстамп фиксации режима торговли. Используется как
     # `from_date` для расчёта XIRR и фильтрации операций по портфелю.
     trading_started_at: str | None = None
-    last_synced_at: str | None = None
-    # ISO-таймстамп последнего распределения top-up; INPUT-операции
-    # после этой даты считаются «свежим» пополнением (см.
-    # :func:`core.portfolio_reconciler.detect_top_up`).
-    last_top_up_processed_at: str | None = None
-    # Накопленная сумма всех уже распределённых top-up'ов в ₽.
-    # Используется для расчёта «полного» бюджета при ребалансировке.
-    acknowledged_top_ups_rub: float = 0.0
-    # Метаданные волн top-up для отката незавершённых партий.
-    top_up_batch_meta: dict[str, Any] = field(default_factory=dict)
     frozen_forecast: FrozenForecast | None = None
-    pending_operations: list[PendingOperation] = field(default_factory=list)
-    trade_records: list[TradeRecord] = field(default_factory=list)
-    # Кэш проверки api_trade_available по (ISIN, direction) — избегаем bond_by на каждый sync.
-    instrument_trade_cache: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def touch(self) -> None:
         """Обновить ``updated_at`` — вызывать перед каждым ``save_portfolios``."""
@@ -452,16 +384,9 @@ class Portfolio:
             "account_kind": self.account_kind.value if self.account_kind else None,
             "account_label": self.account_label,
             "trading_started_at": self.trading_started_at,
-            "last_synced_at": self.last_synced_at,
-            "last_top_up_processed_at": self.last_top_up_processed_at,
-            "acknowledged_top_ups_rub": self.acknowledged_top_ups_rub,
-            "top_up_batch_meta": dict(self.top_up_batch_meta),
             "frozen_forecast": (self.frozen_forecast.to_dict() if self.frozen_forecast else None),
             "positions": [p.to_dict() for p in self.positions],
             "slots": [s.to_dict() for s in self.slots],
-            "pending_operations": [op.to_dict() for op in self.pending_operations],
-            "trade_records": [tr.to_dict() for tr in self.trade_records],
-            "instrument_trade_cache": dict(self.instrument_trade_cache),
         }
 
     @classmethod
@@ -488,20 +413,7 @@ class Portfolio:
             trading_started_at=(
                 str(data["trading_started_at"]) if data.get("trading_started_at") else None
             ),
-            last_synced_at=(str(data["last_synced_at"]) if data.get("last_synced_at") else None),
-            last_top_up_processed_at=(
-                str(data["last_top_up_processed_at"])
-                if data.get("last_top_up_processed_at")
-                else None
-            ),
-            acknowledged_top_ups_rub=float(data.get("acknowledged_top_ups_rub", 0.0)),
-            top_up_batch_meta=dict(data.get("top_up_batch_meta", {})),
             frozen_forecast=(FrozenForecast.from_dict(frozen_raw) if frozen_raw else None),
             positions=[PortfolioPosition.from_dict(p) for p in data.get("positions", [])],
             slots=[ReinvestmentSlot.from_dict(s) for s in data.get("slots", [])],
-            pending_operations=[
-                PendingOperation.from_dict(op) for op in data.get("pending_operations", [])
-            ],
-            trade_records=[TradeRecord.from_dict(tr) for tr in data.get("trade_records", [])],
-            instrument_trade_cache=dict(data.get("instrument_trade_cache", {})),
         )

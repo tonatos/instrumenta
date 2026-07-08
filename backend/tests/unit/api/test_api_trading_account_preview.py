@@ -62,8 +62,8 @@ def test_account_preview_returns_positions_and_blockers(client: TestClient) -> N
     assert len(body["bond_positions"]) == 1
     assert body["bond_positions"][0]["ticker"] == "SU26238"
     assert body["bond_positions"][0]["lots"] == 1
-    assert body["can_attach"] is False
-    assert any("облигации" in b.lower() for b in body["blockers"])
+    assert body["can_attach"] is True
+    assert any("облигации" in w.lower() for w in body["warnings"])
 
 
 def test_clear_account_rejected_for_production(client: TestClient) -> None:

@@ -11,8 +11,8 @@ from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio, PortfolioMode
 from bond_monitor.domain.portfolio.planner import build_plan
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, Rub
+from bond_monitor.domain.trading.advisory import AttachPreviewValidation, validate_attach_soft
 from bond_monitor.domain.trading.models import AccountKind, FrozenForecast
-from bond_monitor.domain.trading.reconciler import validate_account_for_attach
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import broker_snapshot_from_infrastructure
 from bond_monitor.application.trading import broker
 from bond_monitor.infrastructure.tinvest.trading_client import (
@@ -43,7 +43,7 @@ def _reset_sandbox_account(
 
 def _snapshot_to_preview(
     snapshot: AccountSnapshot,
-    validation,
+    validation: AttachPreviewValidation,
     *,
     linked_portfolio: Portfolio | None = None,
 ) -> dict:
@@ -82,16 +82,17 @@ def _snapshot_to_preview(
     }
 
 
-def _with_account_linkage_validation(validation, linked_portfolio: Portfolio | None):
-    from bond_monitor.domain.trading.reconciler import AttachValidation
-
+def _with_account_linkage_validation(
+    validation: AttachPreviewValidation,
+    linked_portfolio: Portfolio | None,
+) -> AttachPreviewValidation:
     if linked_portfolio is None:
         return validation
     blocker = (
         f"Счёт уже привязан к портфелю «{linked_portfolio.name}». "
         "Отвяжите его там или выберите другой счёт."
     )
-    return AttachValidation(
+    return AttachPreviewValidation(
         can_attach=False,
         blockers=[blocker, *validation.blockers],
         warnings=list(validation.warnings),
@@ -109,6 +110,7 @@ class AttachUseCase:
         *,
         account_id: str,
         kind: AccountKind,
+        universe: list[BondRecord],
     ) -> dict:
         portfolio = await self._ctx.repo.get_by_id(portfolio_id)
         if portfolio is None:
@@ -120,7 +122,11 @@ class AttachUseCase:
             exclude_portfolio_id=portfolio_id,
         )
         validation = _with_account_linkage_validation(
-            validate_account_for_attach(broker_snapshot_from_infrastructure(snapshot), portfolio),
+            validate_attach_soft(
+                broker_snapshot_from_infrastructure(snapshot),
+                portfolio,
+                universe,
+            ),
             linked_portfolio,
         )
         return _snapshot_to_preview(
@@ -136,6 +142,7 @@ class AttachUseCase:
         account_id: str,
         kind: AccountKind,
         pay_in_rub: float | None = None,
+        universe: list[BondRecord] | None = None,
     ) -> dict:
         if kind != AccountKind.SANDBOX:
             raise ValueError("Освобождение счёта доступно только в песочнице")
@@ -177,7 +184,7 @@ class AttachUseCase:
                 figi=figi,
                 direction="SELL",
                 lots=pos.lots,
-                pending_op_id=f"clear-account:{figi}",
+                order_key=f"clear-account:{figi}",
                 salt=datetime.now(UTC).isoformat(timespec="seconds"),
             )
             try:
@@ -239,7 +246,11 @@ class AttachUseCase:
             exclude_portfolio_id=portfolio_id,
         )
         validation = _with_account_linkage_validation(
-            validate_account_for_attach(broker_snapshot_from_infrastructure(snapshot), portfolio),
+            validate_attach_soft(
+                broker_snapshot_from_infrastructure(snapshot),
+                portfolio,
+                universe or [],
+            ),
             linked_portfolio,
         )
         preview = _snapshot_to_preview(
@@ -282,12 +293,11 @@ class AttachUseCase:
             )
         token = self._ctx.token(kind)
         snapshot = broker.get_account_snapshot(token, kind, account_id)
-        validation = validate_account_for_attach(
+        validation = validate_attach_soft(
             broker_snapshot_from_infrastructure(snapshot),
             portfolio,
+            universe,
         )
-        if validation.blockers:
-            raise ValueError("; ".join(validation.blockers))
         portfolio.initial_amount_rub = float(validation.effective_initial_amount_rub)
         for pos in portfolio.positions:
             if not pos.figi:
@@ -306,8 +316,6 @@ class AttachUseCase:
         portfolio.account_id = account_id
         portfolio.account_kind = kind
         portfolio.trading_started_at = now_iso
-        portfolio.last_top_up_processed_at = now_iso
-        portfolio.last_synced_at = snapshot.fetched_at
         portfolio.frozen_forecast = FrozenForecast(
             expected_xirr_pct=plan.effective_annual_return_pct,
             expected_total_net_profit_rub=plan.total_net_profit_rub,
@@ -326,5 +334,4 @@ class AttachUseCase:
         portfolio.account_kind = None
         portfolio.frozen_forecast = None
         portfolio.trading_started_at = None
-        portfolio.last_synced_at = None
         return await self._ctx.repo.save(portfolio)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import date
 
 from litestar import Controller, delete, get, post
@@ -12,9 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bond_monitor.application.bonds.bond_service import BondService
 from bond_monitor.application.trading.trading_service import TradingService
-from bond_monitor.application.trading.types import TradingSyncResult
-from bond_monitor.domain.portfolio.models import PutOfferDecision
-from bond_monitor.domain.trading.models import AccountKind
+from bond_monitor.application.trading.types import TradingAdviceResult
+from bond_monitor.domain.trading.models import AccountKind, OrderDirection
 from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
 from bond_monitor.interfaces.api.controllers.bonds import provide_bond_service
 from bond_monitor.interfaces.config import Settings
@@ -23,20 +23,22 @@ from bond_monitor.interfaces.schemas.api import (
     AccountPreviewResponse,
     BrokerAccountResponse,
     ClearAccountRequest,
-    ConfirmPendingRequest,
     CreateSandboxAccountRequest,
     DeleteSandboxAccountResponse,
     OrderPreviewResponse,
-    PendingOperationResponse,
+    PlaceOrderRequest,
+    PlaceOrderResponse,
     PortfolioResponse,
-    PutOfferDecisionRequest,
     SandboxPayInRequest,
     SandboxPayInResponse,
     SellPositionPreviewResponse,
     SellPositionRequest,
     SellQuoteResponse,
-    TradingSyncResponse,
-    QueueSellRequest,
+    TradingAdviceResponse,
+    PerformanceDataResponse,
+    HoldingResponse,
+    SuggestionResponse,
+    ActiveOrderResponse,
 )
 from bond_monitor.interfaces.schemas.serializers import (
     account_operation_to_response,
@@ -55,20 +57,21 @@ async def provide_trading_service(
     )
 
 
-def trading_sync_to_response(result: TradingSyncResult) -> TradingSyncResponse:
-    return TradingSyncResponse(
-        pending_operations=result.pending_operations,
-        drifts=result.drifts,
+def advice_to_response(result: TradingAdviceResult) -> TradingAdviceResponse:
+    performance = None
+    if result.performance is not None:
+        performance = PerformanceDataResponse(**asdict(result.performance))
+    return TradingAdviceResponse(
+        holdings=[HoldingResponse(**asdict(h)) for h in result.holdings],
+        cashflow=result.cashflow,
+        performance=performance,
+        suggestions=[SuggestionResponse(**asdict(s)) for s in result.suggestions],
+        active_orders=[ActiveOrderResponse(**asdict(o)) for o in result.active_orders],
         money_rub=result.money_rub,
         available_money_rub=result.available_money_rub,
         blocked_money_rub=result.blocked_money_rub,
-        last_synced_at=result.last_synced_at,
-        has_pending_top_up=result.has_pending_top_up,
-        pending_top_up_rub=result.pending_top_up_rub,
-        top_up_auto_applied=result.top_up_auto_applied,
-        top_up_distributed_rub=result.top_up_distributed_rub,
-        top_up_notes=result.top_up_notes,
-        notes=result.notes,
+        warnings=result.warnings,
+        as_of=result.as_of,
     )
 
 
@@ -119,14 +122,17 @@ class TradingController(Controller):
         self,
         portfolio_id: str,
         trading_service: TradingService,
+        bond_service: BondService,
         account_id: str,
         kind: str = "sandbox",
     ) -> AccountPreviewResponse:
+        universe = bond_service.load_universe().bonds
         try:
             preview = await trading_service.get_account_preview(
                 portfolio_id,
                 account_id=account_id,
                 kind=AccountKind(kind),
+                universe=universe,
             )
         except ValueError as exc:
             message = str(exc)
@@ -141,13 +147,16 @@ class TradingController(Controller):
         portfolio_id: str,
         data: ClearAccountRequest,
         trading_service: TradingService,
+        bond_service: BondService,
     ) -> AccountPreviewResponse:
+        universe = bond_service.load_universe().bonds
         try:
             preview = await trading_service.clear_account_for_attach(
                 portfolio_id,
                 account_id=data.account_id,
                 kind=AccountKind(data.kind),
                 pay_in_rub=data.pay_in_rub,
+                universe=universe,
             )
         except ValueError as exc:
             message = str(exc)
@@ -207,17 +216,17 @@ class TradingController(Controller):
             raise ClientException(detail=message)
         return SandboxPayInResponse(**result)
 
-    @post("/portfolios/{portfolio_id:str}/sync")
-    async def sync_portfolio(
+    @get("/portfolios/{portfolio_id:str}/advice")
+    async def get_advice(
         self,
         portfolio_id: str,
         trading_service: TradingService,
         bond_service: BondService,
         settings: Settings,
-    ) -> TradingSyncResponse:
+    ) -> TradingAdviceResponse:
         universe = bond_service.load_universe().bonds
         try:
-            result = await trading_service.sync_portfolio(
+            result = await trading_service.get_advice(
                 portfolio_id,
                 universe,
                 key_rate=settings.key_rate,
@@ -229,78 +238,29 @@ class TradingController(Controller):
             if message == "Portfolio not found":
                 raise NotFoundException(detail=message)
             raise ClientException(detail=message)
-        return trading_sync_to_response(result)
-
-    @get("/portfolios/{portfolio_id:str}/pending-operations")
-    async def pending_ops(
-        self,
-        portfolio_id: str,
-        trading_service: TradingService,
-        bond_service: BondService,
-        settings: Settings,
-    ) -> list[PendingOperationResponse]:
-        universe = bond_service.load_universe().bonds
-        return await trading_service.get_pending_operations(
-            portfolio_id,
-            universe,
-            key_rate=settings.key_rate,
-            tax_rate=settings.tax_rate_fraction,
-            today=date.today(),
-        )
-
-    @post("/portfolios/{portfolio_id:str}/pending-operations/{op_id:str}/confirm")
-    async def confirm_pending(
-        self,
-        portfolio_id: str,
-        op_id: str,
-        data: ConfirmPendingRequest,
-        trading_service: TradingService,
-        bond_service: BondService,
-        settings: Settings,
-    ) -> TradingSyncResponse:
-        universe = bond_service.load_universe().bonds
-        try:
-            result = await trading_service.confirm_pending_operation(
-                portfolio_id,
-                op_id,
-                universe,
-                key_rate=settings.key_rate,
-                tax_rate=settings.tax_rate_fraction,
-                today=date.today(),
-                lots=data.lots,
-                price_pct=data.price_pct,
-            )
-        except ValueError as exc:
-            message = str(exc)
-            if message == "Portfolio not found":
-                raise NotFoundException(detail=message)
-            raise ClientException(detail=message)
-        return trading_sync_to_response(result)
+        return advice_to_response(result)
 
     @post(
-        "/portfolios/{portfolio_id:str}/pending-operations/{op_id:str}/preview",
+        "/portfolios/{portfolio_id:str}/orders/preview",
         status_code=HTTP_200_OK,
     )
-    async def preview_pending(
+    async def preview_order(
         self,
         portfolio_id: str,
-        op_id: str,
-        data: ConfirmPendingRequest,
+        data: PlaceOrderRequest,
         trading_service: TradingService,
         bond_service: BondService,
-        settings: Settings,
     ) -> OrderPreviewResponse:
         universe = bond_service.load_universe().bonds
         try:
-            result = await trading_service.preview_pending_operation(
+            result = await trading_service.preview_order(
                 portfolio_id,
-                op_id,
                 universe,
-                key_rate=settings.key_rate,
-                tax_rate=settings.tax_rate_fraction,
-                today=date.today(),
+                isin=data.isin,
+                direction=OrderDirection(data.direction),
                 lots=data.lots,
                 price_pct=data.price_pct,
+                figi=data.figi,
             )
         except ValueError as exc:
             message = str(exc)
@@ -309,31 +269,48 @@ class TradingController(Controller):
             raise ClientException(detail=message)
         return OrderPreviewResponse(**result.__dict__)
 
-    @post("/portfolios/{portfolio_id:str}/pending-operations/{op_id:str}/cancel-order")
-    async def cancel_pending_order(
+    @post("/portfolios/{portfolio_id:str}/orders/place", status_code=HTTP_201_CREATED)
+    async def place_order(
         self,
         portfolio_id: str,
-        op_id: str,
+        data: PlaceOrderRequest,
         trading_service: TradingService,
         bond_service: BondService,
-        settings: Settings,
-    ) -> TradingSyncResponse:
+    ) -> PlaceOrderResponse:
         universe = bond_service.load_universe().bonds
         try:
-            result = await trading_service.cancel_pending_order(
+            result = await trading_service.place_order(
                 portfolio_id,
-                op_id,
                 universe,
-                key_rate=settings.key_rate,
-                tax_rate=settings.tax_rate_fraction,
-                today=date.today(),
+                isin=data.isin,
+                direction=OrderDirection(data.direction),
+                lots=data.lots,
+                price_pct=data.price_pct,
+                figi=data.figi,
+                suggestion_id=data.suggestion_id,
             )
         except ValueError as exc:
             message = str(exc)
             if message == "Portfolio not found":
                 raise NotFoundException(detail=message)
             raise ClientException(detail=message)
-        return trading_sync_to_response(result)
+        return PlaceOrderResponse(**result.__dict__)
+
+    @post("/portfolios/{portfolio_id:str}/orders/{order_id:str}/cancel")
+    async def cancel_order(
+        self,
+        portfolio_id: str,
+        order_id: str,
+        trading_service: TradingService,
+    ) -> dict:
+        try:
+            await trading_service.cancel_order(portfolio_id, order_id)
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        return {"order_id": order_id, "status": "cancelled"}
 
     @post(
         "/portfolios/{portfolio_id:str}/positions/{isin:str}/sell-preview",
@@ -346,7 +323,6 @@ class TradingController(Controller):
         data: SellPositionRequest,
         trading_service: TradingService,
         bond_service: BondService,
-        settings: Settings,
     ) -> SellPositionPreviewResponse:
         universe = bond_service.load_universe().bonds
         try:
@@ -382,95 +358,6 @@ class TradingController(Controller):
                 raise NotFoundException(detail=message)
             raise ClientException(detail=message)
         return SellQuoteResponse(**result.__dict__)
-
-    @post("/portfolios/{portfolio_id:str}/positions/{isin:str}/queue-sell", status_code=HTTP_200_OK)
-    async def queue_manual_sell(
-        self,
-        portfolio_id: str,
-        isin: str,
-        data: QueueSellRequest,
-        trading_service: TradingService,
-        bond_service: BondService,
-        settings: Settings,
-    ) -> TradingSyncResponse:
-        universe = bond_service.load_universe().bonds
-        try:
-            result = await trading_service.queue_manual_sell(
-                portfolio_id,
-                isin,
-                universe,
-                lots=data.lots,
-                price_pct=data.price_pct,
-                key_rate=settings.key_rate,
-                tax_rate=settings.tax_rate_fraction,
-                today=date.today(),
-            )
-        except ValueError as exc:
-            message = str(exc)
-            if message == "Portfolio not found":
-                raise NotFoundException(detail=message)
-            raise ClientException(detail=message)
-        return trading_sync_to_response(result)
-
-    @post(
-        "/portfolios/{portfolio_id:str}/pending-operations/{op_id:str}/dismiss",
-        status_code=HTTP_200_OK,
-    )
-    async def dismiss_manual_sell(
-        self,
-        portfolio_id: str,
-        op_id: str,
-        trading_service: TradingService,
-        bond_service: BondService,
-        settings: Settings,
-    ) -> TradingSyncResponse:
-        universe = bond_service.load_universe().bonds
-        try:
-            result = await trading_service.dismiss_manual_sell(
-                portfolio_id,
-                op_id,
-                universe,
-                key_rate=settings.key_rate,
-                tax_rate=settings.tax_rate_fraction,
-                today=date.today(),
-            )
-        except ValueError as exc:
-            message = str(exc)
-            if message == "Portfolio not found":
-                raise NotFoundException(detail=message)
-            raise ClientException(detail=message)
-        return trading_sync_to_response(result)
-
-    @post("/portfolios/{portfolio_id:str}/positions/{isin:str}/put-offer-decision")
-    async def put_offer_decision(
-        self,
-        portfolio_id: str,
-        isin: str,
-        data: PutOfferDecisionRequest,
-        trading_service: TradingService,
-        bond_service: BondService,
-        settings: Settings,
-    ) -> TradingSyncResponse:
-        decision = (
-            PutOfferDecision.EXERCISE if data.decision == "exercise" else PutOfferDecision.HOLD
-        )
-        universe = bond_service.load_universe().bonds
-        try:
-            result = await trading_service.set_put_offer_decision(
-                portfolio_id,
-                isin,
-                decision,
-                universe,
-                key_rate=settings.key_rate,
-                tax_rate=settings.tax_rate_fraction,
-                today=date.today(),
-            )
-        except ValueError as exc:
-            message = str(exc)
-            if message == "Portfolio not found":
-                raise NotFoundException(detail=message)
-            raise ClientException(detail=message)
-        return trading_sync_to_response(result)
 
     @get("/portfolios/{portfolio_id:str}/performance")
     async def performance(

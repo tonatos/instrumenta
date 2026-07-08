@@ -4,26 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from bond_monitor.interfaces.schemas.api import PendingOperationResponse
-
-
-@dataclass
-class TradingSyncResult:
-    """Результат синхронизации портфеля со счётом T-Invest."""
-
-    pending_operations: list[PendingOperationResponse]
-    drifts: list[dict]
-    money_rub: float
-    last_synced_at: str | None
-    available_money_rub: float = 0.0
-    blocked_money_rub: float = 0.0
-    has_pending_top_up: bool = False
-    pending_top_up_rub: float = 0.0
-    top_up_auto_applied: bool = False
-    top_up_distributed_rub: float = 0.0
-    top_up_notes: list[str] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)
-
 
 @dataclass
 class OrderPreviewResult:
@@ -62,3 +42,91 @@ class SellQuoteResult:
     suggested_price_pct: float
     available_lots: int
     sell_buffer_label: str
+
+
+@dataclass
+class PlaceOrderResult:
+    """Результат отправки заявки на биржу."""
+
+    order_id: str
+    status: str
+    request_uid: str
+    lots_requested: int
+    lots_executed: int
+    total_order_amount_rub: float | None = None
+    initial_commission_rub: float | None = None
+
+
+@dataclass
+class HoldingResponse:
+    figi: str
+    isin: str
+    name: str
+    lots: int
+    quantity: int
+    lot_size: int
+    current_price_pct: float | None
+    current_nkd_rub: float | None
+    ytm: float | None
+    maturity_date: str | None
+    offer_date: str | None
+    market_value_rub: float | None
+
+
+@dataclass
+class SuggestionResponse:
+    id: str
+    kind: str
+    isin: str
+    name: str
+    lots: int
+    figi: str | None
+    suggested_price_pct: float | None
+    reason: str
+    due_date: str | None = None
+    source_isin: str | None = None
+    chat_template: str | None = None
+    urgency: str = "normal"
+
+
+@dataclass
+class ActiveOrderResponse:
+    order_id: str
+    request_uid: str
+    figi: str
+    direction: str
+    lots_requested: int
+    lots_executed: int
+    status: str
+    price_pct: float | None
+    total_order_amount_rub: float | None
+    initial_commission_rub: float | None
+
+
+@dataclass
+class PerformanceResponse:
+    xirr_pct: float | None
+    coupons_received_rub: float
+    tax_paid_rub: float
+    commission_paid_rub: float
+    realized_profit_rub: float
+    unrealized_value_rub: float
+    invested_rub: float
+    received_rub: float
+    as_of: str
+
+
+@dataclass
+class TradingAdviceResult:
+    """Результат stateless advisory."""
+
+    holdings: list[HoldingResponse]
+    cashflow: list[dict]
+    performance: PerformanceResponse | None
+    suggestions: list[SuggestionResponse]
+    active_orders: list[ActiveOrderResponse]
+    money_rub: float
+    available_money_rub: float
+    blocked_money_rub: float
+    warnings: list[str] = field(default_factory=list)
+    as_of: str = ""

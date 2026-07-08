@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, X } from "lucide-react";
 import { api } from "@/api/client";
-import type { Bond, PendingOperation, PortfolioPosition } from "@/api/types";
+import type { Bond, PortfolioPosition } from "@/api/types";
 import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
 import { POSITION_STATUS_LABELS, SOURCE_LABELS } from "@/features/portfolio/labels";
 import { SellPositionDialog } from "@/features/portfolio/trading/SellPositionDialog";
@@ -13,29 +13,19 @@ import { Input } from "@/components/ui/input";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
 
-const ACTIVE_SELL_STATUSES = new Set(["action_required", "in_progress"]);
-
-function manualSellLabel(op: PendingOperation): string {
-  if (op.status === "in_progress") {
-    return `На бирже · ${op.lots} л.`;
-  }
-  return `В очереди · ${op.lots} л.`;
-}
-
-function manualSellHint(op: PendingOperation): string {
-  if (op.status === "in_progress") {
-    return "Заявка на продажу уже выставлена на бирже — отмените её в очереди действий";
-  }
-  return "Продажа в очереди — подтвердите или уберите в блоке «Очередь действий»";
-}
+const ACTIVE_ORDER_STATUSES = new Set([
+  "EXECUTION_REPORT_STATUS_NEW",
+  "EXECUTION_REPORT_STATUS_PARTIALLYFILL",
+  "EXECUTION_REPORT_STATUS_PENDING_CANCEL",
+]);
 
 export function PositionsTab({
   positions,
   portfolioId,
   isTrading,
-  accountKind,
+  accountKind: _accountKind,
   bonds,
-  closedPositionsCount,
+  closedPositionsCount: _closedPositionsCount,
 }: {
   positions: PortfolioPosition[];
   portfolioId: string;
@@ -48,36 +38,41 @@ export function PositionsTab({
   const [addLots, setAddLots] = useState(1);
   const [selectedIsin, setSelectedIsin] = useState<string | null>(null);
   const [detailSecid, setDetailSecid] = useState<string | null>(null);
-  const [showClosed, setShowClosed] = useState(false);
   const [sellPosition, setSellPosition] = useState<PortfolioPosition | null>(null);
 
-  const canSellInSandbox =
-    isTrading && accountKind === "sandbox";
+  const canSellInTrading = isTrading;
 
-  const { data: tradingSync } = useQuery({
-    queryKey: ["trading-sync", portfolioId],
-    queryFn: () => api.syncPortfolio(portfolioId),
-    enabled: canSellInSandbox,
+  const { data: tradingAdvice } = useQuery({
+    queryKey: ["trading-advice", portfolioId],
+    queryFn: () => api.getAdvice(portfolioId),
+    enabled: canSellInTrading,
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
 
-  const manualSellByIsin = useMemo(() => {
-    const map = new Map<string, PendingOperation>();
-    for (const op of tradingSync?.pending_operations ?? []) {
-      if (op.kind !== "manual_sell" || !ACTIVE_SELL_STATUSES.has(op.status)) {
+  const activeSellByFigi = useMemo(() => {
+    const map = new Map<string, { lots: number; onExchange: boolean }>();
+    for (const order of tradingAdvice?.active_orders ?? []) {
+      if (order.direction !== "SELL" || !ACTIVE_ORDER_STATUSES.has(order.status)) {
         continue;
       }
-      map.set(op.isin, op);
+      map.set(order.figi, {
+        lots: order.lots_requested,
+        onExchange: true,
+      });
     }
     return map;
-  }, [tradingSync?.pending_operations]);
+  }, [tradingAdvice?.active_orders]);
 
-  const visiblePositions = useMemo(
-    () => (showClosed ? positions : positions.filter((p) => p.status !== "closed")),
-    [positions, showClosed],
-  );
-  const closedCount = closedPositionsCount;
+  const holdingsByIsin = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const holding of tradingAdvice?.holdings ?? []) {
+      map.set(holding.isin, holding.lots);
+    }
+    return map;
+  }, [tradingAdvice?.holdings]);
+
+  const visiblePositions = positions;
 
   const removeMutation = useMutation({
     mutationFn: (isin: string) => api.removePosition(portfolioId, isin),
@@ -114,23 +109,9 @@ export function PositionsTab({
 
   return (
     <div className="space-y-4">
-      {isTrading && closedCount > 0 && (
-        <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={showClosed}
-            onChange={(e) => setShowClosed(e.target.checked)}
-            data-testid="show-closed-positions"
-          />
-          Показать закрытые ({closedCount})
-        </label>
-      )}
-
       {visiblePositions.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
-          {positions.length > 0 && !showClosed
-            ? "Нет активных позиций — включите «Показать закрытые»"
-            : "Позиций нет — воспользуйтесь «Автосостав» или добавьте бумаги вручную"}
+          Позиций нет — воспользуйтесь «Автосостав» или добавьте бумаги вручную
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border">
@@ -143,20 +124,18 @@ export function PositionsTab({
                 )}
                 <th className="px-3 py-2 text-right font-semibold">YTM</th>
                 <th className="px-3 py-2 text-right font-semibold">Скор</th>
-                <th className="px-3 py-2 text-right font-semibold">
-                  {isTrading ? "Пл / Фк" : "Лотов"}
-                </th>
+                <th className="px-3 py-2 text-right font-semibold">Лотов</th>
                 <th className="px-3 py-2 text-right font-semibold">Вложено</th>
                 <th className="px-3 py-2 text-left font-semibold">Источник</th>
                 <th className="px-3 py-2 text-left font-semibold">Погашение</th>
-                {(canSellInSandbox || !isTrading) && <th className="w-20 px-2 py-2" />}
+                {(canSellInTrading || !isTrading) && <th className="w-20 px-2 py-2" />}
               </tr>
             </thead>
             <tbody>
               {visiblePositions.map((pos) => {
                 const status = pos.status ?? "active";
                 const bond = bondsByIsin.get(pos.isin);
-                const manualSell = manualSellByIsin.get(pos.isin);
+                const manualSell = pos.figi ? activeSellByFigi.get(pos.figi) : undefined;
                 const sellBlocked = manualSell != null;
                 return (
                 <tr
@@ -165,17 +144,13 @@ export function PositionsTab({
                   data-status={status}
                   className={cn(
                     "cursor-pointer border-t border-border hover:bg-muted/20",
-                    status === "closed" && "text-muted-foreground opacity-70",
                   )}
                   onClick={() => setDetailSecid(pos.secid)}
                 >
                   <td className="px-3 py-2">
                     <button
                       type="button"
-                      className={cn(
-                        "max-w-[180px] truncate text-left font-medium hover:underline",
-                        status === "closed" && "line-through",
-                      )}
+                      className="max-w-[180px] truncate text-left font-medium hover:underline"
                       onClick={(e) => {
                         e.stopPropagation();
                         setDetailSecid(pos.secid);
@@ -208,7 +183,7 @@ export function PositionsTab({
                             className="text-[10px] font-normal"
                             data-testid={`sell-pending-badge-${pos.isin}`}
                           >
-                            {manualSell.status === "in_progress" ? "SELL на бирже" : "SELL в очереди"}
+                            SELL на бирже
                           </Badge>
                         )}
                       </div>
@@ -234,22 +209,7 @@ export function PositionsTab({
                     </Badge>
                   </td>
                   <td className="px-3 py-2 text-right font-medium">
-                    {isTrading && pos.actual_lots != null ? (
-                      <Tooltip
-                        content={`Плановых: ${pos.lots} л. · Фактических: ${pos.actual_lots} л.`}
-                      >
-                        <span
-                          className={cn(
-                            "cursor-help",
-                            pos.actual_lots !== pos.lots && "text-amber-600",
-                          )}
-                        >
-                          {pos.lots}&nbsp;/&nbsp;{pos.actual_lots}
-                        </span>
-                      </Tooltip>
-                    ) : (
-                      `${pos.lots} л.`
-                    )}
+                    {`${pos.lots} л.`}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-right">
                     {formatRub(pos.purchase_amount_rub)}
@@ -262,11 +222,11 @@ export function PositionsTab({
                       ? <span className="text-orange-600 dark:text-orange-400">{formatDate(pos.offer_date)} ⚡</span>
                       : formatDate(pos.maturity_date)}
                   </td>
-                  {canSellInSandbox && (
+                  {canSellInTrading && (
                     <td className="px-2 py-2">
-                      {(pos.actual_lots ?? 0) > 0 && pos.status !== "closed" && (
+                      {(holdingsByIsin.get(pos.isin) ?? 0) > 0 && (
                         sellBlocked && manualSell ? (
-                          <Tooltip content={manualSellHint(manualSell)}>
+                          <Tooltip content="Заявка на продажу уже на бирже — отмените в блоке «Советы по торговле»">
                             <Button
                               type="button"
                               variant="outline"
@@ -275,7 +235,7 @@ export function PositionsTab({
                               data-testid={`sell-position-${pos.isin}`}
                               disabled
                             >
-                              {manualSellLabel(manualSell)}
+                              На бирже · {manualSell.lots} л.
                             </Button>
                           </Tooltip>
                         ) : (

@@ -1,12 +1,12 @@
 /**
- * E2E: статусы позиций в trading-портфеле, фильтр закрытых, badge.
+ * E2E: статусы позиций в trading-портфеле, YTM/скор из справочника.
  */
 
 import { test, expect } from "@playwright/test";
 import {
   gotoPortfolio,
+  makeAdvice,
   makeEmptyPlan,
-  makeEmptySync,
   makeTradingPortfolio,
   mockTradingPortfolioRoutes,
 } from "./fixtures";
@@ -16,7 +16,7 @@ const PORTFOLIO_ID = "positions-lifecycle-1";
 const tradingPortfolio = makeTradingPortfolio(PORTFOLIO_ID, {
   name: "Lifecycle E2E",
   positions_count: 2,
-  closed_positions_count: 1,
+  closed_positions_count: 0,
   data: {
     positions: [
       {
@@ -35,33 +35,8 @@ const tradingPortfolio = makeTradingPortfolio(PORTFOLIO_ID, {
         maturity_date: "2027-06-01",
         offer_date: null,
         source: "initial",
-        put_offer_decision: "pending",
         figi: "FIGI_OPEN",
-        actual_lots: 5,
-        closed_at: null,
         status: "active",
-      },
-      {
-        isin: "RU000ACLOSE1",
-        secid: "CLOSE1",
-        name: "Погашенная облигация",
-        lots: 3,
-        lot_size: 1,
-        purchase_clean_price_pct: 100,
-        purchase_dirty_price_rub: 1000,
-        purchase_aci_rub: 0,
-        purchase_date: "2025-01-01",
-        purchase_amount_rub: 3000,
-        coupon_rate: 10,
-        face_value: 1000,
-        maturity_date: "2026-06-01",
-        offer_date: null,
-        source: "initial",
-        put_offer_decision: "pending",
-        figi: "FIGI_CLOSE",
-        actual_lots: 0,
-        closed_at: "2026-06-15",
-        status: "closed",
       },
       {
         isin: "RU000APEND1",
@@ -79,14 +54,11 @@ const tradingPortfolio = makeTradingPortfolio(PORTFOLIO_ID, {
         maturity_date: "2027-12-01",
         offer_date: null,
         source: "initial",
-        put_offer_decision: "pending",
         figi: "FIGI_PEND",
-        actual_lots: 0,
-        closed_at: null,
         status: "pending",
       },
     ],
-    closed_positions_count: 1,
+    closed_positions_count: 0,
   },
 });
 
@@ -94,7 +66,18 @@ test.describe("Позиции — жизненный цикл", () => {
   test.beforeEach(async ({ page }) => {
     await mockTradingPortfolioRoutes(page, PORTFOLIO_ID, tradingPortfolio, {
       plan: makeEmptyPlan({ invested_capital_rub: 100_000 }),
-      sync: makeEmptySync(),
+      advice: makeAdvice({
+        holdings: [
+          {
+            figi: "FIGI_OPEN",
+            isin: "RU000AOPEN1",
+            name: "Активная облигация",
+            lots: 5,
+            quantity: 5,
+            lot_size: 1,
+          },
+        ],
+      }),
     });
     await page.route("**/api/v1/bonds/**", async (route) => {
       await route.fulfill({
@@ -134,7 +117,7 @@ test.describe("Позиции — жизненный цикл", () => {
     await expect(page.getByRole("tab", { name: /Позиции/ })).toBeVisible({ timeout: 15_000 });
   });
 
-  test("показывает статусы открытых позиций без закрытых по умолчанию", async ({ page }) => {
+  test("показывает все позиции плана со статусами", async ({ page }) => {
     await page.getByRole("tab", { name: /Позиции/ }).click();
 
     await expect(page.getByTestId("position-row-RU000AOPEN1")).toBeVisible();
@@ -142,16 +125,16 @@ test.describe("Позиции — жизненный цикл", () => {
       "data-status",
       "active",
     );
+    await expect(page.getByTestId("position-row-RU000APEND1")).toBeVisible();
     await expect(page.getByTestId("position-row-RU000APEND1")).toHaveAttribute(
       "data-status",
       "pending",
     );
-    await expect(page.getByTestId("position-row-RU000ACLOSE1")).not.toBeVisible();
-    await expect(page.getByText("Активная облигация")).toBeVisible();
-    await expect(page.getByText("Погашенная облигация")).not.toBeVisible();
+    await expect(page.getByTestId("position-row-RU000AOPEN1")).toContainText("Активная облигация");
+    await expect(page.getByTestId("position-row-RU000APEND1")).toContainText("Ожидающая покупка");
   });
 
-  test("badge на вкладке считает только открытые позиции", async ({ page }) => {
+  test("badge на вкладке считает позиции плана", async ({ page }) => {
     const tab = page.getByRole("tab", { name: /Позиции/ });
     await expect(tab).toContainText("2");
   });
@@ -163,16 +146,5 @@ test.describe("Позиции — жизненный цикл", () => {
     await expect(page.getByTestId("position-score-RU000AOPEN1")).toHaveText("78");
     await expect(page.getByTestId("position-ytm-RU000APEND1")).toHaveText("11.31%");
     await expect(page.getByTestId("position-score-RU000APEND1")).toHaveText("65");
-  });
-
-  test("фильтр показывает закрытые позиции", async ({ page }) => {
-    await page.getByRole("tab", { name: /Позиции/ }).click();
-    await page.getByTestId("show-closed-positions").check();
-    await expect(page.getByTestId("position-row-RU000ACLOSE1")).toBeVisible();
-    await expect(page.getByTestId("position-row-RU000ACLOSE1")).toHaveAttribute(
-      "data-status",
-      "closed",
-    );
-    await expect(page.getByText("Погашенная облигация")).toBeVisible();
   });
 });

@@ -50,7 +50,7 @@ export function usePortfolioMutations({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["portfolios"] });
       queryClient.invalidateQueries({ queryKey: ["plan", activeId] });
-      queryClient.invalidateQueries({ queryKey: ["trading-sync", activeId] });
+      queryClient.invalidateQueries({ queryKey: ["trading-advice", activeId] });
       onEditSuccess?.();
     },
   });

@@ -1,4 +1,4 @@
-"""Queue manual_sell for sandbox position disposal."""
+"""Sell position preview and quote from broker snapshot."""
 
 from __future__ import annotations
 
@@ -6,27 +6,18 @@ import logging
 from datetime import date
 
 from bond_monitor.application.trading.context import TradingContext
-from bond_monitor.application.trading.sync_use_case import SyncUseCase
-from bond_monitor.application.trading.types import SellPositionPreviewResult, SellQuoteResult, TradingSyncResult
+from bond_monitor.application.trading.types import SellPositionPreviewResult, SellQuoteResult
 from bond_monitor.domain.bonds.models import BondRecord
-from bond_monitor.domain.portfolio.models import PortfolioPosition
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, order_amount_rub
+from bond_monitor.domain.trading.advisory import build_holdings
 from bond_monitor.domain.trading.policies import (
     format_buy_limit_buffer_label,
     sell_limit_price_buffer,
     suggested_sell_limit_price_pct,
 )
 from bond_monitor.domain.trading.ports import BrokerSnapshot
-from bond_monitor.domain.trading.sell_position import (
-    dismiss_queued_manual_sell,
-    dismiss_queued_pending,
-    find_sellable_position,
-    queue_manual_sell,
-    validate_sell_request,
-)
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import broker_snapshot_from_infrastructure
 from bond_monitor.application.trading import broker
-from bond_monitor.infrastructure.tinvest.trading_client import AccountSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -38,51 +29,38 @@ def _position_instrument_uid(snapshot: BrokerSnapshot, figi: str | None) -> str:
     return broker_pos.instrument_uid if broker_pos is not None else ""
 
 
+def _find_holding_lots(snapshot: BrokerSnapshot, universe: list[BondRecord], isin: str) -> tuple[str | None, int]:
+    bond = next((b for b in universe if b.isin == isin), None)
+    if bond and bond.figi:
+        pos = snapshot.bond_positions.get(bond.figi)
+        if pos is not None:
+            return bond.figi, pos.lots
+    for figi, pos in snapshot.bond_positions.items():
+        holding = next((h for h in build_holdings(snapshot, universe) if h.figi == figi), None)
+        if holding and holding.isin == isin:
+            return figi, pos.lots
+    return None, 0
+
+
 def _market_price_pct(
-    position: PortfolioPosition,
     bond: BondRecord | None,
     snapshot: BrokerSnapshot,
+    figi: str | None,
+    *,
+    fallback: float = 100.0,
 ) -> float:
-    if position.figi:
-        broker_pos = snapshot.bond_positions.get(position.figi)
+    if figi:
+        broker_pos = snapshot.bond_positions.get(figi)
         if broker_pos is not None and broker_pos.current_price_pct is not None:
             return float(broker_pos.current_price_pct)
     if bond is not None and bond.last_price is not None and bond.last_price > 0:
         return bond.last_price
-    return position.purchase_clean_price_pct
-
-
-def _suggested_sell_price_pct(
-    position: PortfolioPosition,
-    bond: BondRecord | None,
-    snapshot: BrokerSnapshot,
-    buffer: float,
-) -> tuple[float, float]:
-    market = _market_price_pct(position, bond, snapshot)
-    suggested = float(suggested_sell_limit_price_pct(market, buffer))
-    return market, suggested
-
-
-def _pricing_context(
-    position: PortfolioPosition,
-    bond: BondRecord | None,
-    snapshot: AccountSnapshot,
-    broker_snapshot: BrokerSnapshot,
-) -> tuple[float, int, float]:
-    face_value = bond.face_value if bond else position.face_value
-    lot_size = bond.lot_size if bond else position.lot_size
-    aci_rub = (bond.accrued_interest or 0.0) if bond else 0.0
-    if not aci_rub and position.figi:
-        broker_pos = broker_snapshot.bond_positions.get(position.figi)
-        if broker_pos is not None and broker_pos.current_nkd_rub is not None:
-            aci_rub = float(broker_pos.current_nkd_rub)
-    return face_value, lot_size, aci_rub
+    return fallback
 
 
 class SellPositionUseCase:
-    def __init__(self, ctx: TradingContext, sync: SyncUseCase) -> None:
+    def __init__(self, ctx: TradingContext) -> None:
         self._ctx = ctx
-        self._sync = sync
 
     async def preview_sell_position(
         self,
@@ -94,21 +72,31 @@ class SellPositionUseCase:
         price_pct: float,
         today: date,
     ) -> SellPositionPreviewResult:
+        del today
         portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
         token = self._ctx.token(portfolio.account_kind)  # type: ignore[arg-type]
         account_id = portfolio.account_id  # type: ignore[assignment]
 
-        position = find_sellable_position(portfolio, isin)
-        available_lots = validate_sell_request(portfolio, position, lots)
-
         snapshot = broker.get_account_snapshot(token, portfolio.account_kind, account_id)  # type: ignore[arg-type]
         broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
+        figi, available_lots = _find_holding_lots(broker_snapshot, universe, isin)
+        if available_lots <= 0:
+            raise ValueError("На счёте нет лотов для продажи")
+        if lots > available_lots:
+            raise ValueError(f"Недостаточно лотов: доступно {available_lots}")
+
         bond = next((b for b in universe if b.isin == isin), None)
-        face_value, lot_size, aci_rub = _pricing_context(
-            position, bond, snapshot, broker_snapshot
+        broker_pos = broker_snapshot.bond_positions.get(figi) if figi else None
+        face_value = bond.face_value if bond else 1000.0
+        lot_size = bond.lot_size if bond else (
+            max(1, broker_pos.quantity // max(broker_pos.lots, 1)) if broker_pos else 1
         )
+        aci_rub = (bond.accrued_interest or 0.0) if bond else 0.0
+        if not aci_rub and broker_pos is not None and broker_pos.current_nkd_rub is not None:
+            aci_rub = float(broker_pos.current_nkd_rub)
         buffer = sell_limit_price_buffer(portfolio.account_kind)
-        market, suggested = _suggested_sell_price_pct(position, bond, broker_snapshot, buffer)
+        market = _market_price_pct(bond, broker_snapshot, figi)
+        suggested = float(suggested_sell_limit_price_pct(market, buffer))
 
         clean_amount_rub = round(
             lots * lot_size * face_value * float(price_pct) / 100.0,
@@ -133,13 +121,13 @@ class SellPositionUseCase:
         broker_commission: float | None = None
         preview_source = "moex"
 
-        if position.figi:
-            instrument_uid = _position_instrument_uid(broker_snapshot, position.figi)
+        if figi:
+            instrument_uid = _position_instrument_uid(broker_snapshot, figi)
             broker_preview = broker.preview_order_price(
                 token,
                 portfolio.account_kind,  # type: ignore[arg-type]
                 account_id=account_id,
-                figi=position.figi,
+                figi=figi,
                 instrument_uid=instrument_uid,
                 direction="SELL",
                 lots=Lots(lots),
@@ -194,97 +182,20 @@ class SellPositionUseCase:
         token = self._ctx.token(portfolio.account_kind)  # type: ignore[arg-type]
         account_id = portfolio.account_id  # type: ignore[assignment]
 
-        position = find_sellable_position(portfolio, isin)
-        actual = position.actual_lots if position.actual_lots is not None else 0
-        if actual <= 0:
-            raise ValueError("На счёте нет лотов для продажи")
-
         snapshot = broker.get_account_snapshot(token, portfolio.account_kind, account_id)  # type: ignore[arg-type]
         broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
+        figi, available_lots = _find_holding_lots(broker_snapshot, universe, isin)
+        if available_lots <= 0:
+            raise ValueError("На счёте нет лотов для продажи")
+
         bond = next((b for b in universe if b.isin == isin), None)
         buffer = sell_limit_price_buffer(portfolio.account_kind)
-        market, suggested = _suggested_sell_price_pct(position, bond, broker_snapshot, buffer)
+        market = _market_price_pct(bond, broker_snapshot, figi)
+        suggested = float(suggested_sell_limit_price_pct(market, buffer))
 
         return SellQuoteResult(
             market_price_pct=market,
             suggested_price_pct=suggested,
-            available_lots=actual,
+            available_lots=available_lots,
             sell_buffer_label=format_buy_limit_buffer_label(buffer),
-        )
-
-    async def queue_manual_sell(
-        self,
-        portfolio_id: str,
-        isin: str,
-        universe: list[BondRecord],
-        *,
-        lots: int,
-        price_pct: float | None,
-        key_rate: float,
-        tax_rate: float,
-        today: date,
-    ) -> TradingSyncResult:
-        portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
-        position = find_sellable_position(portfolio, isin)
-
-        resolved_price = price_pct
-        if resolved_price is None:
-            token = self._ctx.token(portfolio.account_kind)  # type: ignore[arg-type]
-            account_id = portfolio.account_id  # type: ignore[assignment]
-            snapshot = broker.get_account_snapshot(token, portfolio.account_kind, account_id)  # type: ignore[arg-type]
-            broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
-            bond = next((b for b in universe if b.isin == isin), None)
-            buffer = sell_limit_price_buffer(portfolio.account_kind)
-            _, resolved_price = _suggested_sell_price_pct(
-                position, bond, broker_snapshot, buffer
-            )
-
-        queue_manual_sell(portfolio, position, lots=lots, price_pct=resolved_price)
-        await self._ctx.repo.save(portfolio)
-        return await self._sync.sync_portfolio(
-            portfolio_id,
-            universe,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-            today=today,
-        )
-
-    async def dismiss_pending_operation(
-        self,
-        portfolio_id: str,
-        op_id: str,
-        universe: list[BondRecord],
-        *,
-        key_rate: float,
-        tax_rate: float,
-        today: date,
-    ) -> TradingSyncResult:
-        portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
-        dismiss_queued_pending(portfolio, op_id)
-        await self._ctx.repo.save(portfolio)
-        return await self._sync.sync_portfolio(
-            portfolio_id,
-            universe,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-            today=today,
-        )
-
-    async def dismiss_manual_sell(
-        self,
-        portfolio_id: str,
-        op_id: str,
-        universe: list[BondRecord],
-        *,
-        key_rate: float,
-        tax_rate: float,
-        today: date,
-    ) -> TradingSyncResult:
-        return await self.dismiss_pending_operation(
-            portfolio_id,
-            op_id,
-            universe,
-            key_rate=key_rate,
-            tax_rate=tax_rate,
-            today=today,
         )

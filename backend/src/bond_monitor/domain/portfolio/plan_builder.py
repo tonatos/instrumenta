@@ -23,7 +23,6 @@ from bond_monitor.domain.portfolio.models import (
     Portfolio,
     PortfolioPosition,
     PositionSourceType,
-    PutOfferDecision,
     ReinvestmentSlot,
     ReinvestmentTriggerReason,
 )
@@ -59,7 +58,7 @@ from bond_monitor.domain.portfolio.selection import has_usable_price
 from bond_monitor.domain.shared.formatting import format_date
 from bond_monitor.domain.shared.money import Rub
 from bond_monitor.domain.shared.position_math import position_cost_basis
-from bond_monitor.domain.trading.cash_constraints import initial_buy_gap_lots
+from bond_monitor.domain.shared.money import Rub
 
 logger = logging.getLogger(__name__)
 
@@ -146,8 +145,6 @@ def _calculate_plan_expected_xirr(
         deployed_outflow = 0.0
         for position in open_positions(portfolio.positions):
             if position.source not in _ON_ACCOUNT_SOURCES:
-                continue
-            if position.is_closed:
                 continue
             cost = position_cost_basis(position)
             if cost > 0 and position.purchase_date <= horizon:
@@ -308,7 +305,6 @@ def build_plan(
         # иметь оферту, и их тоже хочется подсветить.
         if (
             position.offer_date is not None
-            and position.put_offer_decision == PutOfferDecision.PENDING
             and today <= position.offer_date <= horizon
             and position.isin not in reminded_isins
         ):
@@ -342,19 +338,6 @@ def build_plan(
                     )
                 )
                 reminded_isins.add(position.isin)
-
-        if (
-            position.put_offer_decision == PutOfferDecision.EXERCISE
-            and position.offer_date is not None
-            and put_offer_submission_closed(position, today)
-        ):
-            plan.notes.append(
-                f"{position.name}: решение «Предъявить» невозможно — окно подачи "
-                f"по пут-оферте "
-                f"{format_date(position.offer_submission_end)} "
-                f"уже закрыто. Расчёт идёт до погашения "
-                f"{format_date(position.maturity_date)}."
-            )
 
         end_date = position_end_date(
             position,
@@ -402,11 +385,7 @@ def build_plan(
             )
             continue
 
-        is_put = (
-            position.put_offer_decision == PutOfferDecision.EXERCISE
-            and position.offer_date is not None
-            and not put_offer_submission_closed(position, today)
-        )
+        is_put = _position_is_put_at_end(position, end_date, today)
         net_at_end = (
             _net_redemption_amount(position, tax_rate, is_put=is_put)
             if is_put
@@ -635,28 +614,11 @@ def _emit_position_events(
         and position.source == PositionSourceType.INITIAL
         and position.purchase_date <= today
     )
-    needs_initial_buy = False
     purchase_lots = position.lots
     purchase_amount_rub = position.purchase_amount_rub
     purchase_date = position.purchase_date
-    if (
-        plan.portfolio.is_trading
-        and position.source == PositionSourceType.INITIAL
-        and position.actual_lots is not None
-    ):
-        gap_lots = initial_buy_gap_lots(plan.portfolio, position)
-        if gap_lots > 0:
-            purchase_lots = gap_lots
-            unit_dirty = position.purchase_dirty_price_rub
-            if universe_by_isin is not None:
-                live_bond = universe_by_isin.get(position.isin)
-                if live_bond is not None and live_bond.dirty_price_rub:
-                    unit_dirty = live_bond.dirty_price_rub
-            purchase_amount_rub = unit_dirty * gap_lots * position.lot_size
-            purchase_date = today
-            needs_initial_buy = True
 
-    if is_future_purchase or is_reinvestment or needs_initial_buy or emit_initial_purchase:
+    if is_future_purchase or is_reinvestment or emit_initial_purchase:
         plan.events.append(
             CashflowEvent(
                 date=purchase_date,
@@ -713,11 +675,7 @@ def _emit_position_events(
     if end_date is None or end_date > horizon:
         return
 
-    is_put = (
-        position.put_offer_decision == PutOfferDecision.EXERCISE
-        and position.offer_date is not None
-        and not put_offer_submission_closed(position, today)
-    )
+    is_put = _position_is_put_at_end(position, end_date, today)
     if is_put:
         price_suffix = (
             f" ({position.offer_price_pct:.0f}% номинала)"
@@ -1033,18 +991,12 @@ def _finalize_plan_totals(
     if account_snapshot_money_rub is not None:
         initial_spent = 0.0
         for position in open_positions(portfolio.positions):
-            if position.is_closed:
-                continue
             if (
                 position.source not in _ON_ACCOUNT_SOURCES
                 or position.purchase_date > portfolio.horizon_date
             ):
                 continue
-            if position.actual_lots is not None:
-                filled_lots = min(position.actual_lots, position.lots)
-                initial_spent += position.purchase_dirty_price_rub * filled_lots * position.lot_size
-            else:
-                initial_spent += position.purchase_amount_rub
+            initial_spent += position.purchase_amount_rub
     else:
         initial_spent = 0.0
     total_invested = initial_spent
@@ -1169,10 +1121,15 @@ def _position_redemption_gross_value(position: PortfolioPosition, *, is_put: boo
     return redemption_per_bond * position.bonds_count
 
 
-def _position_is_put_at_end(position: PortfolioPosition, today: date) -> bool:
+def _position_is_put_at_end(
+    position: PortfolioPosition,
+    end_date: date | None,
+    today: date,
+) -> bool:
     return (
-        position.put_offer_decision == PutOfferDecision.EXERCISE
+        end_date is not None
         and position.offer_date is not None
+        and end_date == position.offer_date
         and not put_offer_submission_closed(position, today)
     )
 
@@ -1196,7 +1153,7 @@ def _position_market_value_at(
         today=today,
         assume_best_put_outcome=assume_best_put_outcome,
     )
-    is_put = _position_is_put_at_end(position, today)
+    is_put = _position_is_put_at_end(position, end_date, today)
 
     purchase_value = position.purchase_amount_rub
     if end_date is not None and end_date <= as_of and end_date <= horizon:

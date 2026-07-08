@@ -44,18 +44,18 @@ export function makeEmptyPlan(overrides: Record<string, unknown> = {}) {
   };
 }
 
-export function makeEmptySync(overrides: Record<string, unknown> = {}) {
+export function makeAdvice(overrides: Record<string, unknown> = {}) {
   return {
-    pending_operations: [],
-    drifts: [],
+    holdings: [],
+    cashflow: [],
+    performance: null,
+    suggestions: [],
+    active_orders: [],
     money_rub: 50_000,
-    last_synced_at: "2026-07-01T00:00:00+00:00",
-    has_pending_top_up: false,
-    pending_top_up_rub: 0,
-    top_up_auto_applied: false,
-    top_up_distributed_rub: 0,
-    top_up_notes: [],
-    notes: [],
+    available_money_rub: 50_000,
+    blocked_money_rub: 0,
+    warnings: [],
+    as_of: new Date().toISOString(),
     ...overrides,
   };
 }
@@ -87,9 +87,7 @@ export function makeTradingPortfolio(
       mode: "trading",
       account_id: "acc-e2e",
       account_kind: "sandbox",
-      acknowledged_top_ups_rub: 0,
       frozen_forecast: null,
-      pending_operations: [],
       closed_positions_count: 0,
       ...data,
     },
@@ -103,7 +101,7 @@ export async function mockTradingPortfolioRoutes(
   portfolio: ReturnType<typeof makeTradingPortfolio>,
   options: {
     plan?: ReturnType<typeof makeEmptyPlan>;
-    sync?: ReturnType<typeof makeEmptySync>;
+    advice?: ReturnType<typeof makeAdvice>;
     accountOperations?: unknown[];
   } = {},
 ): Promise<void> {
@@ -122,8 +120,9 @@ export async function mockTradingPortfolioRoutes(
     await route.fulfill({ json: options.plan ?? makeEmptyPlan() });
   });
 
-  await page.route(`**/api/v1/portfolios/${portfolioId}/sync`, async (route) => {
-    await route.fulfill({ json: options.sync ?? makeEmptySync() });
+  const advicePayload = options.advice ?? makeAdvice();
+  await page.route(`**/api/v1/portfolios/${portfolioId}/advice`, async (route) => {
+    await route.fulfill({ json: advicePayload });
   });
 
   await page.route(

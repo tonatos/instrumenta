@@ -4,8 +4,8 @@
 
 import { test, expect } from "@playwright/test";
 import {
+  makeAdvice,
   makeEmptyPlan,
-  makeEmptySync,
   makeTradingPortfolio,
   mockTradingPortfolioRoutes,
 } from "./fixtures";
@@ -32,26 +32,31 @@ function countApiRequests(page: import("@playwright/test").Page) {
   };
 }
 
-const pendingBuy = {
-  id: "pending-cancel-1",
-  kind: "initial_buy",
+const buySuggestion = {
+  id: "suggestion-cancel-1",
+  kind: "buy",
   isin: "RU000ATEST1",
   name: "Тестовая облигация",
   lots: 3,
   figi: "FIGI_TEST",
   suggested_price_pct: 100.5,
   due_date: null,
-  reason: "Стартовая покупка",
-  status: "action_required",
-  block_reason: null,
-  estimated_amount_rub: 3030,
-  face_value_rub: 1000,
-  lot_size: 1,
-  aci_rub_per_bond: 0,
-  active_order_id: null,
-  active_order_status: null,
+  reason: "Свободный кэш",
   urgency: "normal",
   chat_template: null,
+};
+
+const activeOrder = {
+  order_id: "order-cancel-1",
+  request_uid: "req-cancel-1",
+  figi: "FIGI_TEST",
+  direction: "BUY",
+  lots_requested: 3,
+  lots_executed: 0,
+  status: "EXECUTION_REPORT_STATUS_NEW",
+  price_pct: 100.5,
+  total_order_amount_rub: 3030,
+  initial_commission_rub: 5,
 };
 
 test.describe("Бюджет API-запросов", () => {
@@ -60,15 +65,15 @@ test.describe("Бюджет API-запросов", () => {
   }) => {
     const portfolio = makeTradingPortfolio(PORTFOLIO_ID);
     await mockTradingPortfolioRoutes(page, PORTFOLIO_ID, portfolio, {
-      sync: makeEmptySync({ pending_operations: [pendingBuy] }),
+      advice: makeAdvice({ suggestions: [buySuggestion] }),
     });
 
     const counter = countApiRequests(page);
     await page.goto(`/portfolio/${PORTFOLIO_ID}`);
-    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
 
     expect(counter.get(/account-operations/)).toBe(0);
-    expect(counter.get(/\/sync$/)).toBeGreaterThanOrEqual(1);
+    expect(counter.get(/\/advice$/)).toBeGreaterThanOrEqual(1);
     expect(counter.get(/\/plan$/)).toBeGreaterThanOrEqual(1);
 
     await page.getByRole("tab", { name: /История операций/i }).click();
@@ -78,48 +83,48 @@ test.describe("Бюджет API-запросов", () => {
 
   test("отмена заявки не перезапрашивает plan", async ({ page }) => {
     const portfolio = makeTradingPortfolio(PORTFOLIO_ID);
+    let adviceCalls = 0;
+
     await mockTradingPortfolioRoutes(page, PORTFOLIO_ID, portfolio, {
       plan: makeEmptyPlan({ invested_capital_rub: 100_000 }),
-      sync: makeEmptySync({
-        pending_operations: [
-          {
-            ...pendingBuy,
-            status: "in_progress",
-            active_order_id: "order-cancel-1",
-            active_order_status: "EXECUTION_REPORT_STATUS_NEW",
-            active_order_lots: 3,
-            active_order_price_pct: 100.5,
-            active_order_total_rub: 3030,
-            active_order_lots_executed: 0,
-            active_order_bonds_count: 3,
-          },
-        ],
+      advice: makeAdvice({
+        suggestions: [buySuggestion],
+        active_orders: [activeOrder],
       }),
     });
 
     await page.route(
-      `**/api/v1/portfolios/${PORTFOLIO_ID}/pending-operations/${pendingBuy.id}/cancel-order`,
+      `**/api/v1/portfolios/${PORTFOLIO_ID}/orders/${activeOrder.order_id}/cancel`,
       async (route) => {
         await route.fulfill({
-          json: makeEmptySync({
-            pending_operations: [
-              { ...pendingBuy, status: "action_required", active_order_id: null },
-            ],
-          }),
+          json: { order_id: activeOrder.order_id, status: "EXECUTION_REPORT_STATUS_CANCELLED" },
         });
       },
     );
 
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
+      adviceCalls += 1;
+      const activeOrders = adviceCalls > 1 ? [] : [activeOrder];
+      await route.fulfill({
+        json: makeAdvice({
+          suggestions: [buySuggestion],
+          active_orders: activeOrders,
+        }),
+      });
+    });
+
     await page.goto(`/portfolio/${PORTFOLIO_ID}`);
-    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Отменить заявку" })).toBeVisible();
 
     const counter = countApiRequests(page);
     counter.reset();
 
-    const opCard = page.locator(`#pending-op-${pendingBuy.id}`);
-    await opCard.getByRole("button", { name: "Отменить заявку" }).click();
+    await page.getByRole("button", { name: "Отменить заявку" }).click();
 
-    await expect(opCard.getByText("Требует действия")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Отменить заявку" })).not.toBeVisible({
+      timeout: 10_000,
+    });
 
     expect(counter.get(/\/plan$/)).toBe(0);
     expect(counter.get(/GET \/portfolios\/$/)).toBeLessThanOrEqual(1);

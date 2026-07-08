@@ -368,12 +368,12 @@ def make_request_uid(
     figi: str,
     direction: OrderDirection,
     lots: int,
-    pending_op_id: str,
+    order_key: str,
     salt: str = "",
 ) -> str:
     """Детерминированный UID для идемпотентности `post_limit_order`.
 
-    Один и тот же `pending_op_id` всегда даёт один и тот же UID — повторное
+    Один и тот же `order_key` всегда даёт один и тот же UID — повторное
     нажатие «Купить» в UI после rerun-а отправит заявку с тем же UID,
     T-Invest API в этом случае вернёт результат первой заявки без
     создания второй. Это критично — пользователь может случайно ткнуть
@@ -386,7 +386,7 @@ def make_request_uid(
     UID — UUID-формат (32 hex символа, длина 36 с дефисами), как требует
     T-Invest (см. https://russianinvestments.github.io/investAPI/orders/).
     """
-    raw = f"{account_id}|{figi}|{direction}|{lots}|{pending_op_id}|{salt}"
+    raw = f"{account_id}|{figi}|{direction}|{lots}|{order_key}|{salt}"
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
     # UUID-форма: 8-4-4-4-12 hex
     return f"{digest[0:8]}-{digest[8:12]}-{digest[12:16]}-{digest[16:20]}-{digest[20:32]}"
@@ -995,29 +995,39 @@ def get_order_state(
     return _order_state_from_proto(state, face_value=resolved_face)
 
 
+_ACTIVE_ORDER_STATUS_NAMES = frozenset({
+    "EXECUTION_REPORT_STATUS_NEW",
+    "EXECUTION_REPORT_STATUS_PARTIALLYFILL",
+    "EXECUTION_REPORT_STATUS_PENDING_CANCEL",
+})
+
+
 def get_active_orders(
     token: str,
     account_kind: AccountKind,
     *,
     account_id: str,
 ) -> list[OrderState]:
-    """Активные заявки на счёте (NEW и PARTIALLYFILL)."""
-    from t_tech.invest.exceptions import RequestError
-    from t_tech.invest.schemas import OrderExecutionReportStatus
+    """Активные заявки на счёте (NEW, PARTIALLYFILL, PENDING_CANCEL).
 
-    active_statuses = [
-        OrderExecutionReportStatus.EXECUTION_REPORT_STATUS_NEW,
-        OrderExecutionReportStatus.EXECUTION_REPORT_STATUS_PARTIALLYFILL,
-    ]
+    На production ``execution_status`` в ``get_orders`` требует ``from`` (код
+    30001) — запрашиваем все активные заявки и фильтруем локально.
+    """
+    from t_tech.invest.exceptions import RequestError
+
     try:
         with _open_client(token, account_kind) as client:
-            resp = client.orders.get_orders(
-                account_id=account_id,
-                execution_status=active_statuses,
-            )
+            resp = client.orders.get_orders(account_id=account_id)
             nominal_cache: dict[str, float | None] = {}
             orders: list[OrderState] = []
             for state in resp.orders:
+                status_name = getattr(
+                    state.execution_report_status,
+                    "name",
+                    str(state.execution_report_status),
+                )
+                if status_name not in _ACTIVE_ORDER_STATUS_NAMES:
+                    continue
                 figi = state.figi or ""
                 if figi not in nominal_cache:
                     nominal_cache[figi] = _fetch_bond_nominal_rub(

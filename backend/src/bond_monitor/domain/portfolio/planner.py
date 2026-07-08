@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from bond_monitor.domain.portfolio.auto_compose import auto_compose, format_share
 from bond_monitor.domain.portfolio.cashflow import CashflowEvent, merge_cashflow_events
-from bond_monitor.domain.portfolio.plan_builder import build_plan
+from bond_monitor.domain.portfolio.plan_builder import _net_redemption_amount, build_plan
 from bond_monitor.domain.portfolio.plan_models import (
     HeldPositionAtHorizon,
     PortfolioPlan,

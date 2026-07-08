@@ -15,6 +15,7 @@ from bond_monitor.infrastructure.tinvest.trading_client import (
     _classify_position,
     _order_state_from_proto,
     get_account_snapshot,
+    get_active_orders,
     post_limit_order,
     post_market_sell_order,
 )
@@ -236,6 +237,68 @@ def test_post_limit_order_maps_30052_to_trading_not_available() -> None:
             face_value=1000.0,
             request_uid="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
         )
+
+
+# ── active orders ─────────────────────────────────────────────────────────────
+
+
+def test_get_active_orders_filters_locally_without_execution_status_param() -> None:
+    from t_tech.invest import OrderDirection as ProtoOrderDirection
+    from t_tech.invest.schemas import OrderExecutionReportStatus
+
+    active = SimpleNamespace(
+        order_id="active-1",
+        execution_report_status=OrderExecutionReportStatus.EXECUTION_REPORT_STATUS_NEW,
+        figi="FIGI_ACTIVE",
+        direction=ProtoOrderDirection.ORDER_DIRECTION_BUY,
+        lots_executed=0,
+        lots_requested=1,
+        executed_order_price=None,
+        initial_security_price=_quotation(100.0),
+        initial_order_price=SimpleNamespace(units=1000, nano=0, currency="rub"),
+        total_order_amount=SimpleNamespace(units=1000, nano=0, currency="rub"),
+        order_date=None,
+        order_request_id="req-1",
+        initial_commission=None,
+        instrument_uid="uid-active",
+    )
+    filled = SimpleNamespace(
+        order_id="filled-1",
+        execution_report_status=OrderExecutionReportStatus.EXECUTION_REPORT_STATUS_FILL,
+        figi="FIGI_DONE",
+        direction=ProtoOrderDirection.ORDER_DIRECTION_BUY,
+        lots_executed=1,
+        lots_requested=1,
+        executed_order_price=_quotation(100.0),
+        initial_security_price=_quotation(100.0),
+        initial_order_price=SimpleNamespace(units=1000, nano=0, currency="rub"),
+        total_order_amount=SimpleNamespace(units=1000, nano=0, currency="rub"),
+        order_date=None,
+        order_request_id="req-2",
+        initial_commission=None,
+        instrument_uid="uid-done",
+    )
+    orders_client = MagicMock()
+    orders_client.get_orders.return_value = SimpleNamespace(orders=[active, filled])
+    client = MagicMock()
+    client.orders = orders_client
+    client.__enter__ = MagicMock(return_value=client)
+    client.__exit__ = MagicMock(return_value=False)
+
+    with (
+        patch(
+            "bond_monitor.infrastructure.tinvest.trading_client._open_client",
+            return_value=client,
+        ),
+        patch(
+            "bond_monitor.infrastructure.tinvest.trading_client._fetch_bond_nominal_rub",
+            return_value=1000.0,
+        ),
+    ):
+        result = get_active_orders("token", AccountKind.PRODUCTION, account_id="acc-1")
+
+    orders_client.get_orders.assert_called_once_with(account_id="acc-1")
+    assert [o.order_id for o in result] == ["active-1"]
 
 
 # ── market sell ─────────────────────────────────────────────────────────────

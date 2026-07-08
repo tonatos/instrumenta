@@ -48,7 +48,6 @@ const tradingPortfolio = {
     account_id: "acc-ops-e2e",
     account_kind: "sandbox",
     frozen_forecast: null,
-    pending_operations: [],
   },
 };
 
@@ -150,19 +149,19 @@ test.describe("История операций", () => {
       });
     });
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sync`, async (route) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
       await route.fulfill({
         json: {
-          pending_operations: [],
-          drifts: [],
+          holdings: [],
+          cashflow: [],
+          performance: null,
+          suggestions: [],
+          active_orders: [],
           money_rub: 95_000,
-          last_synced_at: new Date().toISOString(),
-          has_pending_top_up: false,
-          pending_top_up_rub: 0,
-          top_up_auto_applied: false,
-          top_up_distributed_rub: 0,
-          top_up_notes: [],
-          notes: [],
+          available_money_rub: 95_000,
+          blocked_money_rub: 0,
+          warnings: [],
+          as_of: new Date().toISOString(),
         },
       });
     });

@@ -9,7 +9,7 @@ export function invalidatePortfolioStructure(
   void queryClient.invalidateQueries({ queryKey: ["plan", portfolioId] });
 }
 
-/** After trading sync mutations: pending queue is in the response; avoid plan refetch. */
+/** After trading mutations: refresh advice and optional plan/operations. */
 export function invalidateAfterTradingMutation(
   queryClient: QueryClient,
   portfolioId: string,

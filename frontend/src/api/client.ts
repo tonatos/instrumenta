@@ -8,12 +8,14 @@ import type {
   ConfigResponse,
   DeleteSandboxAccountResult,
   OrderPreviewResponse,
+  PlaceOrderRequest,
+  PlaceOrderResponse,
   PlanResponse,
   Portfolio,
   SandboxPayInResponse,
   SellPositionPreviewResponse,
   SellQuoteResponse,
-  TradingSyncResponse,
+  TradingAdviceResponse,
 } from "./types";
 
 const BASE = "/api/v1";
@@ -169,42 +171,27 @@ export const api = {
     }),
   detachAccount: (id: string) =>
     request<Portfolio>(`/portfolios/${id}/detach`, { method: "POST" }),
-  getPendingOperations: (id: string) =>
-    request<TradingSyncResponse["pending_operations"]>(`/portfolios/${id}/pending-operations`),
-  syncPortfolio: (id: string) =>
-    request<TradingSyncResponse>(`/portfolios/${id}/sync`, { method: "POST" }),
+  getAdvice: (id: string) =>
+    request<TradingAdviceResponse>(`/portfolios/${id}/advice`),
   sandboxPayIn: (id: string, body: { amount_rub: number }) =>
     request<SandboxPayInResponse>(`/portfolios/${id}/sandbox-pay-in`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  confirmPendingOperation: (
-    id: string,
-    opId: string,
-    body: { lots?: number; price_pct?: number },
-  ) =>
-    request<TradingSyncResponse>(
-      `/portfolios/${id}/pending-operations/${opId}/confirm`,
-      { method: "POST", body: JSON.stringify(body) },
-    ),
-  previewPendingOperation: (
-    id: string,
-    opId: string,
-    body: { lots: number; price_pct: number },
-  ) =>
-    request<OrderPreviewResponse>(
-      `/portfolios/${id}/pending-operations/${opId}/preview`,
-      { method: "POST", body: JSON.stringify(body) },
-    ),
-  cancelPendingOrder: (id: string, opId: string) =>
-    request<TradingSyncResponse>(
-      `/portfolios/${id}/pending-operations/${opId}/cancel-order`,
+  previewOrder: (id: string, body: PlaceOrderRequest) =>
+    request<OrderPreviewResponse>(`/portfolios/${id}/orders/preview`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  placeOrder: (id: string, body: PlaceOrderRequest) =>
+    request<PlaceOrderResponse>(`/portfolios/${id}/orders/place`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  cancelOrder: (id: string, orderId: string) =>
+    request<{ order_id: string; status: string }>(
+      `/portfolios/${id}/orders/${encodeURIComponent(orderId)}/cancel`,
       { method: "POST" },
-    ),
-  setPutOfferDecision: (id: string, isin: string, decision: "exercise" | "hold") =>
-    request<TradingSyncResponse>(
-      `/portfolios/${id}/positions/${isin}/put-offer-decision`,
-      { method: "POST", body: JSON.stringify({ decision }) },
     ),
   sellPositionPreview: (
     id: string,
@@ -218,20 +205,6 @@ export const api = {
   getSellQuote: (id: string, isin: string) =>
     request<SellQuoteResponse>(
       `/portfolios/${id}/positions/${encodeURIComponent(isin)}/sell-quote`,
-    ),
-  queueManualSell: (
-    id: string,
-    isin: string,
-    body: { lots: number; price_pct?: number },
-  ) =>
-    request<TradingSyncResponse>(
-      `/portfolios/${id}/positions/${encodeURIComponent(isin)}/queue-sell`,
-      { method: "POST", body: JSON.stringify(body) },
-    ),
-  dismissManualSell: (id: string, opId: string) =>
-    request<TradingSyncResponse>(
-      `/portfolios/${id}/pending-operations/${opId}/dismiss`,
-      { method: "POST" },
     ),
   getPerformance: (id: string) =>
     request<{

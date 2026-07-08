@@ -67,10 +67,7 @@ export interface PortfolioPosition {
   maturity_date: string | null;
   offer_date: string | null;
   source: string;
-  put_offer_decision: string;
   figi: string | null;
-  actual_lots: number | null;
-  closed_at?: string | null;
   status?: PositionStatus;
 }
 
@@ -112,7 +109,6 @@ export interface PortfolioData {
   horizon_date: string;
   mode: string;
   api_trade_only?: boolean;
-  acknowledged_top_ups_rub?: number;
   account_id: string | null;
   account_kind: string | null;
   frozen_forecast: {
@@ -123,17 +119,6 @@ export interface PortfolioData {
     horizon_date: string;
     created_at: string;
   } | null;
-  pending_operations: Array<{
-    id: string;
-    kind: string;
-    isin: string;
-    name: string;
-    lots: number;
-    figi: string | null;
-    suggested_price_pct: number | null;
-    due_date: string | null;
-    reason: string;
-  }>;
 }
 
 export interface Portfolio {
@@ -256,68 +241,104 @@ export interface AccountPreview {
   linked_portfolio?: LinkedPortfolioPreview | null;
 }
 
-export type PendingOperationStatus =
-  | "action_required"
-  | "in_progress"
-  | "overdue"
-  | "blocked";
+export interface TradingAdviceResponse {
+  holdings: HoldingView[];
+  cashflow: CashflowEventView[];
+  performance: PerformanceData | null;
+  suggestions: Suggestion[];
+  active_orders: ActiveOrder[];
+  money_rub: number;
+  available_money_rub: number;
+  blocked_money_rub: number;
+  warnings: string[];
+  as_of: string;
+}
 
-export type PendingOperationUrgency = "normal" | "soon" | "critical";
+export interface HoldingView {
+  figi: string;
+  isin: string;
+  name: string;
+  lots: number;
+  quantity: number;
+  lot_size: number;
+  current_price_pct: number | null;
+  current_nkd_rub: number | null;
+  ytm: number | null;
+  maturity_date: string | null;
+  offer_date: string | null;
+  market_value_rub: number | null;
+}
 
-export interface PendingOperation {
-  id: string;
+export interface CashflowEventView {
+  date: string;
   kind: string;
+  amount_rub: number;
+  description: string;
+  related_isin?: string | null;
+  is_projected?: boolean;
+}
+
+export interface PerformanceData {
+  xirr_pct: number | null;
+  coupons_received_rub: number;
+  tax_paid_rub: number;
+  commission_paid_rub: number;
+  realized_profit_rub: number;
+  unrealized_value_rub: number;
+  invested_rub: number;
+  received_rub: number;
+  as_of: string;
+}
+
+export type SuggestionKind = "buy" | "reinvest" | "put_offer_reminder" | "sell";
+
+export type SuggestionUrgency = "normal" | "soon" | "critical";
+
+export interface Suggestion {
+  id: string;
+  kind: SuggestionKind;
   isin: string;
   name: string;
   lots: number;
   figi: string | null;
   suggested_price_pct: number | null;
-  due_date: string | null;
   reason: string;
-  slot_id?: string | null;
-  top_up_batch_id?: string | null;
-  submitted_request_uid?: string | null;
-  created_at?: string | null;
-  status: PendingOperationStatus;
-  block_reason: string | null;
-  estimated_amount_rub: number | null;
-  face_value_rub?: number | null;
-  lot_size?: number | null;
-  aci_rub_per_bond?: number | null;
-  active_order_id: string | null;
-  active_order_status: string | null;
-  active_order_lots?: number | null;
-  active_order_price_pct?: number | null;
-  active_order_total_rub?: number | null;
-  active_order_commission_rub?: number | null;
-  active_order_lots_executed?: number | null;
-  active_order_bonds_count?: number | null;
-  urgency: PendingOperationUrgency;
+  due_date: string | null;
+  source_isin?: string | null;
   chat_template?: string | null;
+  urgency: SuggestionUrgency;
 }
 
-export interface PositionDrift {
+export interface ActiveOrder {
+  order_id: string;
+  request_uid: string;
+  figi: string;
+  direction: "BUY" | "SELL";
+  lots_requested: number;
+  lots_executed: number;
+  status: string;
+  price_pct: number | null;
+  total_order_amount_rub: number | null;
+  initial_commission_rub: number | null;
+}
+
+export interface PlaceOrderRequest {
   isin: string;
-  name: string;
-  expected_lots: number;
-  actual_lots: number;
-  severity: string;
-  message: string;
+  direction: "BUY" | "SELL";
+  lots: number;
+  price_pct: number;
+  figi?: string | null;
+  suggestion_id?: string | null;
 }
 
-export interface TradingSyncResponse {
-  pending_operations: PendingOperation[];
-  drifts: PositionDrift[];
-  money_rub: number;
-  available_money_rub: number;
-  blocked_money_rub: number;
-  last_synced_at: string | null;
-  has_pending_top_up: boolean;
-  pending_top_up_rub: number;
-  top_up_auto_applied: boolean;
-  top_up_distributed_rub: number;
-  top_up_notes: string[];
-  notes: string[];
+export interface PlaceOrderResponse {
+  order_id: string;
+  status: string;
+  request_uid: string;
+  lots_requested: number;
+  lots_executed: number;
+  total_order_amount_rub: number | null;
+  initial_commission_rub: number | null;
 }
 
 export interface SandboxPayInResponse {

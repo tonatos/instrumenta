@@ -30,14 +30,8 @@ LARGE_TOP_UP_RATIO_THRESHOLD = 2.0
 
 
 def top_up_total_budget_rub(portfolio: Portfolio, top_up_amount_rub: float) -> float:
-    """Полный бюджет портфеля для расчёта потолков при top-up.
-
-    ``acknowledged_top_ups_rub`` после reconcile уже включает свободный кэш
-    с счёта; ``top_up_amount_rub`` — та же сумма INPUT, которую распределяем.
-    Не складываем их повторно.
-    """
-    extra = max(portfolio.acknowledged_top_ups_rub, top_up_amount_rub)
-    return portfolio.initial_amount_rub + extra
+    """Полный бюджет портфеля для расчёта потолков при top-up."""
+    return portfolio.initial_amount_rub + top_up_amount_rub
 
 
 @dataclass
@@ -145,7 +139,7 @@ def distribute_top_up(
             unit_cost = (
                 p.purchase_dirty_price_rub * p.lot_size if p.purchase_dirty_price_rub else 0.0
             )
-        lots_basis = p.actual_lots if p.actual_lots is not None and portfolio.is_trading else p.lots
+        lots_basis = p.lots
         market_value = lots_basis * unit_cost if unit_cost > 0 else p.purchase_amount_rub
         current_value_by_isin[p.isin] = current_value_by_isin.get(p.isin, 0.0) + market_value
 
@@ -252,7 +246,7 @@ def _distribute_top_up_rebalance(
     target_lots_by_isin = {p.isin: p.lots for p in target_positions}
     current_lots_by_isin: dict[str, int] = {}
     for p in open_positions(portfolio.positions):
-        lots_basis = p.actual_lots if p.actual_lots is not None and portfolio.is_trading else p.lots
+        lots_basis = p.lots
         current_lots_by_isin[p.isin] = current_lots_by_isin.get(p.isin, 0) + lots_basis
 
     universe_by_isin = {b.isin: b for b in universe}

@@ -61,9 +61,10 @@ class PortfolioRepository:
                 "mode": row.mode,
                 "account_id": row.account_id,
                 "account_kind": row.account_kind,
-                "last_top_up_processed_at": row.last_top_up_processed_at,
             }
         )
+        if row.last_top_up_processed_at:
+            data.setdefault("last_top_up_processed_at", row.last_top_up_processed_at)
         return Portfolio.from_dict(data)
 
     def _from_domain(self, row: PortfolioRow, portfolio: Portfolio) -> None:
@@ -80,7 +81,7 @@ class PortfolioRepository:
         row.mode = portfolio.mode.value
         row.account_id = portfolio.account_id
         row.account_kind = portfolio.account_kind.value if portfolio.account_kind else None
-        row.last_top_up_processed_at = portfolio.last_top_up_processed_at
+        row.last_top_up_processed_at = None
         # Store nested collections in JSON blob
         row.data = {
             k: v

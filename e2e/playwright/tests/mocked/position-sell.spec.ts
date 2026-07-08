@@ -1,12 +1,12 @@
 /**
- * E2E: продажа через очередь manual_sell в песочнице.
+ * E2E: продажа позиции через place order в песочнице.
  */
 
 import { test, expect } from "@playwright/test";
 import {
   gotoPortfolio,
+  makeAdvice,
   makeEmptyPlan,
-  makeEmptySync,
   makeTradingPortfolio,
   mockTradingPortfolioRoutes,
 } from "./fixtures";
@@ -19,28 +19,6 @@ const sellQuoteResponse = {
   suggested_price_pct: 99.0025,
   available_lots: 3,
   sell_buffer_label: "0.5%",
-};
-
-const manualSellOp = {
-  id: "manual-sell-op-1",
-  kind: "manual_sell",
-  isin: POSITION_ISIN,
-  name: "Тестовая облигация",
-  lots: 2,
-  figi: "FIGI_TEST",
-  suggested_price_pct: 99.0,
-  due_date: null,
-  reason: "Продажа 2 лот(а) из 3 на счёте",
-  status: "action_required",
-  block_reason: null,
-  estimated_amount_rub: 1990,
-  face_value_rub: 1000,
-  lot_size: 1,
-  aci_rub_per_bond: 5,
-  active_order_id: null,
-  active_order_status: null,
-  urgency: "normal",
-  chat_template: null,
 };
 
 test.describe("Продажа позиции (песочница)", () => {
@@ -65,9 +43,7 @@ test.describe("Продажа позиции (песочница)", () => {
             maturity_date: "2027-06-01",
             offer_date: null,
             source: "initial",
-            put_offer_decision: "pending",
             figi: "FIGI_TEST",
-            actual_lots: 3,
             status: "active",
           },
         ],
@@ -76,7 +52,19 @@ test.describe("Продажа позиции (песочница)", () => {
 
     await mockTradingPortfolioRoutes(page, PORTFOLIO_ID, portfolio, {
       plan: makeEmptyPlan({ invested_capital_rub: 3000 }),
-      sync: makeEmptySync({ money_rub: 50_000 }),
+      advice: makeAdvice({
+        money_rub: 50_000,
+        holdings: [
+          {
+            figi: "FIGI_TEST",
+            isin: POSITION_ISIN,
+            name: "Тестовая облигация",
+            lots: 3,
+            quantity: 3,
+            lot_size: 1,
+          },
+        ],
+      }),
     });
 
     await page.route(
@@ -87,39 +75,85 @@ test.describe("Продажа позиции (песочница)", () => {
     );
   });
 
-  test("кнопка «Продать» ставит manual_sell в очередь", async ({ page }) => {
-    let queuePosted = false;
+  test("кнопка «Продать» отправляет SELL-заявку на биржу", async ({ page }) => {
+    let placePosted = false;
+    let adviceCalls = 0;
 
-    await page.route(
-      `**/api/v1/portfolios/${PORTFOLIO_ID}/positions/${POSITION_ISIN}/queue-sell`,
-      async (route) => {
-        queuePosted = true;
-        const body = route.request().postDataJSON() as { lots: number; price_pct: number };
-        expect(body.lots).toBe(2);
-        expect(body.price_pct).toBe(99.0025);
-        await route.fulfill({
-          json: makeEmptySync({
-            pending_operations: [manualSellOp],
-          }),
-        });
-      },
-    );
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/place`, async (route) => {
+      placePosted = true;
+      const body = route.request().postDataJSON() as {
+        lots: number;
+        price_pct: number;
+        direction: string;
+      };
+      expect(body.lots).toBe(2);
+      expect(body.price_pct).toBe(99.0025);
+      expect(body.direction).toBe("SELL");
+      await route.fulfill({
+        json: {
+          order_id: "sell-order-1",
+          status: "EXECUTION_REPORT_STATUS_NEW",
+          request_uid: "req-sell-1",
+          lots_requested: 2,
+          lots_executed: 0,
+          total_order_amount_rub: 1980,
+          initial_commission_rub: 5,
+        },
+      });
+    });
+
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
+      adviceCalls += 1;
+      const activeOrders =
+        adviceCalls > 1
+          ? [
+              {
+                order_id: "sell-order-1",
+                request_uid: "req-sell-1",
+                figi: "FIGI_TEST",
+                direction: "SELL",
+                lots_requested: 2,
+                lots_executed: 0,
+                status: "EXECUTION_REPORT_STATUS_NEW",
+                price_pct: 99.0025,
+                total_order_amount_rub: 1980,
+                initial_commission_rub: 5,
+              },
+            ]
+          : [];
+      await route.fulfill({
+        json: makeAdvice({
+          money_rub: 50_000,
+          holdings: [
+            {
+              figi: "FIGI_TEST",
+              isin: POSITION_ISIN,
+              name: "Тестовая облигация",
+              lots: 3,
+              quantity: 3,
+              lot_size: 1,
+            },
+          ],
+          active_orders: activeOrders,
+        }),
+      });
+    });
 
     await gotoPortfolio(page, PORTFOLIO_ID);
 
+    await page.getByRole("tab", { name: /Позиции/ }).click();
     await page.getByTestId(`sell-position-${POSITION_ISIN}`).click();
-    await expect(page.getByRole("dialog")).toContainText("Поставить продажу в очередь");
+    await expect(page.getByRole("dialog")).toContainText("Продать позицию");
     await expect(page.getByTestId("sell-price-input")).toHaveValue("99.0025");
 
     await page.getByTestId("sell-lots-input").fill("2");
     await page.getByTestId("sell-position-submit").click();
 
-    await expect.poll(() => queuePosted).toBe(true);
+    await expect.poll(() => placePosted).toBe(true);
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(page.getByText("Продажи")).toBeVisible();
-    await expect(page.getByText("Подтвердить продажу")).toBeVisible();
+    await expect(page.getByText("Активные заявки")).toBeVisible();
     await expect(page.getByTestId(`sell-pending-badge-${POSITION_ISIN}`)).toBeVisible();
     await expect(page.getByTestId(`sell-position-${POSITION_ISIN}`)).toBeDisabled();
-    await expect(page.getByTestId(`sell-position-${POSITION_ISIN}`)).toContainText("В очереди");
+    await expect(page.getByTestId(`sell-position-${POSITION_ISIN}`)).toContainText("На бирже");
   });
 });

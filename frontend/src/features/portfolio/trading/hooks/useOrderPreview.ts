@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 import { api } from "@/api/client";
-import type { OrderPreviewResponse, PendingOperation } from "@/api/types";
+import type { OrderPreviewResponse, Suggestion } from "@/api/types";
 
-export const BUY_KINDS = new Set(["initial_buy", "reinvest_buy", "top_up_buy"]);
-export const SELL_KINDS = new Set(["manual_sell"]);
+export function suggestionDirection(
+  kind: Suggestion["kind"],
+): "BUY" | "SELL" | null {
+  if (kind === "buy" || kind === "reinvest") return "BUY";
+  if (kind === "sell") return "SELL";
+  return null;
+}
 
 export function previewMatchesForm(
   preview: OrderPreviewResponse,
@@ -28,13 +33,13 @@ export function parseApiError(err: Error): string {
 
 export function useOrderPreview({
   open,
-  op,
+  suggestion,
   portfolioId,
   lots,
   parsedPricePct,
 }: {
   open: boolean;
-  op: PendingOperation | null;
+  suggestion: Suggestion | null;
   portfolioId: string;
   lots: number;
   parsedPricePct: number;
@@ -43,12 +48,13 @@ export function useOrderPreview({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
 
-  const isBuy = op != null && BUY_KINDS.has(op.kind);
-  const isSell = op != null && SELL_KINDS.has(op.kind);
-  const previewEnabled = isBuy || isSell;
+  const direction = suggestion ? suggestionDirection(suggestion.kind) : null;
+  const isBuy = direction === "BUY";
+  const isSell = direction === "SELL";
+  const previewEnabled = Boolean(direction);
 
   useEffect(() => {
-    if (!open || !op || !previewEnabled) {
+    if (!open || !suggestion || !direction || !previewEnabled) {
       return;
     }
     if (!Number.isFinite(parsedPricePct) || parsedPricePct <= 0 || lots <= 0) {
@@ -65,30 +71,26 @@ export function useOrderPreview({
 
     const timer = window.setTimeout(() => {
       api
-        .previewPendingOperation(portfolioId, op.id, {
+        .previewOrder(portfolioId, {
+          isin: suggestion.isin,
+          direction,
           lots,
           price_pct: parsedPricePct,
+          figi: suggestion.figi,
+          suggestion_id: suggestion.id,
         })
         .then((data) => {
-          if (cancelled) {
-            return;
-          }
-          if (!previewMatchesForm(data, lots, parsedPricePct)) {
-            return;
-          }
+          if (cancelled) return;
+          if (!previewMatchesForm(data, lots, parsedPricePct)) return;
           setPreview(data);
         })
         .catch((err: Error) => {
-          if (cancelled) {
-            return;
-          }
+          if (cancelled) return;
           setPreview(null);
           setPreviewError(parseApiError(err));
         })
         .finally(() => {
-          if (!cancelled) {
-            setPreviewLoading(false);
-          }
+          if (!cancelled) setPreviewLoading(false);
         });
     }, 300);
 
@@ -96,7 +98,7 @@ export function useOrderPreview({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, previewEnabled, op, portfolioId, lots, parsedPricePct]);
+  }, [open, previewEnabled, suggestion, direction, portfolioId, lots, parsedPricePct]);
 
   return { preview, previewLoading, previewError, isBuy, isSell };
 }

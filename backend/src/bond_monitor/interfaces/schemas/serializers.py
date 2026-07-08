@@ -18,7 +18,6 @@ from bond_monitor.infrastructure.tinvest.trading_client import OperationRecord
 from bond_monitor.interfaces.schemas.api import (
     AccountOperationResponse,
     BondResponse,
-    PendingOperationResponse,
     PlanResponse,
     PortfolioDataResponse,
     PortfolioResponse,
@@ -72,10 +71,6 @@ def portfolio_to_response(portfolio: Portfolio, *, today: date | None = None) ->
     open_count = len(open_positions(portfolio.positions))
     closed_count = len(portfolio.positions) - open_count
     d["closed_positions_count"] = closed_count
-    d["pending_operations"] = [
-        PendingOperationResponse.model_validate(op.to_dict()).model_dump()
-        for op in portfolio.pending_operations
-    ]
     data = PortfolioDataResponse.model_validate(d)
     capital = invested_capital_rub(portfolio)
     return PortfolioResponse(

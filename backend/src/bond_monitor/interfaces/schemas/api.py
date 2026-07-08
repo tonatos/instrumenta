@@ -95,10 +95,7 @@ class PortfolioPositionData(BaseModel):
     coupon_period_days: int | None = None
     next_coupon_date: str | None = None
     source: str
-    put_offer_decision: str
     figi: str | None = None
-    actual_lots: int | None = None
-    closed_at: str | None = None
     status: str | None = None
 
 
@@ -137,16 +134,9 @@ class PortfolioDataResponse(BaseModel):
     account_kind: str | None = None
     account_label: str | None = None
     trading_started_at: str | None = None
-    last_synced_at: str | None = None
-    last_top_up_processed_at: str | None = None
-    acknowledged_top_ups_rub: float = 0.0
-    top_up_batch_meta: dict[str, Any] = Field(default_factory=dict)
     frozen_forecast: FrozenForecastData | None = None
     positions: list[PortfolioPositionData] = Field(default_factory=list)
     slots: list[ReinvestmentSlotData] = Field(default_factory=list)
-    pending_operations: list[PendingOperationResponse] = Field(default_factory=list)
-    trade_records: list[dict[str, Any]] = Field(default_factory=list)
-    instrument_trade_cache: dict[str, Any] = Field(default_factory=dict)
     closed_positions_count: int = 0
 
 
@@ -220,7 +210,22 @@ class PositionDriftResponse(BaseModel):
     message: str
 
 
-class PendingOperationResponse(BaseModel):
+class HoldingResponse(BaseModel):
+    figi: str
+    isin: str
+    name: str
+    lots: int
+    quantity: int
+    lot_size: int
+    current_price_pct: float | None = None
+    current_nkd_rub: float | None = None
+    ytm: float | None = None
+    maturity_date: str | None = None
+    offer_date: str | None = None
+    market_value_rub: float | None = None
+
+
+class SuggestionResponse(BaseModel):
     id: str
     kind: str
     isin: str
@@ -228,48 +233,68 @@ class PendingOperationResponse(BaseModel):
     lots: int
     figi: str | None = None
     suggested_price_pct: float | None = None
-    due_date: str | None = None
     reason: str = ""
-    slot_id: str | None = None
-    top_up_batch_id: str | None = None
-    submitted_request_uid: str | None = None
-    created_at: str | None = None
-    status: str = "action_required"
-    block_reason: str | None = None
-    estimated_amount_rub: float | None = None
-    face_value_rub: float | None = None
-    lot_size: int | None = None
-    aci_rub_per_bond: float | None = None
-    active_order_id: str | None = None
-    active_order_status: str | None = None
-    active_order_lots: int | None = None
-    active_order_price_pct: float | None = None
-    active_order_total_rub: float | None = None
-    active_order_commission_rub: float | None = None
-    active_order_lots_executed: int | None = None
-    active_order_bonds_count: int | None = None
-    urgency: str = "normal"
+    due_date: str | None = None
+    source_isin: str | None = None
     chat_template: str | None = None
+    urgency: str = "normal"
 
 
-class TradingSyncResponse(BaseModel):
-    pending_operations: list[PendingOperationResponse]
-    drifts: list[PositionDriftResponse] = Field(default_factory=list)
+class ActiveOrderResponse(BaseModel):
+    order_id: str
+    request_uid: str
+    figi: str
+    direction: str
+    lots_requested: int
+    lots_executed: int
+    status: str
+    price_pct: float | None = None
+    total_order_amount_rub: float | None = None
+    initial_commission_rub: float | None = None
+
+
+class PerformanceDataResponse(BaseModel):
+    xirr_pct: float | None = None
+    coupons_received_rub: float = 0.0
+    tax_paid_rub: float = 0.0
+    commission_paid_rub: float = 0.0
+    realized_profit_rub: float = 0.0
+    unrealized_value_rub: float = 0.0
+    invested_rub: float = 0.0
+    received_rub: float = 0.0
+    as_of: str = ""
+
+
+class TradingAdviceResponse(BaseModel):
+    holdings: list[HoldingResponse] = Field(default_factory=list)
+    cashflow: list[dict[str, Any]] = Field(default_factory=list)
+    performance: PerformanceDataResponse | None = None
+    suggestions: list[SuggestionResponse] = Field(default_factory=list)
+    active_orders: list[ActiveOrderResponse] = Field(default_factory=list)
     money_rub: float
-    last_synced_at: str | None = None
     available_money_rub: float = 0.0
     blocked_money_rub: float = 0.0
-    has_pending_top_up: bool = False
-    pending_top_up_rub: float = 0.0
-    top_up_auto_applied: bool = False
-    top_up_distributed_rub: float = 0.0
-    top_up_notes: list[str] = Field(default_factory=list)
-    notes: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    as_of: str = ""
 
 
-class ConfirmPendingRequest(BaseModel):
-    lots: int | None = Field(default=None, ge=1)
-    price_pct: float | None = Field(default=None, gt=0)
+class PlaceOrderRequest(BaseModel):
+    isin: str
+    direction: str = Field(pattern="^(BUY|SELL)$")
+    lots: int = Field(ge=1)
+    price_pct: float = Field(gt=0)
+    figi: str | None = None
+    suggestion_id: str | None = None
+
+
+class PlaceOrderResponse(BaseModel):
+    order_id: str
+    status: str
+    request_uid: str
+    lots_requested: int
+    lots_executed: int
+    total_order_amount_rub: float | None = None
+    initial_commission_rub: float | None = None
 
 
 class OrderPreviewResponse(BaseModel):
@@ -294,11 +319,6 @@ class SellPositionRequest(BaseModel):
     price_pct: float = Field(gt=0)
 
 
-class QueueSellRequest(BaseModel):
-    lots: int = Field(ge=1)
-    price_pct: float | None = Field(default=None, gt=0)
-
-
 class SellQuoteResponse(BaseModel):
     market_price_pct: float
     suggested_price_pct: float
@@ -310,10 +330,6 @@ class SellPositionPreviewResponse(OrderPreviewResponse):
     available_lots: int
     sufficient_lots: bool
     suggested_price_pct: float | None = None
-
-
-class PutOfferDecisionRequest(BaseModel):
-    decision: str = Field(pattern="^(exercise|hold)$")
 
 
 class AccountBondPositionPreview(BaseModel):

@@ -769,11 +769,7 @@ def test_horizon_extension_rebuilds_reinvestment_chain_for_trading_portfolio() -
         frozen_initial_amount_rub=20_000.0,
         horizon_date=date(2027, 1, 1),
     )
-    for pos in portfolio.positions:
-        pos.actual_lots = pos.lots
-    positions_snapshot = [
-        (p.isin, p.lots, p.actual_lots, p.purchase_amount_rub) for p in portfolio.positions
-    ]
+    positions_snapshot = [(p.isin, p.lots, p.purchase_amount_rub) for p in portfolio.positions]
     frozen_snapshot = portfolio.frozen_forecast
 
     plan_short = build_plan(
@@ -797,9 +793,7 @@ def test_horizon_extension_rebuilds_reinvestment_chain_for_trading_portfolio() -
     )
 
     assert len(plan_long.resolved_slots) > len(plan_short.resolved_slots)
-    assert [(p.isin, p.lots, p.actual_lots, p.purchase_amount_rub) for p in portfolio.positions] == (
-        positions_snapshot
-    )
+    assert [(p.isin, p.lots, p.purchase_amount_rub) for p in portfolio.positions] == positions_snapshot
     assert portfolio.frozen_forecast == frozen_snapshot
 
 
@@ -872,10 +866,10 @@ def test_prune_stale_slot_overrides_helper() -> None:
     assert [s.source_position_isin for s in portfolio.slots] == ["KEEP"]
 
 
-def test_build_plan_skips_closed_positions() -> None:
+def test_build_plan_includes_plan_positions() -> None:
     today = date(2026, 7, 1)
     portfolio = Portfolio(
-        name="Closed test",
+        name="Positions test",
         initial_amount_rub=100_000.0,
         horizon_date=date(2028, 1, 1),
         risk_profile=RiskProfile.NORMAL,
@@ -899,33 +893,8 @@ def test_build_plan_skips_closed_positions() -> None:
         source=PositionSourceType.INITIAL,
         next_coupon_date=date(2026, 12, 1),
     )
-    closed_pos = PortfolioPosition(
-        isin="RU000CLOSED",
-        secid="CLOSED",
-        name="Closed bond",
-        lots=3,
-        lot_size=1,
-        purchase_clean_price_pct=95.0,
-        purchase_dirty_price_rub=960.0,
-        purchase_aci_rub=10.0,
-        purchase_date=date(2025, 1, 1),
-        purchase_amount_rub=2880.0,
-        coupon_rate=10.0,
-        face_value=1000.0,
-        maturity_date=date(2026, 6, 1),
-        offer_date=None,
-        coupon_period_days=182,
-        source=PositionSourceType.INITIAL,
-        closed_at=date(2026, 6, 15),
-        actual_lots=0,
-    )
-    portfolio.positions = [open_pos, closed_pos]
-    universe = [
-        _bond(isin="RU000OPEN", name="Open bond", maturity=date(2027, 6, 1)),
-        _bond(isin="RU000CLOSED", name="Closed bond", maturity=date(2026, 6, 1)),
-    ]
+    portfolio.positions = [open_pos]
+    universe = [_bond(isin="RU000OPEN", name="Open bond", maturity=date(2027, 6, 1))]
     plan = build_plan(portfolio, universe, today=today, key_rate=16.0, tax_rate=0.13)
-    plan_isins = {p.isin for p in plan.all_positions}
-    assert "RU000OPEN" in plan_isins
-    assert "RU000CLOSED" not in plan_isins
+    assert "RU000OPEN" in {p.isin for p in plan.all_positions}
 
