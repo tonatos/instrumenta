@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pyinfra import host
-from pyinfra.operations import apt, docker, files, server
+from pyinfra.operations import apt, docker, files, git, server
 
 APP_DIR = host.data.app_dir
 PROJECT_NAME = host.data.get("project_name", "bond-monitor")
@@ -11,10 +11,20 @@ COMPOSE_FILES = host.data.get(
     "compose_files",
     ["docker-compose.yml", "docker-compose.prod.yml"],
 )
+GIT_REPO = host.data.git_repo
+GIT_BRANCH = host.data.get("git_branch", "main")
+
+
+def _allowed_telegram_ids() -> str:
+    value = host.data.get("allowed_telegram_ids", "")
+    if isinstance(value, list):
+        return ",".join(str(item) for item in value)
+    return str(value)
+
 
 apt.packages(
     name="Install prerequisites",
-    packages=["ca-certificates", "curl"],
+    packages=["ca-certificates", "curl", "git"],
     _sudo=True,
 )
 
@@ -27,60 +37,39 @@ server.shell(
     _sudo=True,
 )
 
-files.directory(
-    name="Ensure app directory exists",
-    path=APP_DIR,
-    mode="755",
+# One-time migration from the old files.sync layout (no .git in app dir).
+server.shell(
+    name="Migrate legacy sync directory to git clone",
+    commands=[
+        f"test -d {APP_DIR}/.git && exit 0",
+        f"test -d {APP_DIR}/cache && mv {APP_DIR}/cache /tmp/bond-monitor-cache-migrate || true",
+        f"rm -rf {APP_DIR}",
+    ],
     _sudo=True,
 )
 
-files.sync(
-    name="Sync application sources",
-    src="..",
+git.repo(
+    name="Clone or update application from GitHub",
+    src=GIT_REPO,
     dest=APP_DIR,
-    delete=True,
-    exclude=[
-        ".env",
-        ".env.*",
-        ".git",
-        ".gitignore",
-        ".cursor",
-        ".venv",
-        "venv",
-        "__pycache__",
-        "*.pyc",
-        "cache",
-        "node_modules",
-        "frontend/node_modules",
-        "frontend/dist",
-        "e2e",
-        "deploy/inventory.py",
-        ".pytest_cache",
-        ".mypy_cache",
-        ".ruff_cache",
-        "*.log",
-    ],
-    exclude_dir=[
-        ".git",
-        ".venv",
-        "venv",
-        "node_modules",
-        "__pycache__",
-        "cache",
-        ".pytest_cache",
-        ".mypy_cache",
-        ".ruff_cache",
-        "e2e",
-    ],
+    branch=GIT_BRANCH,
+    pull=True,
+    ssh_keyscan=True,
     _sudo=True,
 )
 
-def _allowed_telegram_ids() -> str:
-    value = host.data.get("allowed_telegram_ids", "")
-    if isinstance(value, list):
-        return ",".join(str(item) for item in value)
-    return str(value)
-
+server.shell(
+    name="Restore persisted cache after migration",
+    commands=[
+        f"mkdir -p {APP_DIR}/cache",
+        (
+            "test -d /tmp/bond-monitor-cache-migrate "
+            f"&& cp -a /tmp/bond-monitor-cache-migrate/. {APP_DIR}/cache/ "
+            "&& rm -rf /tmp/bond-monitor-cache-migrate || true"
+        ),
+    ],
+    _sudo=True,
+)
 
 files.template(
     name="Generate production .env",

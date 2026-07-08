@@ -3,12 +3,13 @@
 
 bond_monitor = (
     [
-        "user@your-vps-ip",
+        "77.238.250.101",
     ],
     {
         "domain": "bond.example.com",
         "app_dir": "/opt/bond-monitor",
         "ssh_user": "root",
+        # git_repo / git_branch — defaults in deploy/group_data/all.py
         # T-Invest tokens (optional, for TRADING mode)
         "tinkoff_token": "",
         "t_trading_token_sandbox": "",

@@ -86,7 +86,24 @@ uv sync --group deploy
 cd deploy
 ```
 
-В `deploy/inventory.py` укажите SSH-пользователя, домен и при необходимости T-Invest токены.
+В `deploy/inventory.py` укажите IP сервера (без `user@`), `ssh_user`, домен и при необходимости токены. Репозиторий и ветка по умолчанию — в `deploy/group_data/all.py` (`git@github.com:tonatos/bond-monitor.git`, `main`).
+
+```python
+bond_monitor = (
+    ["77.238.250.101"],  # только IP или hostname, не root@host
+    {"ssh_user": "root", "domain": "bond.example.com", ...},
+)
+```
+
+**Доступ VPS к GitHub (один раз):** на сервере нужен SSH-ключ с read-доступом к репозиторию.
+
+```bash
+ssh root@<VPS-IP>
+ssh-keygen -t ed25519 -C "bond-monitor-deploy" -f ~/.ssh/id_ed25519 -N ""
+cat ~/.ssh/id_ed25519.pub
+```
+
+Публичный ключ добавьте в GitHub → репозиторий → Settings → Deploy keys (read-only).
 
 ### Деплой
 
@@ -102,8 +119,8 @@ uv run pyinfra inventory.py deploy.py
 
 Pyinfra на сервере:
 
-1. Установит Docker (если отсутствует)
-2. Синхронизирует исходники в `/opt/bond-monitor`
+1. Установит Docker и git (если отсутствуют)
+2. Склонирует или обновит репозиторий в `/opt/bond-monitor` (`git pull`)
 3. Сгенерирует `.env` из шаблона
 4. Запустит `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`
 
@@ -114,7 +131,7 @@ Pyinfra на сервере:
 
 ### Обновление
 
-Повторите команду деплоя — pyinfra пересинхронизирует файлы и пересоберёт образы.
+Запушьте изменения в GitHub и повторите команду деплоя — на VPS выполнится `git pull` и пересборка образов.
 
 ### Бэкап
 
