@@ -16,6 +16,28 @@ class ConfigResponse(BaseModel):
     tinkoff_configured: bool
     sandbox_configured: bool
     production_configured: bool
+    auth_enabled: bool = False
+    telegram_bot_username: str = ""
+
+
+class TelegramAuthRequest(BaseModel):
+    id: int
+    first_name: str
+    auth_date: int
+    hash: str
+    last_name: str | None = None
+    username: str | None = None
+    photo_url: str | None = None
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class AuthMeResponse(BaseModel):
+    telegram_id: int
+    display_name: str
 
 
 class ConfigUpdateRequest(BaseModel):

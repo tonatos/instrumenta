@@ -12,7 +12,15 @@ export const MOCK_CONFIG = {
   tinkoff_configured: true,
   sandbox_configured: true,
   production_configured: false,
+  auth_enabled: false,
+  telegram_bot_username: "",
 };
+
+export async function seedAuth(page: Page, token = "mock-e2e-token"): Promise<void> {
+  await page.addInitScript((authToken) => {
+    localStorage.setItem("bond_monitor_auth_token", authToken);
+  }, token);
+}
 
 export async function mockConfig(page: Page): Promise<void> {
   await page.route("**/api/v1/config/", async (route) => {

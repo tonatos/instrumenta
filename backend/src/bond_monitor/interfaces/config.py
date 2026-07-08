@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -34,6 +34,13 @@ class Settings(BaseSettings):
     cache_dir: Path = _REPO_ROOT / "cache"
     ratings_json_path: Path = _REPO_ROOT / "data" / "ratings.json"
 
+    # Auth (Telegram Login Widget + JWT whitelist)
+    auth_disabled: bool = False
+    auth_secret: str = ""
+    telegram_bot_token: str = ""
+    telegram_bot_username: str = ""
+    allowed_telegram_ids: list[int] = Field(default_factory=list)
+
     # T-Invest tokens
     tinkoff_token: str = ""
     t_trading_token_sandbox: str = ""
@@ -44,6 +51,21 @@ class Settings(BaseSettings):
     tax_rate: float = 13.0
     max_days: int = 120
     min_volume_rub: float = 500_000.0
+
+    @field_validator("allowed_telegram_ids", mode="before")
+    @classmethod
+    def _parse_allowed_telegram_ids(cls, value: object) -> list[int]:
+        if value is None or value == "":
+            return []
+        if isinstance(value, str):
+            return [int(part.strip()) for part in value.split(",") if part.strip()]
+        if isinstance(value, list):
+            return [int(item) for item in value]
+        return [int(value)]
+
+    @property
+    def auth_enabled(self) -> bool:
+        return not self.auth_disabled
 
     @property
     def tax_rate_fraction(self) -> float:

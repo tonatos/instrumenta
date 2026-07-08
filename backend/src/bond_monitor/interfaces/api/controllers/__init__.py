@@ -1,5 +1,6 @@
 """API controllers package."""
 
+from bond_monitor.interfaces.api.controllers.auth import AuthController
 from bond_monitor.interfaces.api.controllers.bonds import (
     BondsController,
     FavoritesController,
@@ -17,6 +18,7 @@ from bond_monitor.interfaces.api.controllers.portfolio import (
 from bond_monitor.interfaces.api.controllers.trading import TradingController, provide_trading_service
 
 __all__ = [
+    "AuthController",
     "BondsController",
     "CalculatorController",
     "ConfigController",

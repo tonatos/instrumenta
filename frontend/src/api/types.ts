@@ -47,6 +47,18 @@ export interface ConfigResponse {
   tinkoff_configured: boolean;
   sandbox_configured: boolean;
   production_configured: boolean;
+  auth_enabled: boolean;
+  telegram_bot_username: string;
+}
+
+export interface AuthTokenResponse {
+  access_token: string;
+  token_type: string;
+}
+
+export interface AuthMeResponse {
+  telegram_id: number;
+  display_name: string;
 }
 
 export type PositionStatus = "pending" | "active" | "drift" | "closed";

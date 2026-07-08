@@ -1,4 +1,6 @@
 import type {
+  AuthMeResponse,
+  AuthTokenResponse,
   AccountOperationsResponse,
   AccountPreview,
   Bond,
@@ -17,6 +19,7 @@ import type {
   SellQuoteResponse,
   TradingAdviceResponse,
 } from "./types";
+import { getAuthToken, notifyUnauthorized } from "@/features/auth/authStorage";
 
 const BASE = "/api/v1";
 
@@ -49,12 +52,22 @@ function parseErrorMessage(text: string, status: number): ApiError {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  const token = getAuthToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
+    headers,
     ...init,
   });
   if (!res.ok) {
     const text = await res.text();
+    if (res.status === 401) {
+      notifyUnauthorized();
+    }
     throw parseErrorMessage(text, res.status);
   }
   if (res.status === 204) return undefined as T;
@@ -63,6 +76,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   getConfig: () => request<ConfigResponse>("/config/"),
+
+  loginWithTelegram: (body: {
+    id: number;
+    first_name: string;
+    auth_date: number;
+    hash: string;
+    last_name?: string;
+    username?: string;
+    photo_url?: string;
+  }) =>
+    request<AuthTokenResponse>("/auth/telegram", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  getMe: (token?: string) =>
+    request<AuthMeResponse>("/auth/me", {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    }),
+  logout: () => request<{ status: string }>("/auth/logout", { method: "POST" }),
 
   getBonds: (filterBy = "effective") =>
     request<BondsListResponse>(`/bonds/?filter_by=${filterBy}`),

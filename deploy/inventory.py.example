@@ -1,0 +1,29 @@
+# Copy to inventory.py and fill in your VPS details.
+# inventory.py is gitignored — never commit secrets.
+
+bond_monitor = (
+    [
+        "user@your-vps-ip",
+    ],
+    {
+        "domain": "bond.example.com",
+        "app_dir": "/opt/bond-monitor",
+        "ssh_user": "root",
+        # T-Invest tokens (optional, for TRADING mode)
+        "tinkoff_token": "",
+        "t_trading_token_sandbox": "",
+        "t_trading_token_production": "",
+        # Scoring defaults
+        "key_rate": 14.5,
+        "tax_rate": 13,
+        "max_days": 120,
+        "min_volume_rub": 500000,
+        "log_level": "INFO",
+        # Auth (Telegram Login Widget + JWT whitelist)
+        "auth_disabled": False,
+        "auth_secret": "change-me-to-a-long-random-string",
+        "telegram_bot_token": "",
+        "telegram_bot_username": "",
+        "allowed_telegram_ids": "",  # comma-separated, e.g. "123456789,987654321"
+    },
+)

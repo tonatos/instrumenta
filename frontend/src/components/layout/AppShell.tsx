@@ -3,6 +3,7 @@ import {
   BarChart3,
   Calculator,
   Heart,
+  LogOut,
   Moon,
   Settings,
   Sun,
@@ -12,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { SettingsSheet } from "@/features/settings/SettingsSheet";
+import { useAuth } from "@/features/auth/AuthContext";
 import { api } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -25,6 +27,7 @@ const navItems = [
 
 export function AppShell() {
   const { theme, toggle } = useTheme();
+  const { authEnabled, displayName, logout } = useAuth();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { data: favorites } = useQuery({
     queryKey: ["favorites"],
@@ -69,6 +72,16 @@ export function AppShell() {
           ))}
         </nav>
         <div className="flex gap-2 border-t border-border p-4">
+          {authEnabled && displayName && (
+            <div className="flex min-w-0 flex-1 items-center text-xs text-muted-foreground">
+              <span className="truncate">{displayName}</span>
+            </div>
+          )}
+          {authEnabled && (
+            <Button variant="outline" size="icon" onClick={logout} aria-label="Выйти">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          )}
           <Button variant="outline" size="icon" onClick={toggle} aria-label="Переключить тему">
             {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
           </Button>

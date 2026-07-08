@@ -14,7 +14,7 @@ Bond Monitor — веб-приложение для отбора и планир
 
 ## Быстрый старт
 
-### Docker
+### Docker (локально)
 
 ```bash
 cp .env.example .env
@@ -62,3 +62,70 @@ cache/                      # MOEX cache, SQLite DB, portfolios migration
 ```
 
 Подробная архитектура — в [AGENTS.md](AGENTS.md).
+
+## Деплой на VPS
+
+Production-стек: **Caddy** (HTTPS, Let's Encrypt) → **nginx** (SPA + `/api` proxy) → **Litestar API** → **SQLite** (`cache/` volume).
+
+### Требования
+
+- VPS с Ubuntu/Debian, SSH-доступ по ключу
+- DNS A-запись домена на IP сервера
+- Открытые порты `80` и `443`
+
+### Первичная настройка
+
+```bash
+# 1. Скопировать и заполнить inventory (host, domain, токены)
+cp deploy/inventory.py.example deploy/inventory.py
+
+# 2. Установить pyinfra
+uv sync --group deploy
+
+# 3. Перейти в каталог deploy (для group_data и относительных путей)
+cd deploy
+```
+
+В `deploy/inventory.py` укажите SSH-пользователя, домен и при необходимости T-Invest токены.
+
+### Деплой
+
+```bash
+cd deploy
+
+# Предпросмотр изменений
+uv run pyinfra inventory.py deploy.py --dry
+
+# Деплой
+uv run pyinfra inventory.py deploy.py
+```
+
+Pyinfra на сервере:
+
+1. Установит Docker (если отсутствует)
+2. Синхронизирует исходники в `/opt/bond-monitor`
+3. Сгенерирует `.env` из шаблона
+4. Запустит `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`
+
+### Проверка
+
+- Web UI: `https://<DOMAIN>/`
+- Health: `https://<DOMAIN>/health`
+
+### Обновление
+
+Повторите команду деплоя — pyinfra пересинхронизирует файлы и пересоберёт образы.
+
+### Бэкап
+
+Сохраняйте volume `cache/` на сервере — в нём SQLite-база и MOEX-кэш:
+
+```bash
+tar czf bond-monitor-cache-$(date +%F).tar.gz -C /opt/bond-monitor cache/
+```
+
+### Ручной запуск production compose
+
+```bash
+DOMAIN=bond.example.com docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```

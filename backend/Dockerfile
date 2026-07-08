@@ -7,16 +7,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY backend/pyproject.toml backend/uv.lock* /app/backend/
-COPY pyproject.toml /app/
+COPY pyproject.toml uv.lock /app/
+COPY backend/pyproject.toml /app/backend/
 COPY backend/src /app/backend/src
 COPY data/ratings.json /app/data/ratings.json
 
-WORKDIR /app/backend
-RUN uv sync --no-dev
+RUN uv sync --package bond-monitor-backend --no-dev
 
-ENV PATH="/app/backend/.venv/bin:$PATH"
-ENV PYTHONPATH="/app/backend/src"
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 

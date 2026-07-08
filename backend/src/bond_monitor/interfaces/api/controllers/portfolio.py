@@ -59,6 +59,8 @@ class ConfigController(Controller):
             tinkoff_configured=bool(settings.tinkoff_token),
             sandbox_configured=bool(settings.t_trading_token_sandbox),
             production_configured=bool(settings.t_trading_token_production),
+            auth_enabled=settings.auth_enabled,
+            telegram_bot_username=settings.telegram_bot_username,
         )
 
 

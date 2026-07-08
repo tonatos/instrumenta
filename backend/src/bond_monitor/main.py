@@ -13,6 +13,7 @@ from litestar.events import listener
 from bond_monitor.infrastructure.persistence.database import get_db_session, init_db
 from bond_monitor.infrastructure.persistence.json_migration import migrate_json_to_db
 from bond_monitor.interfaces.api.controllers import (
+    AuthController,
     BondsController,
     CalculatorController,
     ConfigController,
@@ -22,6 +23,7 @@ from bond_monitor.interfaces.api.controllers import (
     RatingsController,
     TradingController,
 )
+from bond_monitor.interfaces.auth.jwt_auth import get_jwt_auth
 from bond_monitor.interfaces.config import get_settings
 from bond_monitor.interfaces.logging_config import configure_logging
 
@@ -43,9 +45,13 @@ async def lifespan(app: Litestar):
 def create_app() -> Litestar:
     settings = get_settings()
     configure_logging(settings.log_level)
+    on_app_init: list = []
+    if settings.auth_enabled:
+        on_app_init.append(get_jwt_auth().on_app_init)
     return Litestar(
         route_handlers=[
             HealthController,
+            AuthController,
             ConfigController,
             BondsController,
             FavoritesController,
@@ -62,6 +68,7 @@ def create_app() -> Litestar:
         lifespan=[lifespan],
         debug=settings.debug,
         listeners=[log_unhandled_exception],
+        on_app_init=on_app_init,
     )
 
 

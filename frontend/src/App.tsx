@@ -6,6 +6,9 @@ import { ScreenerPage } from "@/features/screener/ScreenerPage";
 import { FavoritesPage } from "@/features/favorites/FavoritesPage";
 import { PortfolioPage } from "@/features/portfolio/PortfolioPage";
 import { CalculatorPage } from "@/features/calculator/CalculatorPage";
+import { AuthProvider } from "@/features/auth/AuthContext";
+import { LoginPage } from "@/features/auth/LoginPage";
+import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,17 +20,22 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route index element={<ScreenerPage />} />
-              <Route path="favorites" element={<FavoritesPage />} />
-              <Route path="portfolio/:portfolioId?" element={<PortfolioPage />} />
-              <Route path="calculator" element={<CalculatorPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route element={<ProtectedRoute />}>
+                <Route element={<AppShell />}>
+                  <Route index element={<ScreenerPage />} />
+                  <Route path="favorites" element={<FavoritesPage />} />
+                  <Route path="portfolio/:portfolioId?" element={<PortfolioPage />} />
+                  <Route path="calculator" element={<CalculatorPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Route>
+              </Route>
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

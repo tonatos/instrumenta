@@ -18,6 +18,18 @@ if str(_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIR))
 
 from factories import make_account_snapshot, portfolio_create_payload  # noqa: E402
+from bond_monitor.interfaces.auth.jwt_auth import reset_jwt_auth_cache  # noqa: E402
+from bond_monitor.interfaces.config import get_settings  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _auth_disabled_for_tests(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
+    monkeypatch.setenv("AUTH_DISABLED", "true")
+    get_settings.cache_clear()
+    reset_jwt_auth_cache()
+    yield
+    get_settings.cache_clear()
+    reset_jwt_auth_cache()
 
 
 @contextlib.contextmanager
