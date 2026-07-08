@@ -170,23 +170,38 @@ async def exchange_authorization_code(
         raise TelegramOidcError("Telegram OIDC redirect URI is not configured")
 
     credentials = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+    form_data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "code_verifier": code_verifier,
+    }
     async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.post(
             TOKEN_URL,
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": redirect_uri,
-                "client_id": client_id,
-                "code_verifier": code_verifier,
-            },
-            headers={
-                "Authorization": f"Basic {credentials}",
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
+            data=form_data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
-        response.raise_for_status()
         token_data = response.json()
+        if token_data.get("error") == "invalid_client":
+            response = await client.post(
+                TOKEN_URL,
+                data={
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri,
+                    "client_id": client_id,
+                    "code_verifier": code_verifier,
+                },
+                headers={
+                    "Authorization": f"Basic {credentials}",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+            )
+            token_data = response.json()
+        response.raise_for_status()
 
     if token_data.get("error"):
         error = str(token_data.get("error"))

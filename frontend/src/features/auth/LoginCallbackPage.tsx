@@ -1,11 +1,31 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "./AuthContext";
 
+function readAccessToken(): string | null {
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  const hashToken = new URLSearchParams(hash).get("access_token");
+  if (hashToken) return hashToken;
+  return new URLSearchParams(window.location.search).get("access_token");
+}
+
+function readOAuthError(): { error: string; description: string } | null {
+  const params = new URLSearchParams(window.location.search);
+  const error = params.get("error");
+  if (!error) return null;
+  return {
+    error,
+    description: params.get("error_description") ?? error,
+  };
+}
+
 export function LoginCallbackPage() {
-  const [searchParams] = useSearchParams();
-  const { loginWithAccessToken, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const { loginWithAccessToken } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const handledRef = useRef(false);
 
@@ -13,23 +33,25 @@ export function LoginCallbackPage() {
     if (handledRef.current) return;
     handledRef.current = true;
 
-    const accessToken = searchParams.get("access_token");
+    const accessToken = readAccessToken();
     if (accessToken) {
-      void loginWithAccessToken(accessToken).catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : "Не удалось завершить вход через Telegram.");
-      });
+      window.history.replaceState({}, document.title, window.location.pathname);
+      void loginWithAccessToken(accessToken)
+        .then(() => navigate("/", { replace: true }))
+        .catch((err: unknown) => {
+          setError(err instanceof Error ? err.message : "Не удалось завершить вход через Telegram.");
+        });
       return;
     }
 
-    const oauthError = searchParams.get("error");
+    const oauthError = readOAuthError();
     if (oauthError) {
-      setError(searchParams.get("error_description") ?? oauthError);
+      setError(oauthError.description);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      setError("Telegram не вернул результат авторизации.");
     }
-  }, [loginWithAccessToken, searchParams]);
-
-  if (isAuthenticated) {
-    return <Navigate to="/" replace />;
-  }
+  }, [loginWithAccessToken, navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -40,9 +62,21 @@ export function LoginCallbackPage() {
             {error ? "Вход не выполнен." : "Завершаем вход через Telegram..."}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-4">
           {error ? (
-            <p className="text-sm text-destructive">{error}</p>
+            <>
+              <p className="text-sm text-destructive">{error}</p>
+              {error.includes("invalid_client") && (
+                <p className="text-sm text-muted-foreground">
+                  Проверьте в BotFather → Bot Settings → Web Login: Client ID и Client Secret
+                  должны совпадать с TELEGRAM_OIDC_CLIENT_ID и TELEGRAM_OIDC_CLIENT_SECRET в .env.
+                  Это не bot token.
+                </p>
+              )}
+              <Button asChild>
+                <Link to="/login">Попробовать снова</Link>
+              </Button>
+            </>
           ) : (
             <p className="text-sm text-muted-foreground">Пожалуйста, подождите.</p>
           )}

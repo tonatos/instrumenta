@@ -73,7 +73,7 @@ def test_telegram_callback_redirects_with_token(auth_client: TestClient) -> None
         )
     assert response.status_code in (302, 307), response.text
     location = response.headers["location"]
-    assert location.startswith(f"{PUBLIC_APP_URL}/login/callback?access_token=")
+    assert location.startswith(f"{PUBLIC_APP_URL}/login/callback#access_token=")
 
 
 def test_telegram_callback_redirects_forbidden(auth_client: TestClient) -> None:

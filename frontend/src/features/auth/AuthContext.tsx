@@ -63,9 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [logout]);
 
   const loginWithAccessToken = useCallback(async (accessToken: string) => {
+    await refreshMe(accessToken);
     setAuthToken(accessToken);
     setToken(accessToken);
-    await refreshMe(accessToken);
   }, [refreshMe]);
 
   const value = useMemo<AuthContextValue>(

@@ -42,7 +42,7 @@ test.describe("auth login", () => {
       await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });
     });
 
-    await page.goto("/login/callback?access_token=mock-e2e-token");
+    await page.goto("/login/callback#access_token=mock-e2e-token");
     await expect(page).toHaveURL("/");
     await expect(page.getByRole("heading", { name: "Скринер облигаций" })).toBeVisible();
   });

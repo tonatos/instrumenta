@@ -43,6 +43,19 @@ class Settings(BaseSettings):
     telegram_oidc_redirect_uri: str = ""
     allowed_telegram_ids: list[int] = Field(default_factory=list)
 
+    @field_validator(
+        "telegram_oidc_client_id",
+        "telegram_oidc_client_secret",
+        "telegram_oidc_redirect_uri",
+        "public_app_url",
+        mode="before",
+    )
+    @classmethod
+    def _strip_auth_strings(cls, value: object) -> object:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
     # T-Invest tokens
     tinkoff_token: str = ""
     t_trading_token_sandbox: str = ""

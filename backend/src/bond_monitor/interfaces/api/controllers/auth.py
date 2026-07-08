@@ -94,7 +94,7 @@ class AuthController(Controller):
                 AuthUser(telegram_id=user.telegram_id, display_name=user.display_name),
                 settings=settings,
             )
-            return Redirect(path=f"{frontend_callback}?access_token={quote(token)}")
+            return Redirect(path=f"{frontend_callback}#access_token={quote(token)}")
         except TelegramOidcForbidden as exc:
             logger.warning("Telegram OIDC forbidden: %s", exc)
             return Redirect(path=_frontend_error_url(frontend_callback, "forbidden", str(exc)))
