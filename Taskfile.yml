@@ -1,0 +1,19 @@
+version: "3"
+
+tasks:
+  deploy:sync:
+    desc: Install pyinfra deploy dependencies
+    cmds:
+      - uv sync --group deploy
+
+  deploy:dry:
+    desc: Preview VPS deploy (dry run)
+    deps: [deploy:sync]
+    cmds:
+      - uv run --group deploy --directory deploy pyinfra inventory.py deploy.py --dry
+
+  deploy:
+    desc: Deploy Bond Monitor to VPS
+    deps: [deploy:sync]
+    cmds:
+      - uv run --group deploy --directory deploy pyinfra inventory.py deploy.py -y
