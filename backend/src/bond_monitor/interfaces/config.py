@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     def telegram_oidc_redirect_uri_resolved(self) -> str:
         if self.telegram_oidc_redirect_uri:
             return self.telegram_oidc_redirect_uri
-        return f"{self.public_app_url.rstrip('/')}/login/callback"
+        return f"{self.public_app_url.rstrip('/')}/api/v1/auth/telegram/callback"
 
     @property
     def telegram_oidc_configured(self) -> bool:

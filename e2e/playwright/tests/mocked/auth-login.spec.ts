@@ -20,7 +20,7 @@ test.describe("auth login", () => {
     await expect(page.getByText("Войдите через Telegram")).toBeVisible();
   });
 
-  test("allows access after mocked telegram oidc callback", async ({ page }) => {
+  test("allows access after backend redirect with access_token", async ({ page }) => {
     await page.route("**/api/v1/config/", async (route) => {
       await route.fulfill({
         json: {
@@ -28,12 +28,6 @@ test.describe("auth login", () => {
           auth_enabled: true,
           telegram_oidc_configured: true,
         },
-      });
-    });
-    await page.route("**/api/v1/auth/telegram/callback", async (route) => {
-      await route.fulfill({
-        status: 201,
-        json: { access_token: "mock-e2e-token", token_type: "bearer" },
       });
     });
     await page.route("**/api/v1/auth/me", async (route) => {
@@ -48,7 +42,7 @@ test.describe("auth login", () => {
       await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });
     });
 
-    await page.goto("/login/callback?code=mock-code&state=mock-state");
+    await page.goto("/login/callback?access_token=mock-e2e-token");
     await expect(page).toHaveURL("/");
     await expect(page.getByRole("heading", { name: "Скринер облигаций" })).toBeVisible();
   });

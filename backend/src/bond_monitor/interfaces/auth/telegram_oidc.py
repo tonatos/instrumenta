@@ -102,33 +102,47 @@ def _get_jwks_client() -> PyJWKClient:
 
 def _decode_id_token(id_token: str, *, client_id: str) -> dict[str, Any]:
     signing_key = _get_jwks_client().get_signing_key_from_jwt(id_token)
-    return jwt.decode(
+    claims = jwt.decode(
         id_token,
         signing_key.key,
-        algorithms=["RS256"],
-        audience=str(client_id),
+        algorithms=["RS256", "ES256"],
         issuer=ISSUER,
         leeway=CLOCK_SKEW_SECONDS,
-        options={"require": ["exp", "iss", "aud"]},
+        options={"verify_aud": False, "require": ["exp", "iss"]},
     )
-
-
-def verify_id_token(id_token: str, *, client_id: str, expected_nonce: str) -> dict[str, Any]:
-    claims = _decode_id_token(id_token, client_id=client_id)
-    nonce = str(claims.get("nonce", ""))
-    if nonce != expected_nonce:
-        raise TelegramOidcError("JWT nonce mismatch")
     audience = claims.get("aud")
-    if str(audience) != str(client_id):
+    if isinstance(audience, list):
+        audiences = {str(item) for item in audience}
+    else:
+        audiences = {str(audience)} if audience is not None else set()
+    if str(client_id) not in audiences:
         raise TelegramOidcError("Invalid JWT audience")
     return claims
 
 
+def verify_id_token(id_token: str, *, client_id: str, expected_nonce: str) -> dict[str, Any]:
+    try:
+        claims = _decode_id_token(id_token, client_id=client_id)
+    except jwt.PyJWTError as exc:
+        raise TelegramOidcError(f"Invalid id_token: {exc}") from exc
+    token_nonce = claims.get("nonce")
+    if token_nonce is not None and str(token_nonce) != expected_nonce:
+        raise TelegramOidcError("JWT nonce mismatch")
+    return claims
+
+
+def _telegram_id_from_claims(claims: dict[str, Any]) -> int:
+    raw_id = claims.get("id")
+    if raw_id is not None:
+        return int(raw_id)
+    sub = claims.get("sub")
+    if sub is not None and str(sub).isdigit():
+        return int(sub)
+    raise TelegramOidcError("Telegram id_token is missing user id")
+
+
 def _user_from_claims(claims: dict[str, Any], *, allowed_ids: list[int]) -> TelegramUser:
-    telegram_id = claims.get("id")
-    if telegram_id is None:
-        raise TelegramOidcError("Telegram id_token is missing user id")
-    user_id = int(telegram_id)
+    user_id = _telegram_id_from_claims(claims)
     if user_id not in allowed_ids:
         raise TelegramOidcForbidden("User not allowed")
     display_name = str(claims.get("name") or claims.get("given_name") or claims.get("preferred_username") or "")
@@ -173,6 +187,14 @@ async def exchange_authorization_code(
         )
         response.raise_for_status()
         token_data = response.json()
+
+    if token_data.get("error"):
+        error = str(token_data.get("error"))
+        description = token_data.get("error_description")
+        message = f"Telegram token error: {error}"
+        if description:
+            message = f"{message} ({description})"
+        raise TelegramOidcError(message)
 
     id_token = token_data.get("id_token")
     if not id_token:

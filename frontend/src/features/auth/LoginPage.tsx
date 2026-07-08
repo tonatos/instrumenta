@@ -19,11 +19,6 @@ export function LoginPage() {
     return <Navigate to={redirectTo} replace />;
   }
 
-  const startLogin = async () => {
-    const { authorization_url } = await api.startTelegramLogin();
-    window.location.assign(authorization_url);
-  };
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -35,7 +30,9 @@ export function LoginPage() {
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Загрузка...</p>
           ) : config?.telegram_oidc_configured ? (
-            <Button onClick={() => void startLogin()}>Войти через Telegram</Button>
+            <Button onClick={() => window.location.assign("/api/v1/auth/telegram/login")}>
+              Войти через Telegram
+            </Button>
           ) : (
             <p className="text-sm text-muted-foreground">
               Telegram OIDC не настроен. Укажите TELEGRAM_OIDC_CLIENT_ID, TELEGRAM_OIDC_CLIENT_SECRET

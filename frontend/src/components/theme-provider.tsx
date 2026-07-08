@@ -2,12 +2,14 @@ import { createContext, useContext, useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
 
+const DEFAULT_THEME: Theme = "dark";
+
 const ThemeContext = createContext<{ theme: Theme; toggle: () => void } | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "light";
-    return (localStorage.getItem("theme") as Theme) || "light";
+    if (typeof window === "undefined") return DEFAULT_THEME;
+    return (localStorage.getItem("theme") as Theme) || DEFAULT_THEME;
   });
 
   useEffect(() => {

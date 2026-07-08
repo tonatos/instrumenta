@@ -77,6 +77,32 @@ def test_verify_id_token_rejects_bad_nonce() -> None:
 
 
 @pytest.mark.asyncio
+async def test_exchange_authorization_code_reports_token_error() -> None:
+    with patch(
+        "bond_monitor.interfaces.auth.telegram_oidc.httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        return_value=type(
+            "Resp",
+            (),
+            {
+                "raise_for_status": lambda self: None,
+                "json": lambda self: {"error": "invalid_grant", "error_description": "code expired"},
+            },
+        )(),
+    ):
+        with pytest.raises(TelegramOidcError, match="invalid_grant"):
+            await exchange_authorization_code(
+                code="auth-code",
+                code_verifier="verifier",
+                nonce="nonce",
+                client_id=CLIENT_ID,
+                client_secret="secret",
+                redirect_uri="http://localhost:5173/login/callback",
+                allowed_ids=[42],
+            )
+
+
+@pytest.mark.asyncio
 async def test_exchange_authorization_code_whitelist() -> None:
     id_token = "mock.id.token"
     token_response = {"id_token": id_token, "access_token": "at", "token_type": "Bearer", "expires_in": 3600}

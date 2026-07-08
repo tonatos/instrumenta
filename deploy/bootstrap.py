@@ -1,4 +1,4 @@
-"""Deploy Bond Monitor to a VPS via Docker Compose."""
+"""First-time VPS bootstrap: Docker, git clone, .env, compose up."""
 
 from __future__ import annotations
 

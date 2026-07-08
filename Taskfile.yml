@@ -6,14 +6,31 @@ tasks:
     cmds:
       - uv sync --group deploy
 
-  deploy:dry:
-    desc: Preview VPS deploy (dry run)
+  deploy:bootstrap:
+    desc: First-time VPS setup (Docker, git clone, .env, compose)
     deps: [deploy:sync]
     cmds:
-      - uv run --group deploy --directory deploy pyinfra inventory.py deploy.py --dry
+      - uv run --group deploy --directory deploy pyinfra inventory.py bootstrap.py -y
+
+  deploy:bootstrap-dry:
+    desc: Preview first-time VPS bootstrap
+    deps: [deploy:sync]
+    cmds:
+      - uv run --group deploy --directory deploy pyinfra inventory.py bootstrap.py --dry
+
+  deploy:update:
+    desc: Manual update on VPS (git pull + compose pull, keeps .env)
+    deps: [deploy:sync]
+    cmds:
+      - uv run --group deploy --directory deploy pyinfra inventory.py update.py -y
+
+  deploy:update-dry:
+    desc: Preview manual VPS update
+    deps: [deploy:sync]
+    cmds:
+      - uv run --group deploy --directory deploy pyinfra inventory.py update.py --dry
 
   deploy:
-    desc: Deploy Bond Monitor to VPS
-    deps: [deploy:sync]
+    desc: Alias for deploy:update (routine deploy is automatic via GitHub Actions)
     cmds:
-      - uv run --group deploy --directory deploy pyinfra inventory.py deploy.py -y
+      - task: deploy:update

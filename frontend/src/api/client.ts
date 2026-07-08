@@ -1,8 +1,5 @@
 import type {
   AuthMeResponse,
-  AuthTokenResponse,
-  TelegramOidcCallbackRequest,
-  TelegramOidcStartResponse,
   AccountOperationsResponse,
   AccountPreview,
   Bond,
@@ -67,7 +64,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const text = await res.text();
-    if (res.status === 401) {
+    if (res.status === 401 && !path.startsWith("/auth/")) {
       notifyUnauthorized();
     }
     throw parseErrorMessage(text, res.status);
@@ -79,12 +76,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   getConfig: () => request<ConfigResponse>("/config/"),
 
-  startTelegramLogin: () => request<TelegramOidcStartResponse>("/auth/telegram/start"),
-  completeTelegramLogin: (body: TelegramOidcCallbackRequest) =>
-    request<AuthTokenResponse>("/auth/telegram/callback", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
   getMe: (token?: string) =>
     request<AuthMeResponse>("/auth/me", {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,

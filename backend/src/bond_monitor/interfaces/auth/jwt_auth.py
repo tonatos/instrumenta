@@ -34,7 +34,7 @@ def get_jwt_auth() -> JWTAuth[AuthUser]:
         default_token_expiration=timedelta(days=30),
         exclude=[
             "/health",
-            "/api/v1/auth/telegram/start",
+            "/api/v1/auth/telegram/login",
             "/api/v1/auth/telegram/callback",
             "/api/v1/config",
             "/api/v1/config/",

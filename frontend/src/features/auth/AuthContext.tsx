@@ -16,13 +16,8 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   loading: boolean;
   displayName: string | null;
-  completeTelegramLogin: (payload: TelegramOidcCallbackPayload) => Promise<void>;
+  loginWithAccessToken: (accessToken: string) => Promise<void>;
   logout: () => void;
-}
-
-export interface TelegramOidcCallbackPayload {
-  code: string;
-  state: string;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -67,11 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, [logout]);
 
-  const completeTelegramLogin = useCallback(async (payload: TelegramOidcCallbackPayload) => {
-    const response = await api.completeTelegramLogin(payload);
-    setAuthToken(response.access_token);
-    setToken(response.access_token);
-    await refreshMe(response.access_token);
+  const loginWithAccessToken = useCallback(async (accessToken: string) => {
+    setAuthToken(accessToken);
+    setToken(accessToken);
+    await refreshMe(accessToken);
   }, [refreshMe]);
 
   const value = useMemo<AuthContextValue>(
@@ -80,10 +74,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: !authEnabled || Boolean(token),
       loading: configLoading,
       displayName,
-      completeTelegramLogin,
+      loginWithAccessToken,
       logout,
     }),
-    [authEnabled, completeTelegramLogin, configLoading, displayName, logout, token],
+    [authEnabled, configLoading, displayName, loginWithAccessToken, logout, token],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

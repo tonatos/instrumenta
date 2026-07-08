@@ -20,20 +20,6 @@ class ConfigResponse(BaseModel):
     telegram_oidc_configured: bool = False
 
 
-class TelegramOidcStartResponse(BaseModel):
-    authorization_url: str
-
-
-class TelegramOidcCallbackRequest(BaseModel):
-    code: str
-    state: str
-
-
-class AuthTokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
 class AuthMeResponse(BaseModel):
     telegram_id: int
     display_name: str

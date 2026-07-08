@@ -73,64 +73,70 @@ Production-стек: **Caddy** (HTTPS, Let's Encrypt) → **nginx** (SPA + `/api
 - DNS A-запись домена на IP сервера
 - Открытые порты `80` и `443`
 
-### Первичная настройка
+### Первичная настройка (один раз)
+
+**1. GitHub Secrets** (Settings → Secrets and variables → Actions):
+
+| Secret | Описание |
+|--------|----------|
+| `VPS_HOST` | IP сервера, напр. `77.238.250.101` |
+| `VPS_USER` | SSH-пользователь, напр. `root` |
+| `VPS_SSH_KEY` | Приватный SSH-ключ для доступа Actions → VPS |
+| `GHCR_READ_TOKEN` | Опционально: PAT с `read:packages` для приватных образов |
+
+Сгенерируйте отдельную пару ключей для CI (не используйте личный):
 
 ```bash
-# 1. Скопировать и заполнить inventory (host, domain, токены)
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/bond-monitor-gha -N ""
+```
+
+Публичный ключ (`bond-monitor-gha.pub`) → `authorized_keys` на VPS. Приватный → secret `VPS_SSH_KEY`.
+
+**2. Bootstrap на VPS** (Docker, git clone, `.env` с секретами):
+
+```bash
 cp deploy/inventory.py.example deploy/inventory.py
+# заполнить host, domain, токены
 
-# 2. Установить task (go-task) и pyinfra
-brew install go-task   # macOS; см. https://taskfile.dev/installation/
+brew install go-task   # macOS
 uv sync --group deploy
+task deploy:bootstrap
 ```
 
-В `deploy/inventory.py` укажите IP сервера (без `user@`), `ssh_user`, домен и при необходимости токены. Репозиторий и ветка по умолчанию — в `deploy/group_data/all.py` (`git@github.com:tonatos/bond-monitor.git`, `main`).
+Секреты (`TINKOFF_TOKEN`, `AUTH_SECRET`, OIDC и т.д.) записываются в `/opt/bond-monitor/.env` **только при bootstrap**. GitHub Actions их не трогает.
 
-```python
-bond_monitor = (
-    ["77.238.250.101"],  # только IP или hostname, не root@host
-    {"ssh_user": "root", "domain": "bond.example.com", ...},
-)
-```
-
-**Доступ VPS к GitHub (один раз):** на сервере нужен SSH-ключ с read-доступом к репозиторию.
+**3. Deploy key VPS → GitHub** (для `git pull` на сервере):
 
 ```bash
 ssh root@<VPS-IP>
-ssh-keygen -t ed25519 -C "bond-monitor-deploy" -f ~/.ssh/id_ed25519 -N ""
+ssh-keygen -t ed25519 -C "bond-monitor-vps" -f ~/.ssh/id_ed25519 -N ""
 cat ~/.ssh/id_ed25519.pub
 ```
 
-Публичный ключ добавьте в GitHub → репозиторий → Settings → Deploy keys (read-only).
+Публичный ключ → GitHub → репозиторий → Settings → Deploy keys (read-only).
 
 ### Docker-образы (GHCR)
 
-Сборка образов — в **GitHub Actions** (`.github/workflows/docker.yml`), публикация в [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry):
+Сборка — workflow **Docker** (push в `main`):
 
 - `ghcr.io/tonatos/bond-monitor-api:main`
 - `ghcr.io/tonatos/bond-monitor-web:main`
 
-На VPS образы только **скачиваются** (`docker compose pull`), без сборки.
+### Деплой (автоматический)
 
-После первого push в `main` дождитесь зелёного workflow **Docker**. Для приватных пакетов добавьте в `deploy/inventory.py` PAT с `read:packages` (`ghcr_username`, `ghcr_token`).
+После успешной сборки workflow **Deploy** по SSH:
 
-### Деплой
+1. `git pull` в `/opt/bond-monitor`
+2. `docker compose pull && up -d`
+3. `.env` **не изменяется**
 
-Из корня репозитория:
+Ручной перезапуск: Actions → Deploy → Run workflow.
+
+Локальный fallback (без GitHub):
 
 ```bash
-task deploy:dry   # предпросмотр
-task deploy       # деплой
+task deploy:update
 ```
-
-Таски описаны в [`Taskfile.yml`](Taskfile.yml) ([go-task](https://taskfile.dev/)).
-
-Pyinfra на сервере:
-
-1. Установит Docker и git (если отсутствуют)
-2. Склонирует или обновит репозиторий в `/opt/bond-monitor` (`git pull`)
-3. Сгенерирует `.env` из шаблона
-4. Скачает образы из GHCR и запустит `docker compose up -d` (без `--build`)
 
 ### Проверка
 
@@ -139,8 +145,8 @@ Pyinfra на сервере:
 
 ### Обновление
 
-1. `git push` в `main` — GitHub Actions соберёт и опубликует образы в GHCR
-2. `task deploy` — на VPS `git pull` + `docker compose pull` + перезапуск
+1. `git push` в `main` → **Docker** (сборка) → **Deploy** (выкат на VPS)
+2. Секреты на сервере меняйте вручную в `/opt/bond-monitor/.env`, затем `docker compose up -d`
 
 ### Бэкап
 
