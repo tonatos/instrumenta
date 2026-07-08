@@ -81,16 +81,27 @@ files.template(
     telegram_oidc_client_id=host.data.get("telegram_oidc_client_id", ""),
     telegram_oidc_client_secret=host.data.get("telegram_oidc_client_secret", ""),
     allowed_telegram_ids=_allowed_telegram_ids(),
+    image_tag=host.data.get("image_tag", "main"),
     _sudo=True,
 )
+
+if host.data.get("ghcr_token"):
+    docker.login(
+        name="Log in to GitHub Container Registry",
+        server="ghcr.io",
+        username=host.data.get("ghcr_username", ""),
+        password=host.data["ghcr_token"],
+        _sudo=True,
+    )
 
 docker.compose(
     name="Deploy Bond Monitor stack",
     project_directory=APP_DIR,
     project_name=PROJECT_NAME,
     files=COMPOSE_FILES,
-    build=True,
-    pull="missing",
+    build=False,
+    pull="always",
     _chdir=APP_DIR,
+    _env={"IMAGE_TAG": host.data.get("image_tag", "main")},
     _sudo=True,
 )

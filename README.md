@@ -103,6 +103,17 @@ cat ~/.ssh/id_ed25519.pub
 
 Публичный ключ добавьте в GitHub → репозиторий → Settings → Deploy keys (read-only).
 
+### Docker-образы (GHCR)
+
+Сборка образов — в **GitHub Actions** (`.github/workflows/docker.yml`), публикация в [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry):
+
+- `ghcr.io/tonatos/bond-monitor-api:main`
+- `ghcr.io/tonatos/bond-monitor-web:main`
+
+На VPS образы только **скачиваются** (`docker compose pull`), без сборки.
+
+После первого push в `main` дождитесь зелёного workflow **Docker**. Для приватных пакетов добавьте в `deploy/inventory.py` PAT с `read:packages` (`ghcr_username`, `ghcr_token`).
+
 ### Деплой
 
 Из корня репозитория:
@@ -119,7 +130,7 @@ Pyinfra на сервере:
 1. Установит Docker и git (если отсутствуют)
 2. Склонирует или обновит репозиторий в `/opt/bond-monitor` (`git pull`)
 3. Сгенерирует `.env` из шаблона
-4. Запустит `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`
+4. Скачает образы из GHCR и запустит `docker compose up -d` (без `--build`)
 
 ### Проверка
 
@@ -128,7 +139,8 @@ Pyinfra на сервере:
 
 ### Обновление
 
-Запушьте изменения в GitHub и повторите команду деплоя — на VPS выполнится `git pull` и пересборка образов.
+1. `git push` в `main` — GitHub Actions соберёт и опубликует образы в GHCR
+2. `task deploy` — на VPS `git pull` + `docker compose pull` + перезапуск
 
 ### Бэкап
 
@@ -141,5 +153,6 @@ tar czf bond-monitor-cache-$(date +%F).tar.gz -C /opt/bond-monitor cache/
 ### Ручной запуск production compose
 
 ```bash
-DOMAIN=bond.example.com docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+DOMAIN=bond.example.com IMAGE_TAG=main docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+DOMAIN=bond.example.com IMAGE_TAG=main docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```

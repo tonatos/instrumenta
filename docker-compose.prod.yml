@@ -1,10 +1,14 @@
 services:
   api:
+    image: ghcr.io/tonatos/bond-monitor-api:${IMAGE_TAG:-main}
+    build: !reset null
     ports: !reset []
     environment:
       LOG_LEVEL: INFO
 
   web:
+    image: ghcr.io/tonatos/bond-monitor-web:${IMAGE_TAG:-main}
+    build: !reset null
     ports: !reset []
 
   caddy:
