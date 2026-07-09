@@ -15,6 +15,7 @@ export interface Bond {
   last_price: number | null;
   face_value: number;
   lot_size: number;
+  duration_years: number | null;
   volume_rub: number | null;
   prev_volume_rub: number | null;
   credit_rating: string | null;
@@ -130,6 +131,8 @@ export interface PortfolioData {
   horizon_date: string;
   mode: string;
   api_trade_only?: boolean;
+  max_weighted_duration_years?: number | null;
+  target_duration_years?: number | null;
   account_id: string | null;
   account_kind: string | null;
   frozen_forecast: {
@@ -156,6 +159,7 @@ export interface Portfolio {
   closed_positions_count?: number;
   invested_capital_rub: number;
   api_trade_only?: boolean;
+  max_weighted_duration_years?: number | null;
   data: PortfolioData;
 }
 
@@ -167,6 +171,7 @@ export interface PlanResponse {
   final_cash_balance: number;
   final_portfolio_value: number;
   expected_xirr_pct: number | null;
+  weighted_duration_years: number | null;
   notes: string[];
   cashflow: Array<{
     date: string;
@@ -273,6 +278,7 @@ export interface TradingAdviceResponse {
   blocked_money_rub: number;
   warnings: string[];
   as_of: string;
+  weighted_duration_years: number | null;
 }
 
 export interface TradingStateResponse {

@@ -54,6 +54,18 @@ export const TRIGGER_LABELS: Record<string, string> = {
   coupon_cash: "Купонный кэш",
 };
 
+export const RATE_SCENARIO_LABELS: Record<string, string> = {
+  hold: "Без учёта дюрации",
+  cut: "Снижение ставки",
+  hike: "Рост ставки",
+};
+
+export const RATE_SCENARIO_HINTS: Record<string, string> = {
+  hold: "Дюрация не влияет на ранжирование и отбор бумаг.",
+  cut: "Приоритет более длинной дюрации: переоценка тела при снижении ставки.",
+  hike: "Приоритет короткой дюрации: меньше процентного риска при ужесточении.",
+};
+
 export const OPERATION_TYPE_LABELS: Record<string, string> = {
   buy: "Покупка",
   sell: "Продажа",

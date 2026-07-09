@@ -20,8 +20,15 @@ import type {
   TradingStateResponse,
 } from "./types";
 import { getAuthToken, notifyUnauthorized } from "@/features/auth/authStorage";
+import { getRateScenario } from "@/features/settings/durationPreferences";
 
 const BASE = "/api/v1";
+
+function withRateScenario(path: string): string {
+  const scenario = getRateScenario();
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}rate_scenario=${encodeURIComponent(scenario)}`;
+}
 
 export class ApiError extends Error {
   status: number;
@@ -84,7 +91,7 @@ export const api = {
   logout: () => request<{ status: string }>("/auth/logout", { method: "POST" }),
 
   getBonds: (filterBy = "effective") =>
-    request<BondsListResponse>(`/bonds/?filter_by=${filterBy}`),
+    request<BondsListResponse>(withRateScenario(`/bonds/?filter_by=${filterBy}`)),
   getBondsByIsins: (isins: string[]) =>
     request<BondsListResponse>(
       `/bonds/by-isins?isins=${encodeURIComponent(isins.join(","))}`,
@@ -108,6 +115,8 @@ export const api = {
     horizon_date: string;
     risk_profile: string;
     api_trade_only?: boolean;
+    max_weighted_duration_years?: number | null;
+    target_duration_years?: number | null;
   }) =>
     request<Portfolio>("/portfolios/", {
       method: "POST",
@@ -121,6 +130,8 @@ export const api = {
       horizon_date?: string;
       risk_profile?: string;
       api_trade_only?: boolean;
+      max_weighted_duration_years?: number | null;
+      target_duration_years?: number | null;
     },
   ) =>
     request<Portfolio>(`/portfolios/${id}`, {
@@ -130,7 +141,9 @@ export const api = {
   deletePortfolio: (id: string) =>
     request<void>(`/portfolios/${id}`, { method: "DELETE" }),
   autoCompose: (id: string) =>
-    request<Portfolio>(`/portfolios/${id}/auto-compose`, { method: "POST" }),
+    request<Portfolio>(withRateScenario(`/portfolios/${id}/auto-compose`), {
+      method: "POST",
+    }),
   clearPositions: (id: string) =>
     request<Portfolio>(`/portfolios/${id}/clear`, { method: "POST" }),
   addPosition: (id: string, body: { isin: string; lots: number }) =>
@@ -145,7 +158,7 @@ export const api = {
     sourcePositionIsin: string,
     confirmedIsin: string | null,
   ) =>
-    request<Portfolio>(`/portfolios/${id}/slots/override`, {
+    request<Portfolio>(withRateScenario(`/portfolios/${id}/slots/override`), {
       method: "POST",
       body: JSON.stringify({
         source_position_isin: sourcePositionIsin,
@@ -154,9 +167,9 @@ export const api = {
     }),
   resetAllSlotOverrides: (id: string) =>
     request<Portfolio>(`/portfolios/${id}/slots/reset-all`, { method: "POST" }),
-  getPlan: (id: string) => request<PlanResponse>(`/portfolios/${id}/plan`),
+  getPlan: (id: string) => request<PlanResponse>(withRateScenario(`/portfolios/${id}/plan`)),
   getTradingState: (id: string) =>
-    request<TradingStateResponse>(`/portfolios/${id}/trading-state`),
+    request<TradingStateResponse>(withRateScenario(`/portfolios/${id}/trading-state`)),
 
   getAccounts: (kind: "sandbox" | "production" = "sandbox") =>
     request<BrokerAccount[]>(`/accounts?kind=${kind}`),
@@ -197,7 +210,7 @@ export const api = {
   detachAccount: (id: string) =>
     request<Portfolio>(`/portfolios/${id}/detach`, { method: "POST" }),
   getAdvice: (id: string) =>
-    request<TradingAdviceResponse>(`/portfolios/${id}/advice`),
+    request<TradingAdviceResponse>(withRateScenario(`/portfolios/${id}/advice`)),
   sandboxPayIn: (id: string, body: { amount_rub: number }) =>
     request<SandboxPayInResponse>(`/portfolios/${id}/sandbox-pay-in`, {
       method: "POST",

@@ -9,7 +9,9 @@ from litestar.status_codes import HTTP_201_CREATED, HTTP_204_NO_CONTENT
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bond_monitor.application.bonds.bond_service import BondService
+from bond_monitor.domain.portfolio.policies import resolve_duration_policy
 from bond_monitor.infrastructure.persistence.favorites_repository import FavoritesRepository
+from bond_monitor.interfaces.api.duration_params import parse_rate_scenario
 from bond_monitor.interfaces.config import Settings
 from bond_monitor.interfaces.schemas.api import BondsListResponse
 from bond_monitor.interfaces.schemas.serializers import bond_to_response
@@ -42,8 +44,15 @@ class BondsController(Controller):
         bond_service: BondService,
         favorites_repo: FavoritesRepository,
         filter_by: str = "effective",
+        rate_scenario: str | None = None,
     ) -> BondsListResponse:
-        result = bond_service.load_screener_bonds(filter_by=filter_by)
+        duration_policy = resolve_duration_policy(
+            rate_scenario=parse_rate_scenario(rate_scenario),
+        )
+        result = bond_service.load_screener_bonds(
+            filter_by=filter_by,
+            duration_policy=duration_policy,
+        )
         favorite_isins = set(await favorites_repo.list_isins())
         bonds = []
         for b in result.bonds:

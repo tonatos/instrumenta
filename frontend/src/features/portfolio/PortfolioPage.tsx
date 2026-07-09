@@ -239,6 +239,10 @@ export function PortfolioPage() {
                             active.api_trade_only ??
                             active.data?.api_trade_only ??
                             true,
+                          max_weighted_duration_years:
+                            active.data?.max_weighted_duration_years != null
+                              ? String(active.data.max_weighted_duration_years)
+                              : "",
                         }}
                         onSubmit={updateMutation.mutate}
                         isPending={updateMutation.isPending}
@@ -363,7 +367,17 @@ export function PortfolioPage() {
               <Skeleton className="h-24" />
             </div>
           )}
-          {plan && <ForecastMetrics plan={plan} isTrading={isTrading} />}
+          {plan && (
+            <ForecastMetrics
+              plan={plan}
+              isTrading={isTrading}
+              weightedDurationYears={
+                isTrading
+                  ? tradingAdvice?.weighted_duration_years ?? plan.weighted_duration_years
+                  : plan.weighted_duration_years
+              }
+            />
+          )}
 
           {plan && plan.value_timeline.length > 0 && (
             <PortfolioValueChart

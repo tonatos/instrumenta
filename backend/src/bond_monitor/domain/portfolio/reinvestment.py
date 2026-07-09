@@ -23,6 +23,7 @@ from bond_monitor.domain.portfolio.policies import (
     BondSelectionContext,
 )
 from bond_monitor.domain.portfolio.put_offer import put_offer_buy_blocked
+from bond_monitor.domain.portfolio.policies import DEFAULT_DURATION_POLICY, DurationPolicy
 from bond_monitor.domain.portfolio.selection import (
     SelectionOptions,
     bond_eligibility_reason,
@@ -333,6 +334,7 @@ def select_replacement(
     tax_rate: float,
     api_trade_only: bool = False,
     selection_options: SelectionOptions | None = None,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> tuple[BondRecord | None, str]:
     """Подобрать бумагу-замену для слота реинвестиции.
 
@@ -351,6 +353,7 @@ def select_replacement(
         key_rate=key_rate,
         tax_rate=tax_rate,
         selection_options=selection_options,
+        duration_policy=duration_policy,
     )
 
 
@@ -382,6 +385,7 @@ def refresh_due_reinvest_slot_suggestions(
     today: date,
     key_rate: float,
     tax_rate: float,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> None:
     """Пересчитать ``suggested_isin`` для наступивших слотов без ручного override."""
     for slot in slots:
@@ -396,6 +400,7 @@ def refresh_due_reinvest_slot_suggestions(
             key_rate=key_rate,
             tax_rate=tax_rate,
             api_trade_only=portfolio.api_trade_only,
+            duration_policy=duration_policy,
         )
         if suggested is not None:
             slot.suggested_isin = suggested.isin

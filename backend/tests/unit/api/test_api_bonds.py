@@ -19,6 +19,15 @@ def test_list_bonds_accepts_filter_by_effective() -> None:
     assert "source" in body
 
 
+def test_list_bonds_accepts_rate_scenario_query() -> None:
+    with TestClient(app=create_app()) as client:
+        response = client.get("/api/v1/bonds/?filter_by=effective&rate_scenario=cut")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "bonds" in body
+
+
 def test_get_bond_not_found_returns_404() -> None:
     with TestClient(app=create_app()) as client:
         response = client.get("/api/v1/bonds/___nonexistent___")

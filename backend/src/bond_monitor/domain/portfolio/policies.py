@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from enum import StrEnum
 
 from bond_monitor.domain.portfolio.models import RiskProfile
 
@@ -51,6 +52,92 @@ class BondSelectionPolicy:
 
 
 DEFAULT_BOND_SELECTION_POLICY = BondSelectionPolicy()
+
+
+class RateScenario(StrEnum):
+    """Сценарий по ключевой ставке — влияет на предпочтение по дюрации.
+
+    * ``HOLD`` — ставка у пола / паузы: дюрация нейтральна (чистый carry).
+    * ``CUT`` — цикл снижения продолжается: длинная дюрация даёт переоценку
+      тела вверх, поэтому в ранжировании ей отдаётся приоритет.
+    * ``HIKE`` — риск ужесточения: приоритет короткой дюрации.
+    """
+
+    HOLD = "hold"
+    CUT = "cut"
+    HIKE = "hike"
+
+
+@dataclass(frozen=True)
+class DurationPolicy:
+    """Параметры учёта дюрации в отборе и ранжировании.
+
+    Дефолт — «noop»: ``duration_score_weight == 0`` и
+    ``max_weighted_duration_years is None`` не меняют текущее поведение
+    стратегии (обратная совместимость с существующими тестами).
+    """
+
+    # Гардрейл риск-контура: верхний предел дюрации бумаги в корзине (годы).
+    # Все включённые бумаги ≤ лимита → средневзвешенная корзины ≤ лимита.
+    max_weighted_duration_years: float | None = None
+    # Целевая дюрация под сценарий (годы). Зарезервировано для будущих
+    # итераций (мягкое притяжение к таргету); сейчас не влияет на скор.
+    target_duration_years: float | None = None
+    # Вес duration-компоненты в composite score под ``rate_scenario``.
+    # 0.0 = дюрация не влияет на ранжирование.
+    duration_score_weight: float = 0.0
+    rate_scenario: RateScenario = RateScenario.HOLD
+
+
+DEFAULT_DURATION_POLICY = DurationPolicy()
+
+_SCENARIO_DURATION_WEIGHT: dict[RateScenario, float] = {
+    RateScenario.HOLD: 0.0,
+    RateScenario.CUT: 0.20,
+    RateScenario.HIKE: 0.20,
+}
+
+_SCENARIO_DEFAULT_TARGET_YEARS: dict[RateScenario, float | None] = {
+    RateScenario.HOLD: None,
+    RateScenario.CUT: 2.0,
+    RateScenario.HIKE: 0.5,
+}
+
+
+def resolve_duration_policy(
+    *,
+    rate_scenario: RateScenario = RateScenario.HOLD,
+    max_weighted_duration_years: float | None = None,
+    target_duration_years: float | None = None,
+) -> DurationPolicy:
+    """Собрать ``DurationPolicy`` из глобального сценария и полей портфеля."""
+    weight = _SCENARIO_DURATION_WEIGHT[rate_scenario]
+    target = target_duration_years
+    if target is None:
+        target = _SCENARIO_DEFAULT_TARGET_YEARS[rate_scenario]
+    if rate_scenario == RateScenario.HOLD:
+        target = None
+    return DurationPolicy(
+        max_weighted_duration_years=max_weighted_duration_years,
+        target_duration_years=target,
+        duration_score_weight=weight,
+        rate_scenario=rate_scenario,
+    )
+
+
+def duration_policy_for_portfolio(
+    portfolio: object,
+    *,
+    rate_scenario: RateScenario = RateScenario.HOLD,
+) -> DurationPolicy:
+    """Собрать политику из query-сценария и сохранённых полей портфеля."""
+    max_years = getattr(portfolio, "max_weighted_duration_years", None)
+    target_years = getattr(portfolio, "target_duration_years", None)
+    return resolve_duration_policy(
+        rate_scenario=rate_scenario,
+        max_weighted_duration_years=max_years,
+        target_duration_years=target_years,
+    )
 
 
 @dataclass(frozen=True)

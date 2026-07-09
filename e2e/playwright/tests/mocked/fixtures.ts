@@ -43,6 +43,7 @@ export function makeEmptyPlan(overrides: Record<string, unknown> = {}) {
     final_cash_balance: 50_000,
     final_portfolio_value: 100_000,
     expected_xirr_pct: null,
+    weighted_duration_years: null,
     notes: [],
     cashflow: [],
     value_timeline: [],

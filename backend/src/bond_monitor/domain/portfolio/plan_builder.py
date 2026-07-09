@@ -19,6 +19,7 @@ from bond_monitor.domain.portfolio.coupon_schedule import (
     coupon_dates_in_range,
     coupon_payment_per_event,
 )
+from bond_monitor.domain.portfolio.duration_metrics import weighted_duration_by_purchase
 from bond_monitor.domain.portfolio.models import (
     Portfolio,
     PortfolioPosition,
@@ -47,6 +48,7 @@ from bond_monitor.domain.portfolio.put_offer import (
     put_offer_can_exercise,
     put_offer_submission_closed,
 )
+from bond_monitor.domain.portfolio.policies import DEFAULT_DURATION_POLICY, DurationPolicy
 from bond_monitor.domain.portfolio.reinvestment import (
     clear_slot_override,
     enrich_reinvestment_slot,
@@ -242,6 +244,7 @@ def build_plan(
     tax_rate: float,
     account_snapshot_money_rub: Rub | None = None,
     assume_best_put_outcome: bool = False,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> PortfolioPlan:
     """Построить полный timeline портфеля до ``horizon_date``.
 
@@ -408,6 +411,7 @@ def build_plan(
                 tax_rate=tax_rate,
                 api_trade_only=portfolio.api_trade_only,
                 selection_options=selection_options,
+                duration_policy=duration_policy,
             )
             if suggested:
                 if selection_note:
@@ -449,6 +453,7 @@ def build_plan(
                     tax_rate=tax_rate,
                     api_trade_only=portfolio.api_trade_only,
                     selection_options=selection_options,
+                    duration_policy=duration_policy,
                 )
                 if suggested:
                     slot.suggested_isin = suggested.isin
@@ -544,6 +549,7 @@ def build_plan(
             tax_rate=tax_rate,
             assume_best_put_outcome=assume_best_put_outcome,
             selection_options=selection_options,
+            duration_policy=duration_policy,
         )
 
     plan.resolved_slots = merge_reinvestment_slots(plan.resolved_slots)
@@ -814,6 +820,7 @@ def _maybe_add_coupon_cash_reinvestments(
     tax_rate: float,
     assume_best_put_outcome: bool = False,
     selection_options: SelectionOptions | None = None,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> None:
     """Дополнительный проход: реинвестируем накопленный купонный кэш.
 
@@ -860,6 +867,7 @@ def _maybe_add_coupon_cash_reinvestments(
             tax_rate=tax_rate,
             api_trade_only=portfolio.api_trade_only,
             selection_options=selection_options,
+            duration_policy=duration_policy,
         )
         if candidate is None:
             continue
@@ -1076,6 +1084,14 @@ def _finalize_plan_totals(
     weighted_initial = _weighted_ytm(open_positions(portfolio.positions), universe_by_isin)
     if weighted_initial is not None:
         plan.weighted_ytm_net_pct = round(weighted_initial, 2)
+
+    # Средневзвешенная дюрация ТЕКУЩИХ позиций — метрика процентного риска.
+    weighted_dur = weighted_duration_by_purchase(
+        open_positions(portfolio.positions),
+        universe_by_isin,
+    )
+    if weighted_dur is not None:
+        plan.weighted_duration_years = round(weighted_dur, 2)
 
     # YTM по ВСЕМ позициям плана (initial + phantom-ы от реинвест-цепочек):
     # ближе к «средней годовой доходности портфеля за горизонт».

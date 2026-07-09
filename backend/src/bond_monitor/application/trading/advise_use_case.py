@@ -13,6 +13,7 @@ from bond_monitor.application.trading.types import (
     TradingAdviceResult,
 )
 from bond_monitor.domain.bonds.models import BondRecord
+from bond_monitor.domain.portfolio.policies import DurationPolicy, duration_policy_for_portfolio
 from bond_monitor.domain.trading.advisory import advise
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import (
     broker_active_orders_from_infrastructure,
@@ -106,6 +107,7 @@ class AdviseUseCase:
         key_rate: float,
         tax_rate: float,
         today: date,
+        duration_policy: DurationPolicy | None = None,
     ) -> TradingAdviceResult:
         portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
         token = self._ctx.token(portfolio.account_kind)  # type: ignore[arg-type]
@@ -132,6 +134,7 @@ class AdviseUseCase:
             key_rate=key_rate,
             tax_rate=tax_rate,
             today=today,
+            duration_policy=duration_policy,
         )
 
     def build_advice_result(
@@ -145,8 +148,10 @@ class AdviseUseCase:
         key_rate: float,
         tax_rate: float,
         today: date,
+        duration_policy: DurationPolicy | None = None,
     ) -> TradingAdviceResult:
         broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
+        policy = duration_policy or duration_policy_for_portfolio(portfolio)
 
         advice = advise(
             portfolio,
@@ -157,6 +162,7 @@ class AdviseUseCase:
             key_rate=key_rate,
             tax_rate=tax_rate,
             today=today,
+            duration_policy=policy,
         )
 
         performance = None
@@ -185,6 +191,7 @@ class AdviseUseCase:
             blocked_money_rub=advice.blocked_money_rub,
             warnings=list(advice.warnings),
             as_of=advice.as_of,
+            weighted_duration_years=advice.weighted_duration_years,
         )
 
     async def get_performance(self, portfolio_id: str) -> dict | None:

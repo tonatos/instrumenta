@@ -22,6 +22,7 @@ import {
 import { api } from "@/api/client";
 import type { Bond } from "@/api/types";
 import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
+import { useRateScenario } from "@/features/settings/RateScenarioProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -88,6 +89,7 @@ export function ScreenerPage() {
     loadColumnVisibility,
   );
   const queryClient = useQueryClient();
+  const { rateScenario } = useRateScenario();
 
   const { data: config } = useQuery({
     queryKey: ["config"],
@@ -114,7 +116,7 @@ export function ScreenerPage() {
   }, [config]);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ["bonds", filterBy],
+    queryKey: ["bonds", filterBy, rateScenario],
     queryFn: () => api.getBonds(filterBy),
   });
 
@@ -231,6 +233,14 @@ export function ScreenerPage() {
       columnHelper.accessor("days_to_maturity", {
         header: "Дней",
         cell: (i) => i.getValue() ?? "—",
+      }),
+      columnHelper.accessor("duration_years", {
+        id: "duration_years",
+        header: "Дюрация",
+        cell: (i) => {
+          const v = i.getValue();
+          return v != null ? `${v.toFixed(1)} г` : "—";
+        },
       }),
       columnHelper.accessor("ytm_net", {
         header: "YTM нетто",

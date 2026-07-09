@@ -133,3 +133,4 @@ class TradingAdviceResult:
     blocked_money_rub: float
     warnings: list[str] = field(default_factory=list)
     as_of: str = ""
+    weighted_duration_years: float | None = None

@@ -12,11 +12,14 @@ from bond_monitor.domain.portfolio.cashflow import CashflowEvent, cashflow_event
 from bond_monitor.domain.portfolio.coupon_schedule import coupon_dates_in_range, coupon_payment_per_event
 from bond_monitor.domain.portfolio.models import Portfolio, PortfolioPosition, PositionSourceType, RiskProfile
 from bond_monitor.domain.portfolio.auto_compose import compose_buy_allocations
+from bond_monitor.domain.portfolio.duration_metrics import weighted_duration_by_market
 from bond_monitor.domain.portfolio.policies import (
     DEFAULT_BOND_SELECTION_POLICY,
+    DEFAULT_DURATION_POLICY,
     DEFAULT_PLANNING_POLICY,
     BondSelectionContext,
     BondSelectionPolicy,
+    DurationPolicy,
     PlanningPolicy,
 )
 from bond_monitor.domain.portfolio.position_factory import position_end_date, position_from_bond, sync_put_offer_from_bond
@@ -121,6 +124,7 @@ class TradingAdvice:
     blocked_money_rub: float = 0.0
     warnings: list[str] = field(default_factory=list)
     as_of: str = ""
+    weighted_duration_years: float | None = None
 
 
 def _universe_by_figi(universe: Sequence[BondRecord]) -> dict[str, BondRecord]:
@@ -342,6 +346,7 @@ def _buy_suggestions(
     today: date,
     key_rate: float,
     tax_rate: float,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> list[Suggestion]:
     if available_cash < _MIN_BUY_CASH_RUB:
         return []
@@ -362,6 +367,7 @@ def _buy_suggestions(
         tax_rate=tax_rate,
         api_trade_only=portfolio.api_trade_only,
         account_kind=portfolio.account_kind,
+        duration_policy=duration_policy,
     )
     if not allocations:
         return []
@@ -399,6 +405,7 @@ def _reinvest_suggestions(
     tax_rate: float,
     policy: BondSelectionPolicy,
     planning: PlanningPolicy,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> list[Suggestion]:
     suggestions: list[Suggestion] = []
     horizon = portfolio.horizon_date
@@ -426,6 +433,7 @@ def _reinvest_suggestions(
             policy,
             key_rate=key_rate,
             tax_rate=tax_rate,
+            duration_policy=duration_policy,
         )
         if not selection.bonds:
             continue
@@ -522,6 +530,7 @@ def advise(
     today: date | None = None,
     selection_policy: BondSelectionPolicy = DEFAULT_BOND_SELECTION_POLICY,
     planning_policy: PlanningPolicy = DEFAULT_PLANNING_POLICY,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> TradingAdvice:
     """Собрать консультативный ответ из брокерского state и рынка."""
     as_of_dt = datetime.now(UTC)
@@ -570,6 +579,7 @@ def advise(
         today=today,
         key_rate=key_rate,
         tax_rate=tax_rate,
+        duration_policy=duration_policy,
     )
     reinvest_suggestions = _reinvest_suggestions(
         portfolio,
@@ -580,10 +590,12 @@ def advise(
         tax_rate=tax_rate,
         policy=selection_policy,
         planning=planning_policy,
+        duration_policy=duration_policy,
     )
     put_offer_suggestions = _put_offer_reminder_suggestions(portfolio, positions, today=today)
     suggestions = buy_suggestions + reinvest_suggestions + put_offer_suggestions
     warnings = collect_account_warnings(snapshot, universe_by_isin, holdings)
+    weighted_dur = weighted_duration_by_market(holdings, universe_by_isin)
 
     return TradingAdvice(
         holdings=holdings,
@@ -596,6 +608,9 @@ def advise(
         blocked_money_rub=float(snapshot.blocked_money_rub),
         warnings=warnings,
         as_of=as_of_dt.isoformat(timespec="seconds"),
+        weighted_duration_years=(
+            round(weighted_dur, 2) if weighted_dur is not None else None
+        ),
     )
 
 

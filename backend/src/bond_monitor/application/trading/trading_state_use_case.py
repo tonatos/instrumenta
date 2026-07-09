@@ -11,6 +11,7 @@ from bond_monitor.application.trading.plan_from_broker import build_trading_plan
 from bond_monitor.application.trading.types import TradingAdviceResult
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.planner import PortfolioPlan
+from bond_monitor.domain.portfolio.policies import DurationPolicy
 from bond_monitor.application.trading import broker
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import (
     broker_active_orders_from_infrastructure,
@@ -39,6 +40,7 @@ class TradingStateUseCase:
         key_rate: float,
         tax_rate: float,
         today: date,
+        duration_policy: DurationPolicy | None = None,
     ) -> TradingStateResult:
         portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
         token = self._ctx.token(portfolio.account_kind)  # type: ignore[arg-type]
@@ -65,6 +67,7 @@ class TradingStateUseCase:
             key_rate=key_rate,
             tax_rate=tax_rate,
             today=today,
+            duration_policy=duration_policy,
         )
         advice = self._advise.build_advice_result(
             portfolio,
@@ -75,5 +78,6 @@ class TradingStateUseCase:
             key_rate=key_rate,
             tax_rate=tax_rate,
             today=today,
+            duration_policy=duration_policy,
         )
         return TradingStateResult(plan=plan, advice=advice)

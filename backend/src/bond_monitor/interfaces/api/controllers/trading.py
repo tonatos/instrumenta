@@ -9,14 +9,19 @@ from litestar import Controller, delete, get, post
 from litestar.di import Provide
 from litestar.exceptions import ClientException, NotFoundException
 from litestar.status_codes import HTTP_200_OK, HTTP_201_CREATED
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from bond_monitor.application.bonds.bond_service import BondService
+from bond_monitor.application.portfolio.portfolio_service import PortfolioService
 from bond_monitor.application.trading.trading_service import TradingService
 from bond_monitor.application.trading.types import TradingAdviceResult
+from bond_monitor.domain.portfolio.policies import duration_policy_for_portfolio
 from bond_monitor.domain.trading.models import AccountKind
-from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
 from bond_monitor.interfaces.api.controllers.bonds import provide_bond_service
+from bond_monitor.interfaces.api.duration_params import parse_rate_scenario
+from bond_monitor.interfaces.api.providers import (
+    provide_portfolio_service,
+    provide_trading_service,
+)
 from bond_monitor.interfaces.config import Settings
 from bond_monitor.interfaces.schemas.api import (
     AccountOperationsResponse,
@@ -48,17 +53,6 @@ from bond_monitor.interfaces.schemas.serializers import (
 )
 
 
-async def provide_trading_service(
-    db_session: AsyncSession,
-    settings: Settings,
-) -> TradingService:
-    return TradingService(
-        PortfolioRepository(db_session),
-        sandbox_token=settings.t_trading_token_sandbox,
-        production_token=settings.t_trading_token_production,
-    )
-
-
 def advice_to_response(result: TradingAdviceResult) -> TradingAdviceResponse:
     performance = None
     if result.performance is not None:
@@ -74,6 +68,7 @@ def advice_to_response(result: TradingAdviceResult) -> TradingAdviceResponse:
         blocked_money_rub=result.blocked_money_rub,
         warnings=result.warnings,
         as_of=result.as_of,
+        weighted_duration_years=result.weighted_duration_years,
     )
 
 
@@ -82,6 +77,7 @@ class TradingController(Controller):
     dependencies = {
         "trading_service": Provide(provide_trading_service),
         "bond_service": Provide(provide_bond_service),
+        "portfolio_service": Provide(provide_portfolio_service),
     }
 
     @get("/accounts")
@@ -223,9 +219,18 @@ class TradingController(Controller):
         self,
         portfolio_id: str,
         trading_service: TradingService,
+        portfolio_service: PortfolioService,
         bond_service: BondService,
         settings: Settings,
+        rate_scenario: str | None = None,
     ) -> TradingAdviceResponse:
+        portfolio = await portfolio_service.get_portfolio(portfolio_id)
+        if portfolio is None:
+            raise NotFoundException(detail="Portfolio not found")
+        duration_policy = duration_policy_for_portfolio(
+            portfolio,
+            rate_scenario=parse_rate_scenario(rate_scenario),
+        )
         universe = bond_service.load_universe().bonds
         try:
             result = await trading_service.get_advice(
@@ -234,6 +239,7 @@ class TradingController(Controller):
                 key_rate=settings.key_rate,
                 tax_rate=settings.tax_rate_fraction,
                 today=date.today(),
+                duration_policy=duration_policy,
             )
         except ValueError as exc:
             message = str(exc)
@@ -247,9 +253,18 @@ class TradingController(Controller):
         self,
         portfolio_id: str,
         trading_service: TradingService,
+        portfolio_service: PortfolioService,
         bond_service: BondService,
         settings: Settings,
+        rate_scenario: str | None = None,
     ) -> TradingStateResponse:
+        portfolio = await portfolio_service.get_portfolio(portfolio_id)
+        if portfolio is None:
+            raise NotFoundException(detail="Portfolio not found")
+        duration_policy = duration_policy_for_portfolio(
+            portfolio,
+            rate_scenario=parse_rate_scenario(rate_scenario),
+        )
         universe = bond_service.load_universe().bonds
         try:
             result = await trading_service.get_trading_state(
@@ -258,6 +273,7 @@ class TradingController(Controller):
                 key_rate=settings.key_rate,
                 tax_rate=settings.tax_rate_fraction,
                 today=date.today(),
+                duration_policy=duration_policy,
             )
         except ValueError as exc:
             message = str(exc)

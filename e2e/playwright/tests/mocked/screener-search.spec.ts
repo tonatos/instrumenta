@@ -29,6 +29,7 @@ function makeBond(
     last_price: 92.5,
     face_value: 1000,
     lot_size: 1,
+    duration_years: 1.6,
     volume_rub: 5_000_000,
     prev_volume_rub: 4_000_000,
     credit_rating: "AAA",
@@ -84,5 +85,15 @@ test.describe("Скринер — поиск", () => {
     await expect(page.getByRole("button", { name: "ОФЗ 26238" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Другая облигация" })).not.toBeVisible();
     await expect(page.getByText("1 бумаг")).toBeVisible();
+  });
+
+  test("в таблице показывается дюрация бумаги", async ({ page }) => {
+    await page.goto("/");
+    await expect(page.getByText("2 из 2")).toBeVisible({ timeout: 15_000 });
+
+    await expect(
+      page.getByRole("columnheader", { name: "Дюрация" }),
+    ).toBeVisible();
+    await expect(page.getByRole("cell", { name: "1.6 г" }).first()).toBeVisible();
   });
 });

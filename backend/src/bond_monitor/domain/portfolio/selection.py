@@ -11,8 +11,10 @@ from bond_monitor.domain.bonds.models import RATING_ORDER, BondRecord, RiskLevel
 from bond_monitor.domain.portfolio.models import Portfolio, RiskProfile
 from bond_monitor.domain.portfolio.policies import (
     DEFAULT_BOND_SELECTION_POLICY,
+    DEFAULT_DURATION_POLICY,
     BondSelectionContext,
     BondSelectionPolicy,
+    DurationPolicy,
 )
 from bond_monitor.domain.screening.scorer import score_bonds_for_profile
 from bond_monitor.domain.shared.formatting import format_date
@@ -229,6 +231,7 @@ def rank_bonds(
     *,
     key_rate: float,
     tax_rate: float,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> list[BondRecord]:
     """Rank bonds using portfolio profile scoring weights."""
     return score_bonds_for_profile(
@@ -236,6 +239,7 @@ def rank_bonds(
         profile,
         key_rate=key_rate,
         tax_rate=tax_rate,
+        duration_policy=duration_policy,
     )
 
 
@@ -334,6 +338,7 @@ def _ranked_cache_key(
     *,
     key_rate: float,
     tax_rate: float,
+    duration_policy: DurationPolicy,
 ) -> tuple[object, ...]:
     budget = None if ctx.budget_rub is None else round(ctx.budget_rub)
     return (
@@ -344,6 +349,7 @@ def _ranked_cache_key(
         ctx.api_trade_only,
         key_rate,
         tax_rate,
+        duration_policy,
     )
 
 
@@ -354,6 +360,7 @@ def select_ranked_bonds(
     *,
     key_rate: float,
     tax_rate: float,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
     selection_options: SelectionOptions | None = None,
 ) -> BondSelectionResult:
     """Main entry: profile fallback chain, then rank by portfolio profile."""
@@ -361,8 +368,10 @@ def select_ranked_bonds(
     if min_maturity_date > ctx.horizon_date:
         return BondSelectionResult([], "", None)
 
+    cache_key = _ranked_cache_key(
+        ctx, key_rate=key_rate, tax_rate=tax_rate, duration_policy=duration_policy
+    )
     if selection_options is not None:
-        cache_key = _ranked_cache_key(ctx, key_rate=key_rate, tax_rate=tax_rate)
         cached = selection_options.ranked_cache.get(cache_key)
         if cached is not None:
             return cached
@@ -382,20 +391,19 @@ def select_ranked_bonds(
             ctx.profile,
             key_rate=key_rate,
             tax_rate=tax_rate,
+            duration_policy=duration_policy,
         )
         if not ranked:
             continue
         note = _fallback_note(ctx, requested_step=ctx.profile, effective_step=step)
         result = BondSelectionResult(ranked, note, step)
         if selection_options is not None:
-            selection_options.ranked_cache[_ranked_cache_key(ctx, key_rate=key_rate, tax_rate=tax_rate)] = (
-                result
-            )
+            selection_options.ranked_cache[cache_key] = result
         return result
 
     empty = BondSelectionResult([], "", None)
     if selection_options is not None:
-        selection_options.ranked_cache[_ranked_cache_key(ctx, key_rate=key_rate, tax_rate=tax_rate)] = empty
+        selection_options.ranked_cache[cache_key] = empty
     return empty
 
 
@@ -406,6 +414,7 @@ def select_best_bond(
     *,
     key_rate: float,
     tax_rate: float,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
     selection_options: SelectionOptions | None = None,
 ) -> tuple[BondRecord | None, str]:
     """Pick top-ranked bond; second value is note or failure reason."""
@@ -418,6 +427,7 @@ def select_best_bond(
         policy,
         key_rate=key_rate,
         tax_rate=tax_rate,
+        duration_policy=duration_policy,
         selection_options=selection_options,
     )
     if result.bonds:

@@ -343,6 +343,10 @@ class Portfolio:
     # Если True (по умолчанию) — в автосборе и реинвесте только бумаги
     # с ``api_trade_available_flag`` из T-Invest (торгуемые через API).
     api_trade_only: bool = True
+    # Гардрейл процентного риска: верхний предел средневзв. дюрации корзины (годы).
+    max_weighted_duration_years: float | None = None
+    # Override целевой дюрации под сценарий по ставке (годы); None — дефолт сценария.
+    target_duration_years: float | None = None
     id: str = field(default_factory=_new_portfolio_id)
     created_at: str = field(default_factory=_utc_now_iso)
     updated_at: str = field(default_factory=_utc_now_iso)
@@ -378,6 +382,8 @@ class Portfolio:
             "horizon_date": self.horizon_date.isoformat(),
             "risk_profile": self.risk_profile.value,
             "api_trade_only": self.api_trade_only,
+            "max_weighted_duration_years": self.max_weighted_duration_years,
+            "target_duration_years": self.target_duration_years,
             "cash_balance_rub": self.cash_balance_rub,
             "mode": self.mode.value,
             "account_id": self.account_id,
@@ -405,6 +411,16 @@ class Portfolio:
             horizon_date=date.fromisoformat(str(data["horizon_date"])),
             risk_profile=RiskProfile(data.get("risk_profile", RiskProfile.NORMAL.value)),
             api_trade_only=bool(data.get("api_trade_only", True)),
+            max_weighted_duration_years=(
+                float(data["max_weighted_duration_years"])
+                if data.get("max_weighted_duration_years") is not None
+                else None
+            ),
+            target_duration_years=(
+                float(data["target_duration_years"])
+                if data.get("target_duration_years") is not None
+                else None
+            ),
             cash_balance_rub=float(data.get("cash_balance_rub", 0.0)),
             mode=PortfolioMode(data.get("mode", PortfolioMode.SIMULATION.value)),
             account_id=(str(data["account_id"]) if data.get("account_id") else None),

@@ -8,11 +8,6 @@ from datetime import date
 
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import PortfolioPosition, RiskProfile
-from bond_monitor.domain.trading.models import AccountKind
-from bond_monitor.domain.trading.policies import (
-    buy_limit_price_buffer,
-    suggested_buy_limit_price_pct,
-)
 from bond_monitor.domain.portfolio.plan_models import (
     MAX_AUTO_POSITIONS,
     MAX_POSITION_SHARE,
@@ -21,9 +16,42 @@ from bond_monitor.domain.portfolio.plan_models import (
     MIN_POSITION_SHARE,
     TARGET_POSITION_SHARE,
 )
+from bond_monitor.domain.portfolio.policies import (
+    DEFAULT_DURATION_POLICY,
+    DurationPolicy,
+)
 from bond_monitor.domain.portfolio.position_factory import position_from_bond
 from bond_monitor.domain.portfolio.reinvestment import selection_context
 from bond_monitor.domain.portfolio.selection import select_ranked_bonds
+from bond_monitor.domain.trading.models import AccountKind
+from bond_monitor.domain.trading.policies import (
+    buy_limit_price_buffer,
+    suggested_buy_limit_price_pct,
+)
+
+
+def _apply_duration_guardrail(
+    bonds: list[BondRecord],
+    duration_policy: DurationPolicy,
+    notes: list[str],
+) -> list[BondRecord]:
+    """Отсечь бумаги длиннее лимита дюрации (риск-контур).
+
+    Если каждая включённая бумага ≤ ``max_weighted_duration_years``, то и
+    средневзвешенная дюрация корзины ≤ лимита — достаточное условие без
+    пост-фактум пересборки. Бумаги без данных о дюрации не отсекаются.
+    """
+    limit = duration_policy.max_weighted_duration_years
+    if limit is None:
+        return bonds
+    kept = [b for b in bonds if b.duration_years is None or b.duration_years <= limit]
+    dropped = len(bonds) - len(kept)
+    if dropped > 0:
+        notes.append(
+            f"Гардрейл по дюрации: исключено {dropped} бумаг(и) с дюрацией "
+            f"> {limit:.1f} г."
+        )
+    return kept
 
 
 def auto_compose(
@@ -36,6 +64,7 @@ def auto_compose(
     key_rate: float,
     tax_rate: float,
     api_trade_only: bool = True,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> tuple[list[PortfolioPosition], float, list[str]]:
     """Сформировать стартовый набор позиций под выбранный профиль и бюджет.
 
@@ -82,8 +111,9 @@ def auto_compose(
         selection_ctx,
         key_rate=key_rate,
         tax_rate=tax_rate,
+        duration_policy=duration_policy,
     )
-    scored = selection.bonds
+    scored = _apply_duration_guardrail(selection.bonds, duration_policy, notes)
     if not scored:
         notes.append(
             "Под выбранный профиль и горизонт не нашлось ни одной подходящей бумаги. "
@@ -259,6 +289,7 @@ def _top_scored_existing_bonds(
     key_rate: float,
     tax_rate: float,
     api_trade_only: bool,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> list[BondRecord]:
     """Топ ``MAX_AUTO_POSITIONS`` держимых бумаг по скорингу."""
     selection_ctx = selection_context(
@@ -272,6 +303,7 @@ def _top_scored_existing_bonds(
         selection_ctx,
         key_rate=key_rate,
         tax_rate=tax_rate,
+        duration_policy=duration_policy,
     ).bonds
     result: list[BondRecord] = []
     for bond in scored:
@@ -296,6 +328,7 @@ def compose_buy_allocations(
     tax_rate: float,
     api_trade_only: bool,
     account_kind: AccountKind | None,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> tuple[list[BuyAllocation], list[str]]:
     """Развернуть доступный кэш по целевой структуре ``auto_compose``.
 
@@ -321,6 +354,7 @@ def compose_buy_allocations(
             key_rate=key_rate,
             tax_rate=tax_rate,
             api_trade_only=api_trade_only,
+            duration_policy=duration_policy,
         )
         notes.append("Лимит 10 позиций — докупаем только существующие бумаги.")
     else:
@@ -335,6 +369,7 @@ def compose_buy_allocations(
         key_rate=key_rate,
         tax_rate=tax_rate,
         api_trade_only=api_trade_only,
+        duration_policy=duration_policy,
     )
     notes.extend(compose_notes)
     if not target_positions:

@@ -13,9 +13,12 @@ from bond_monitor.interfaces.api.controllers.portfolio import (
     ConfigController,
     HealthController,
     PortfoliosController,
-    provide_portfolio_service,
 )
-from bond_monitor.interfaces.api.controllers.trading import TradingController, provide_trading_service
+from bond_monitor.interfaces.api.controllers.trading import TradingController
+from bond_monitor.interfaces.api.providers import (
+    provide_portfolio_service,
+    provide_trading_service,
+)
 
 __all__ = [
     "AuthController",

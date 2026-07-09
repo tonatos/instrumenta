@@ -135,6 +135,30 @@ class BondRecord:
             return self.prev_volume_rub
         return self.volume_rub or 0.0
 
+    @property
+    def duration_years(self) -> float | None:
+        """Дюрация Маколея в годах.
+
+        Приоритет — значение MOEX (``duration_days``). Если его нет, берём
+        срок до погашения как грубую прокси (для короткого carry дюрация ≈
+        сроку). Флаг ``duration_is_proxy`` помечает такой случай, чтобы не
+        путать прокси с настоящей дюрацией MOEX.
+        """
+        if self.duration_days is not None:
+            return self.duration_days / 365.0
+        if self.days_to_maturity is not None and self.days_to_maturity > 0:
+            return self.days_to_maturity / 365.0
+        return None
+
+    @property
+    def duration_is_proxy(self) -> bool:
+        """``True`` если ``duration_years`` посчитана из срока, а не из MOEX."""
+        return (
+            self.duration_days is None
+            and self.days_to_maturity is not None
+            and self.days_to_maturity > 0
+        )
+
     # --- Risk flags (from T-Invest API) ---
     amortization_flag: bool = False
     floating_coupon_flag: bool = False

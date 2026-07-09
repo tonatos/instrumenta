@@ -61,6 +61,22 @@ export function PortfolioForm({
           <option value="aggressive">Агрессивный</option>
         </select>
       </label>
+      <label className="space-y-1.5 text-sm sm:col-span-2">
+        <span className="font-medium text-muted-foreground">Макс. дюрация, лет</span>
+        <Input
+          type="number"
+          min={0}
+          step={0.5}
+          placeholder="Без лимита"
+          value={form.max_weighted_duration_years}
+          onChange={(e) =>
+            setForm({ ...form, max_weighted_duration_years: e.target.value })
+          }
+        />
+        <span className="block text-xs text-muted-foreground">
+          Гардрейл процентного риска в автосборе и реинвесте. Пусто — без ограничения.
+        </span>
+      </label>
       <label className="flex cursor-pointer items-start gap-2 text-sm sm:col-span-2">
         <input
           type="checkbox"

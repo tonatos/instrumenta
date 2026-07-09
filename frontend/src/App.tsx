@@ -10,6 +10,7 @@ import { AuthProvider } from "@/features/auth/AuthContext";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { LoginCallbackPage } from "@/features/auth/LoginCallbackPage";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
+import { RateScenarioProvider } from "@/features/settings/RateScenarioProvider";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,7 +22,8 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AuthProvider>
+        <RateScenarioProvider>
+          <AuthProvider>
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
@@ -38,6 +40,7 @@ export function App() {
             </Routes>
           </BrowserRouter>
         </AuthProvider>
+        </RateScenarioProvider>
       </ThemeProvider>
     </QueryClientProvider>
   );

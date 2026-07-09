@@ -49,6 +49,7 @@ class BondResponse(BaseModel):
     last_price: float | None = None
     face_value: float = 1000.0
     lot_size: int = 1
+    duration_years: float | None = None
     volume_rub: float | None = None
     prev_volume_rub: float | None = None
     credit_rating: str | None = None
@@ -79,6 +80,8 @@ class CreatePortfolioRequest(BaseModel):
     horizon_date: date
     risk_profile: str = "normal"
     api_trade_only: bool = True
+    max_weighted_duration_years: float | None = None
+    target_duration_years: float | None = None
 
 
 class PortfolioPositionData(BaseModel):
@@ -135,6 +138,8 @@ class PortfolioDataResponse(BaseModel):
     horizon_date: str
     risk_profile: str
     api_trade_only: bool = True
+    max_weighted_duration_years: float | None = None
+    target_duration_years: float | None = None
     cash_balance_rub: float
     mode: str
     account_id: str | None = None
@@ -171,6 +176,7 @@ class PlanResponse(BaseModel):
     final_cash_balance: float
     final_portfolio_value: float
     expected_xirr_pct: float | None = None
+    weighted_duration_years: float | None = None
     notes: list[str] = Field(default_factory=list)
     cashflow: list[dict[str, Any]] = Field(default_factory=list)
     value_timeline: list[dict[str, Any]] = Field(default_factory=list)
@@ -184,6 +190,8 @@ class UpdatePortfolioRequest(BaseModel):
     horizon_date: date | None = None
     risk_profile: str | None = None
     api_trade_only: bool | None = None
+    max_weighted_duration_years: float | None = None
+    target_duration_years: float | None = None
 
 
 class AddPositionRequest(BaseModel):
@@ -284,6 +292,7 @@ class TradingAdviceResponse(BaseModel):
     blocked_money_rub: float = 0.0
     warnings: list[str] = Field(default_factory=list)
     as_of: str = ""
+    weighted_duration_years: float | None = None
 
 
 class TradingStateResponse(BaseModel):

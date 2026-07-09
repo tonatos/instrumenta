@@ -42,6 +42,7 @@ def bond_to_response(bond: BondRecord) -> BondResponse:
         last_price=bond.last_price,
         face_value=bond.face_value,
         lot_size=bond.lot_size,
+        duration_years=bond.duration_years,
         volume_rub=bond.volume_rub,
         prev_volume_rub=bond.prev_volume_rub,
         credit_rating=bond.credit_rating,
@@ -99,6 +100,7 @@ def plan_to_response(plan: PortfolioPlan) -> PlanResponse:
         final_cash_balance=plan.final_cash_balance_rub,
         final_portfolio_value=plan.final_portfolio_value_rub,
         expected_xirr_pct=plan.effective_annual_return_pct,
+        weighted_duration_years=plan.weighted_duration_years,
         notes=list(plan.notes),
         cashflow=[
             {

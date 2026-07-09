@@ -1,8 +1,12 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip } from "@/components/ui/tooltip";
+import { RATE_SCENARIO_HINTS, RATE_SCENARIO_LABELS } from "@/features/portfolio/labels";
+import { useRateScenario } from "@/features/settings/RateScenarioProvider";
+import type { RateScenario } from "@/features/settings/durationPreferences";
 import { formatRub } from "@/lib/utils";
 
 interface SettingsSheetProps {
@@ -10,12 +14,23 @@ interface SettingsSheetProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const SCENARIOS: RateScenario[] = ["hold", "cut", "hike"];
+
 export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
+  const queryClient = useQueryClient();
+  const { rateScenario, setRateScenario } = useRateScenario();
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["config"],
     queryFn: api.getConfig,
     enabled: open,
   });
+
+  const handleScenarioChange = (value: RateScenario) => {
+    setRateScenario(value);
+    void queryClient.invalidateQueries({ queryKey: ["bonds"] });
+    void queryClient.invalidateQueries({ queryKey: ["plan"] });
+    void queryClient.invalidateQueries({ queryKey: ["trading-state"] });
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -24,6 +39,32 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
           <SheetTitle>Настройки</SheetTitle>
         </SheetHeader>
         <div className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Сценарий по ключевой ставке</p>
+            <p className="text-xs text-muted-foreground">
+              Влияет на ранжирование в скринере и подбор бумаг в портфеле. Сохраняется локально в браузере.
+            </p>
+            <select
+              aria-label="Сценарий по ключевой ставке"
+              className="flex h-9 w-full rounded-md border border-border bg-card px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              value={rateScenario}
+              onChange={(e) => handleScenarioChange(e.target.value as RateScenario)}
+            >
+              {SCENARIOS.map((scenario) => (
+                <option key={scenario} value={scenario}>
+                  {RATE_SCENARIO_LABELS[scenario]}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              <Tooltip content={RATE_SCENARIO_HINTS[rateScenario]}>
+                <span className="cursor-help underline decoration-dotted underline-offset-2">
+                  {RATE_SCENARIO_HINTS[rateScenario]}
+                </span>
+              </Tooltip>
+            </p>
+          </div>
+
           {isLoading && <Skeleton className="h-32 w-full" />}
           {data && (
             <dl className="space-y-3 text-sm">

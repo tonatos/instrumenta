@@ -9,6 +9,11 @@ from statistics import quantiles
 
 from bond_monitor.domain.bonds.models import RATING_ORDER, BondRecord, CouponType, RiskLevel
 from bond_monitor.domain.portfolio.models import RiskProfile
+from bond_monitor.domain.portfolio.policies import (
+    DEFAULT_DURATION_POLICY,
+    DurationPolicy,
+    RateScenario,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -363,12 +368,105 @@ _PROFILE_WEIGHTS: dict[RiskProfile, tuple[float, float, float]] = {
 }
 
 
+def calc_duration_adjustment(
+    duration_years: float | None,
+    *,
+    scale_years: float,
+    scenario: RateScenario,
+    weight: float,
+) -> float:
+    """Прибавка к composite score за дюрацию под сценарий по ставке.
+
+    * ``CUT`` — длинной дюрации выше бонус (переоценка тела при снижении).
+    * ``HIKE`` — короткой дюрации выше бонус (защита при ужесточении).
+    * ``HOLD`` / ``weight == 0`` / нет данных — нейтрально (0).
+
+    Величина ограничена ``weight × 100`` и нормирована на разброс дюраций
+    в универсе (``scale_years`` — максимум дюрации), поэтому влияет только
+    на относительный порядок, а не на абсолютную шкалу 0..100.
+    """
+    if weight <= 0 or scenario == RateScenario.HOLD:
+        return 0.0
+    if duration_years is None or scale_years <= 0:
+        return 0.0
+    norm = min(1.0, max(0.0, duration_years / scale_years))
+    factor = norm if scenario == RateScenario.CUT else 1.0 - norm
+    return factor * weight * 100.0
+
+
+def calc_target_duration_adjustment(
+    duration_years: float | None,
+    *,
+    target_years: float | None,
+    scale_years: float,
+    weight: float,
+) -> float:
+    """Мягкий бонус за близость дюрации бумаги к целевой (soft-pull)."""
+    if weight <= 0 or target_years is None:
+        return 0.0
+    if duration_years is None or scale_years <= 0:
+        return 0.0
+    distance = abs(duration_years - target_years) / scale_years
+    closeness = max(0.0, 1.0 - distance)
+    return closeness * weight * 50.0
+
+
+def _duration_scale_years(bonds: Sequence[BondRecord]) -> float:
+    duration_values = [d for b in bonds if (d := b.duration_years) is not None]
+    return max(duration_values) if duration_values else 0.0
+
+
+def _apply_duration_score_adjustments(
+    bond: BondRecord,
+    *,
+    duration_scale: float,
+    duration_policy: DurationPolicy,
+) -> None:
+    weight = duration_policy.duration_score_weight
+    bond.score = (bond.score or 0.0) + calc_duration_adjustment(
+        bond.duration_years,
+        scale_years=duration_scale,
+        scenario=duration_policy.rate_scenario,
+        weight=weight,
+    )
+    bond.score += calc_target_duration_adjustment(
+        bond.duration_years,
+        target_years=duration_policy.target_duration_years,
+        scale_years=duration_scale,
+        weight=weight,
+    )
+
+
+def apply_duration_scoring(
+    bonds: Sequence[BondRecord],
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
+) -> list[BondRecord]:
+    """Пересчитать duration-компоненту score и пересортировать (для скринера)."""
+    if (
+        duration_policy.rate_scenario == RateScenario.HOLD
+        and duration_policy.duration_score_weight <= 0
+        and duration_policy.target_duration_years is None
+    ):
+        return list(bonds)
+    duration_scale = _duration_scale_years(bonds)
+    result = list(bonds)
+    for bond in result:
+        _apply_duration_score_adjustments(
+            bond,
+            duration_scale=duration_scale,
+            duration_policy=duration_policy,
+        )
+    result.sort(key=lambda b: b.score or 0.0, reverse=True)
+    return result
+
+
 def score_bonds_for_profile(
     bonds: Sequence[BondRecord],
     profile: RiskProfile,
     *,
     key_rate: float = KEY_RATE_DEFAULT,
     tax_rate: float = TAX_RATE_DEFAULT,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> list[BondRecord]:
     """Аналог :func:`score_bonds`, но с весами под выбранный риск-профиль.
 
@@ -401,6 +499,8 @@ def score_bonds_for_profile(
         scale_ytm_net = risk_free_net
     max_spread = max(scale_ytm_net - risk_free_net, 0.0)
 
+    duration_scale = _duration_scale_years(bonds)
+
     result: list[BondRecord] = []
     for bond in bonds:
         scoring_ytm = _scoring_ytm_net(bond, risk_free_net, after_tax_multiplier)
@@ -420,6 +520,11 @@ def score_bonds_for_profile(
                 - calc_aggressive_boredom_penalty(boredom_ytm, risk_free_net)
                 - calc_aggressive_junk_penalty(bond, boredom_ytm, risk_free_net),
             )
+        _apply_duration_score_adjustments(
+            bond,
+            duration_scale=duration_scale,
+            duration_policy=duration_policy,
+        )
         result.append(bond)
 
     result.sort(key=lambda b: b.score or 0.0, reverse=True)

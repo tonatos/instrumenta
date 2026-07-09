@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from bond_monitor.domain.bonds.models import BondRecord
-from bond_monitor.domain.screening.scorer import score_bonds
+from bond_monitor.domain.portfolio.policies import DEFAULT_DURATION_POLICY, DurationPolicy, RateScenario
+from bond_monitor.domain.screening.scorer import apply_duration_scoring, score_bonds
 from bond_monitor.infrastructure.bonds.universe_cache import (
     BondCacheKey,
     get as get_cached_bonds,
@@ -92,20 +93,35 @@ class BondService:
         bonds = score_bonds(bonds, key_rate=self._key_rate, tax_rate=self._tax_rate)
         return bonds, source
 
-    def load_screener_bonds(self, *, filter_by: str = "effective") -> BondLoadResult:
+    def load_screener_bonds(
+        self,
+        *,
+        filter_by: str = "effective",
+        duration_policy: DurationPolicy | None = None,
+    ) -> BondLoadResult:
         cache_key = self._cache_key("screener", filter_by=filter_by)
         cached = get_cached_bonds(cache_key)
         if cached is not None:
             bonds, source = cached
-            return BondLoadResult(bonds=bonds, source=source)
+        else:
+            bonds = fetch_all_bonds(
+                max_days=self._max_days,
+                min_volume_rub=self._min_volume_rub,
+                filter_by=filter_by,
+            )
+            bonds, source = self._enrich_and_score(bonds)
+            put_cached_bonds(cache_key, bonds, source)
 
-        bonds = fetch_all_bonds(
-            max_days=self._max_days,
-            min_volume_rub=self._min_volume_rub,
-            filter_by=filter_by,
-        )
-        bonds, source = self._enrich_and_score(bonds)
-        put_cached_bonds(cache_key, bonds, source)
+        policy = duration_policy or DEFAULT_DURATION_POLICY
+        if (
+            policy.rate_scenario != RateScenario.HOLD
+            or policy.duration_score_weight > 0
+            or policy.target_duration_years is not None
+        ):
+            bonds = apply_duration_scoring(
+                [replace(b) for b in bonds],
+                policy,
+            )
         return BondLoadResult(bonds=bonds, source=source)
 
     def load_universe(self) -> BondLoadResult:

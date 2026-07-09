@@ -4,12 +4,14 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "@/api/client";
 import type { Bond, PortfolioPosition } from "@/api/types";
 import { STALE } from "@/features/portfolio/hooks/queryConfig";
+import { useRateScenario } from "@/features/settings/RateScenarioProvider";
 import { portfolioPath } from "@/features/portfolio/utils";
 
 export function usePortfolioQueries() {
   const navigate = useNavigate();
   const { portfolioId: urlPortfolioId } = useParams();
   const [searchParams] = useSearchParams();
+  const { rateScenario } = useRateScenario();
 
   const { data: portfolios, isLoading } = useQuery({
     queryKey: ["portfolios"],
@@ -61,7 +63,7 @@ export function usePortfolioQueries() {
   });
 
   const { data: bonds } = useQuery({
-    queryKey: ["bonds"],
+    queryKey: ["bonds", rateScenario],
     queryFn: () => api.getBonds(),
     staleTime: STALE.bonds,
     refetchOnWindowFocus: false,
@@ -77,7 +79,7 @@ export function usePortfolioQueries() {
     isLoading: simulationPlanLoading,
     refetch: refetchSimulationPlan,
   } = useQuery({
-    queryKey: ["plan", activeId],
+    queryKey: ["plan", activeId, rateScenario],
     queryFn: () => api.getPlan(activeId!),
     enabled: !!activeId && portfolioReady && !isTrading,
     staleTime: STALE.plan,
@@ -89,7 +91,7 @@ export function usePortfolioQueries() {
     isLoading: tradingStateLoading,
     refetch: refetchTradingState,
   } = useQuery({
-    queryKey: ["trading-state", activeId],
+    queryKey: ["trading-state", activeId, rateScenario],
     queryFn: () => api.getTradingState(activeId!),
     enabled: !!activeId && portfolioReady && tradingEnabled,
     staleTime: STALE.tradingSync,

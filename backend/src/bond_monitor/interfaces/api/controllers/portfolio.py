@@ -8,17 +8,20 @@ from litestar import Controller, delete, get, patch, post
 from litestar.di import Provide
 from litestar.exceptions import ClientException, NotFoundException
 from litestar.status_codes import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from bond_monitor.application.bonds.bond_service import BondService
 from bond_monitor.application.portfolio.errors import SlotOverrideValidationError
 from bond_monitor.application.portfolio.portfolio_service import PortfolioService
 from bond_monitor.application.trading.trading_service import TradingService
-from bond_monitor.interfaces.api.controllers.trading import provide_trading_service
+from bond_monitor.interfaces.api.providers import (
+    provide_portfolio_service,
+    provide_trading_service,
+)
 from bond_monitor.domain.portfolio.calculator import calculate_portfolio_budget
 from bond_monitor.domain.portfolio.models import RiskProfile
-from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
+from bond_monitor.domain.portfolio.policies import duration_policy_for_portfolio
 from bond_monitor.interfaces.api.controllers.bonds import provide_bond_service
+from bond_monitor.interfaces.api.duration_params import parse_rate_scenario
 from bond_monitor.interfaces.config import Settings
 from bond_monitor.interfaces.schemas.api import (
     AddPositionRequest,
@@ -32,10 +35,6 @@ from bond_monitor.interfaces.schemas.api import (
     UpdatePortfolioRequest,
 )
 from bond_monitor.interfaces.schemas.serializers import plan_to_response, portfolio_to_response
-
-
-async def provide_portfolio_service(db_session: AsyncSession) -> PortfolioService:
-    return PortfolioService(PortfolioRepository(db_session))
 
 
 class HealthController(Controller):
@@ -89,6 +88,8 @@ class PortfoliosController(Controller):
             horizon_date=data.horizon_date,
             risk_profile=RiskProfile(data.risk_profile),
             api_trade_only=data.api_trade_only,
+            max_weighted_duration_years=data.max_weighted_duration_years,
+            target_duration_years=data.target_duration_years,
         )
         return portfolio_to_response(portfolio)
 
@@ -120,14 +121,22 @@ class PortfoliosController(Controller):
         portfolio_service: PortfolioService,
     ) -> PortfolioResponse:
         risk_profile = RiskProfile(data.risk_profile) if data.risk_profile else None
+        update_kwargs: dict = {
+            "name": data.name,
+            "initial_amount_rub": data.initial_amount_rub,
+            "horizon_date": data.horizon_date,
+            "risk_profile": risk_profile,
+            "api_trade_only": data.api_trade_only,
+        }
+        fields_set = data.model_fields_set
+        if "max_weighted_duration_years" in fields_set:
+            update_kwargs["max_weighted_duration_years"] = data.max_weighted_duration_years
+        if "target_duration_years" in fields_set:
+            update_kwargs["target_duration_years"] = data.target_duration_years
         try:
             portfolio = await portfolio_service.update_portfolio_fields(
                 portfolio_id,
-                name=data.name,
-                initial_amount_rub=data.initial_amount_rub,
-                horizon_date=data.horizon_date,
-                risk_profile=risk_profile,
-                api_trade_only=data.api_trade_only,
+                **update_kwargs,
             )
         except ValueError:
             raise NotFoundException(detail="Portfolio not found")
@@ -193,8 +202,16 @@ class PortfoliosController(Controller):
         portfolio_service: PortfolioService,
         bond_service: BondService,
         settings: Settings,
+        rate_scenario: str | None = None,
     ) -> PortfolioResponse:
         universe = bond_service.load_universe().bonds
+        portfolio = await portfolio_service.get_portfolio(portfolio_id)
+        if portfolio is None:
+            raise NotFoundException(detail="Portfolio not found")
+        duration_policy = duration_policy_for_portfolio(
+            portfolio,
+            rate_scenario=parse_rate_scenario(rate_scenario),
+        )
         try:
             portfolio = await portfolio_service.set_slot_override(
                 portfolio_id,
@@ -204,6 +221,7 @@ class PortfoliosController(Controller):
                 key_rate=settings.key_rate,
                 tax_rate=settings.tax_rate_fraction,
                 today=date.today(),
+                duration_policy=duration_policy,
             )
         except SlotOverrideValidationError as exc:
             raise ClientException(
@@ -234,7 +252,15 @@ class PortfoliosController(Controller):
         portfolio_service: PortfolioService,
         bond_service: BondService,
         settings: Settings,
+        rate_scenario: str | None = None,
     ) -> PortfolioResponse:
+        portfolio = await portfolio_service.get_portfolio(portfolio_id)
+        if portfolio is None:
+            raise NotFoundException(detail="Portfolio not found")
+        duration_policy = duration_policy_for_portfolio(
+            portfolio,
+            rate_scenario=parse_rate_scenario(rate_scenario),
+        )
         universe = bond_service.load_universe().bonds
         portfolio = await portfolio_service.auto_compose_portfolio(
             portfolio_id,
@@ -242,6 +268,7 @@ class PortfoliosController(Controller):
             key_rate=settings.key_rate,
             tax_rate=settings.tax_rate_fraction,
             today=date.today(),
+            duration_policy=duration_policy,
         )
         return portfolio_to_response(portfolio)
 
@@ -253,11 +280,16 @@ class PortfoliosController(Controller):
         bond_service: BondService,
         trading_service: TradingService,
         settings: Settings,
+        rate_scenario: str | None = None,
     ) -> PlanResponse:
         universe = bond_service.load_universe().bonds
         portfolio = await portfolio_service.get_portfolio(portfolio_id)
         if portfolio is None:
             raise NotFoundException(detail="Portfolio not found")
+        duration_policy = duration_policy_for_portfolio(
+            portfolio,
+            rate_scenario=parse_rate_scenario(rate_scenario),
+        )
         if portfolio.is_trading:
             plan = await trading_service.build_trading_plan(
                 portfolio_id,
@@ -265,6 +297,7 @@ class PortfoliosController(Controller):
                 key_rate=settings.key_rate,
                 tax_rate=settings.tax_rate_fraction,
                 today=date.today(),
+                duration_policy=duration_policy,
             )
         else:
             plan = await portfolio_service.build_portfolio_plan(
@@ -273,6 +306,7 @@ class PortfoliosController(Controller):
                 key_rate=settings.key_rate,
                 tax_rate=settings.tax_rate_fraction,
                 today=date.today(),
+                duration_policy=duration_policy,
             )
         return plan_to_response(plan)
 

@@ -8,6 +8,7 @@ from uuid import uuid4
 from bond_monitor.application.portfolio.errors import SlotOverrideValidationError
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio, RiskProfile
+from bond_monitor.domain.portfolio.policies import DurationPolicy, duration_policy_for_portfolio
 from bond_monitor.domain.portfolio.planner import (
     PortfolioPlan,
     auto_compose,
@@ -16,6 +17,8 @@ from bond_monitor.domain.portfolio.planner import (
     validate_slot_replacement,
 )
 from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
+
+_UNSET: object = object()
 
 
 class PortfolioService:
@@ -38,6 +41,8 @@ class PortfolioService:
         horizon_date: date,
         risk_profile: RiskProfile,
         api_trade_only: bool = True,
+        max_weighted_duration_years: float | None = None,
+        target_duration_years: float | None = None,
     ) -> Portfolio:
         portfolio = Portfolio(
             id=uuid4().hex,
@@ -46,6 +51,8 @@ class PortfolioService:
             horizon_date=horizon_date,
             risk_profile=risk_profile,
             api_trade_only=api_trade_only,
+            max_weighted_duration_years=max_weighted_duration_years,
+            target_duration_years=target_duration_years,
         )
         return await self._repo.save(portfolio)
 
@@ -63,10 +70,12 @@ class PortfolioService:
         key_rate: float,
         tax_rate: float,
         today: date,
+        duration_policy: DurationPolicy | None = None,
     ) -> Portfolio:
         portfolio = await self._repo.get_by_id(portfolio_id)
         if portfolio is None:
             raise ValueError(f"Portfolio {portfolio_id} not found")
+        policy = duration_policy or duration_policy_for_portfolio(portfolio)
         positions, remaining_cash, _notes = auto_compose(
             initial_amount=portfolio.initial_amount_rub,
             universe=universe,
@@ -76,6 +85,7 @@ class PortfolioService:
             key_rate=key_rate,
             tax_rate=tax_rate,
             api_trade_only=portfolio.api_trade_only,
+            duration_policy=policy,
         )
         portfolio.positions = positions
         portfolio.cash_balance_rub = remaining_cash
@@ -92,6 +102,7 @@ class PortfolioService:
         tax_rate_fraction: float | None = None,
         account_snapshot_money_rub: float | None = None,
         assume_best_put_outcome: bool = True,
+        duration_policy: DurationPolicy | None = None,
     ) -> PortfolioPlan:
         portfolio = await self._repo.get_by_id(portfolio_id)
         if portfolio is None:
@@ -99,6 +110,7 @@ class PortfolioService:
         if portfolio.is_trading and account_snapshot_money_rub is None:
             account_snapshot_money_rub = portfolio.cash_balance_rub
             assume_best_put_outcome = False
+        policy = duration_policy or duration_policy_for_portfolio(portfolio)
         plan = build_plan(
             portfolio,
             universe,
@@ -107,6 +119,7 @@ class PortfolioService:
             tax_rate=tax_rate,
             assume_best_put_outcome=assume_best_put_outcome,
             account_snapshot_money_rub=account_snapshot_money_rub,
+            duration_policy=policy,
         )
         # Persist if slot overrides were cleared during planning
         await self._repo.save(portfolio)
@@ -121,6 +134,8 @@ class PortfolioService:
         horizon_date: date | None = None,
         risk_profile: RiskProfile | None = None,
         api_trade_only: bool | None = None,
+        max_weighted_duration_years: float | None | object = _UNSET,
+        target_duration_years: float | None | object = _UNSET,
     ) -> Portfolio:
         portfolio = await self._repo.get_by_id(portfolio_id)
         if portfolio is None:
@@ -135,6 +150,10 @@ class PortfolioService:
             portfolio.risk_profile = risk_profile
         if api_trade_only is not None:
             portfolio.api_trade_only = api_trade_only
+        if max_weighted_duration_years is not _UNSET:
+            portfolio.max_weighted_duration_years = max_weighted_duration_years  # type: ignore[assignment]
+        if target_duration_years is not _UNSET:
+            portfolio.target_duration_years = target_duration_years  # type: ignore[assignment]
         portfolio.touch()
         return await self._repo.save(portfolio)
 
@@ -206,15 +225,17 @@ class PortfolioService:
         key_rate: float,
         tax_rate: float,
         today: date,
+        duration_policy: DurationPolicy | None = None,
     ) -> Portfolio:
         from bond_monitor.domain.portfolio.models import (
-    ReinvestmentSlot,
-    ReinvestmentTriggerReason,
-)
+            ReinvestmentSlot,
+            ReinvestmentTriggerReason,
+        )
 
         portfolio = await self._repo.get_by_id(portfolio_id)
         if portfolio is None:
             raise ValueError(f"Portfolio {portfolio_id} not found")
+        policy = duration_policy or duration_policy_for_portfolio(portfolio)
 
         plan = build_plan(
             portfolio,
@@ -222,6 +243,7 @@ class PortfolioService:
             today=today,
             key_rate=key_rate,
             tax_rate=tax_rate,
+            duration_policy=policy,
         )
         matching_slots = [
             slot

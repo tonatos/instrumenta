@@ -37,11 +37,17 @@ const InfoIconButton = forwardRef<
 export function ForecastMetrics({
   plan,
   isTrading,
+  weightedDurationYears,
 }: {
   plan: PlanResponse;
   isTrading: boolean;
+  weightedDurationYears?: number | null;
 }) {
   const [heldExpanded, setHeldExpanded] = useState(false);
+  const durationYears = weightedDurationYears ?? plan.weighted_duration_years;
+  const durationTooltip = isTrading
+    ? "Средневзвешенная дюрация позиций на счёте (по рыночной стоимости). Мера процентного риска."
+    : "Средневзвешенная дюрация текущих позиций (по сумме покупки). Мера процентного риска: чем выше, тем сильнее переоценка тела при изменении ключевой ставки.";
 
   const primaryProfit = isTrading ? plan.total_net_profit_with_held_rub : plan.total_net_profit_rub;
   const secondaryProfit = isTrading ? plan.total_net_profit_rub : plan.total_net_profit_with_held_rub;
@@ -105,6 +111,14 @@ export function ForecastMetrics({
             </p>
           ) : (
             <p className="mt-1.5 text-2xl font-bold text-muted-foreground">—</p>
+          )}
+          {durationYears != null && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+              дюрация: {durationYears.toFixed(1)} г
+              <Tooltip content={durationTooltip}>
+                <InfoIconButton />
+              </Tooltip>
+            </p>
           )}
         </div>
 

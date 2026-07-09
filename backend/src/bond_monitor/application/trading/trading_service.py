@@ -23,6 +23,7 @@ from bond_monitor.application.trading import broker
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio
 from bond_monitor.domain.portfolio.planner import PortfolioPlan
+from bond_monitor.domain.portfolio.policies import DurationPolicy
 from bond_monitor.domain.trading.models import AccountKind, OrderDirection
 from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import broker_snapshot_from_infrastructure
@@ -132,6 +133,7 @@ class TradingService:
         key_rate: float,
         tax_rate: float,
         today: date,
+        duration_policy: DurationPolicy | None = None,
     ) -> TradingAdviceResult:
         return await self._advise.get_advice(
             portfolio_id,
@@ -139,6 +141,7 @@ class TradingService:
             key_rate=key_rate,
             tax_rate=tax_rate,
             today=today,
+            duration_policy=duration_policy,
         )
 
     async def get_trading_state(
@@ -149,6 +152,7 @@ class TradingService:
         key_rate: float,
         tax_rate: float,
         today: date,
+        duration_policy: DurationPolicy | None = None,
     ):
         return await self._trading_state.get_trading_state(
             portfolio_id,
@@ -156,6 +160,7 @@ class TradingService:
             key_rate=key_rate,
             tax_rate=tax_rate,
             today=today,
+            duration_policy=duration_policy,
         )
 
     async def build_trading_plan(
@@ -166,6 +171,7 @@ class TradingService:
         key_rate: float,
         tax_rate: float,
         today: date,
+        duration_policy: DurationPolicy | None = None,
     ) -> PortfolioPlan:
         portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
         token = self._ctx.token(portfolio.account_kind)  # type: ignore[arg-type]
@@ -178,6 +184,7 @@ class TradingService:
             key_rate=key_rate,
             tax_rate=tax_rate,
             today=today,
+            duration_policy=duration_policy,
         )
 
     async def preview_order(
