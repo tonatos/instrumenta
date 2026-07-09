@@ -85,6 +85,10 @@ export const api = {
 
   getBonds: (filterBy = "effective") =>
     request<BondsListResponse>(`/bonds/?filter_by=${filterBy}`),
+  getBondsByIsins: (isins: string[]) =>
+    request<BondsListResponse>(
+      `/bonds/by-isins?isins=${encodeURIComponent(isins.join(","))}`,
+    ),
   getBond: (secid: string) =>
     request<{ bond: Bond; coupons: unknown[] }>(`/bonds/${secid}`),
   refreshBonds: () => request<{ status: string }>("/bonds/refresh", { method: "POST" }),

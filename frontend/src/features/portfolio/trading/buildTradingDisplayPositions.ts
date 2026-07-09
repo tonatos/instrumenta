@@ -17,7 +17,7 @@ export function buildTradingDisplayPositions(
         : ((bond?.last_price ?? 100) / 100) * (bond?.face_value ?? 1000);
     return {
       isin: h.isin,
-      secid: bond?.secid ?? h.isin.slice(0, 6),
+      secid: bond?.secid ?? h.isin,
       name: h.name,
       lots: h.lots,
       lot_size: h.lot_size,

@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "@/api/client";
-import type { PortfolioPosition } from "@/api/types";
+import type { Bond, PortfolioPosition } from "@/api/types";
 import { STALE } from "@/features/portfolio/hooks/queryConfig";
 import { portfolioPath } from "@/features/portfolio/utils";
 
@@ -69,6 +69,9 @@ export function usePortfolioQueries() {
 
   const portfolioReady = Boolean(active);
 
+  const positions: PortfolioPosition[] =
+    (active?.data?.positions as PortfolioPosition[]) ?? [];
+
   const {
     data: simulationPlan,
     isLoading: simulationPlanLoading,
@@ -97,10 +100,42 @@ export function usePortfolioQueries() {
   const planLoading = isTrading ? tradingStateLoading : simulationPlanLoading;
   const refetchPlan = isTrading ? refetchTradingState : refetchSimulationPlan;
 
-  const positions: PortfolioPosition[] =
-    (active?.data?.positions as PortfolioPosition[]) ?? [];
+  const positionIsins = useMemo(() => {
+    const isins = new Set<string>();
+    for (const position of positions) {
+      if (position.isin) isins.add(position.isin);
+    }
+    for (const holding of tradingState?.advice?.holdings ?? []) {
+      isins.add(holding.isin);
+    }
+    return [...isins].sort();
+  }, [positions, tradingState?.advice?.holdings]);
+
+  const missingPositionIsins = useMemo(() => {
+    const screenerIsins = new Set((bonds?.bonds ?? []).map((bond) => bond.isin));
+    return positionIsins.filter((isin) => !screenerIsins.has(isin));
+  }, [bonds?.bonds, positionIsins]);
+
+  const { data: positionBonds } = useQuery({
+    queryKey: ["bonds-by-isins", missingPositionIsins],
+    queryFn: () => api.getBondsByIsins(missingPositionIsins),
+    enabled: missingPositionIsins.length > 0,
+    staleTime: STALE.bonds,
+    refetchOnWindowFocus: false,
+  });
+
+  const bondsList = useMemo(() => {
+    const byIsin = new Map<string, Bond>();
+    for (const bond of bonds?.bonds ?? []) {
+      byIsin.set(bond.isin, bond);
+    }
+    for (const bond of positionBonds?.bonds ?? []) {
+      byIsin.set(bond.isin, bond);
+    }
+    return [...byIsin.values()];
+  }, [bonds?.bonds, positionBonds?.bonds]);
+
   const slots = plan?.slots ?? [];
-  const bondsList = bonds?.bonds ?? [];
 
   return {
     searchParams,

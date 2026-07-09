@@ -51,6 +51,24 @@ class BondsController(Controller):
             bonds.append(bond_to_response(b))
         return BondsListResponse(bonds=bonds, source=result.source, count=len(bonds))
 
+    @get("/by-isins")
+    async def bonds_by_isins(
+        self,
+        bond_service: BondService,
+        favorites_repo: FavoritesRepository,
+        isins: str = "",
+    ) -> BondsListResponse:
+        isin_list = [part.strip() for part in isins.split(",") if part.strip()]
+        bonds = bond_service.load_by_isins(isin_list)
+        favorite_isins = set(await favorites_repo.list_isins())
+        for bond in bonds:
+            bond.is_favorite = bond.isin in favorite_isins
+        return BondsListResponse(
+            bonds=[bond_to_response(b) for b in bonds],
+            source="isins",
+            count=len(bonds),
+        )
+
     @get("/{secid:str}")
     async def get_bond(
         self,
@@ -59,6 +77,9 @@ class BondsController(Controller):
         favorites_repo: FavoritesRepository,
     ) -> dict:
         bond = bond_service.load_by_secid(secid)
+        if bond is None and secid:
+            loaded = bond_service.load_by_isins([secid])
+            bond = loaded[0] if loaded else None
         if bond is None:
             raise NotFoundException(detail=f"Bond {secid} not found")
         favorite_isins = set(await favorites_repo.list_isins())

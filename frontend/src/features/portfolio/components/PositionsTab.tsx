@@ -144,6 +144,7 @@ export function PositionsTab({
               {visiblePositions.map((pos) => {
                 const status = pos.status ?? "active";
                 const bond = bondsByIsin.get(pos.isin);
+                const detailId = bond?.secid ?? pos.isin;
                 const manualSell = pos.figi ? activeSellByFigi.get(pos.figi) : undefined;
                 const sellBlocked = manualSell != null;
                 return (
@@ -154,7 +155,7 @@ export function PositionsTab({
                   className={cn(
                     "cursor-pointer border-t border-border hover:bg-muted/20",
                   )}
-                  onClick={() => setDetailSecid(pos.secid)}
+                  onClick={() => setDetailSecid(detailId)}
                 >
                   <td className="px-3 py-2">
                     <button
@@ -162,12 +163,12 @@ export function PositionsTab({
                       className="max-w-[180px] truncate text-left font-medium hover:underline"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setDetailSecid(pos.secid);
+                        setDetailSecid(detailId);
                       }}
                     >
                       {pos.name}
                     </button>
-                    <p className="text-muted-foreground">{pos.secid}</p>
+                    <p className="text-muted-foreground">{detailId}</p>
                   </td>
                   {isTrading && (
                     <td className="px-3 py-2">

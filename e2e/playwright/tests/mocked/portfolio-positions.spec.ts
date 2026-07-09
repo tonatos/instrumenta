@@ -80,6 +80,13 @@ test.describe("Позиции — жизненный цикл", () => {
       }),
     });
     await page.route("**/api/v1/bonds/**", async (route) => {
+      const url = route.request().url();
+      if (url.includes("/by-isins")) {
+        await route.fulfill({
+          json: { bonds: [], source: "mock", count: 0 },
+        });
+        return;
+      }
       await route.fulfill({
         json: {
           bonds: [
