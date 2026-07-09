@@ -112,7 +112,6 @@ class AdviseUseCase:
         account_id = portfolio.account_id  # type: ignore[assignment]
 
         snapshot = broker.get_account_snapshot(token, portfolio.account_kind, account_id)  # type: ignore[arg-type]
-        broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
         operations = broker.get_account_operations(
             token,
             portfolio.account_kind,  # type: ignore[arg-type]
@@ -124,6 +123,30 @@ class AdviseUseCase:
             portfolio.account_kind,  # type: ignore[arg-type]
             account_id=account_id,
         )
+        return self.build_advice_result(
+            portfolio,
+            universe,
+            snapshot=snapshot,
+            operations=operations,
+            active_orders=active_orders,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            today=today,
+        )
+
+    def build_advice_result(
+        self,
+        portfolio,
+        universe: list[BondRecord],
+        *,
+        snapshot,
+        operations,
+        active_orders,
+        key_rate: float,
+        tax_rate: float,
+        today: date,
+    ) -> TradingAdviceResult:
+        broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
 
         advice = advise(
             portfolio,

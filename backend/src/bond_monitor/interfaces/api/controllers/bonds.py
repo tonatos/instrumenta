@@ -68,9 +68,13 @@ class BondsController(Controller):
 
     @post("/refresh")
     async def refresh_bonds(self) -> dict[str, str]:
+        from bond_monitor.application.bonds.bond_service import invalidate_all_bond_caches
         from bond_monitor.infrastructure.moex.client import invalidate_moex_cache
+        from bond_monitor.infrastructure.tinvest.read_client import invalidate_tinvest_bonds_cache
 
         invalidate_moex_cache()
+        invalidate_tinvest_bonds_cache()
+        invalidate_all_bond_caches()
         return {"status": "ok"}
 
 

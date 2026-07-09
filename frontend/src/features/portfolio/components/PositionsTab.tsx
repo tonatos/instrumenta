@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, X } from "lucide-react";
 import { api } from "@/api/client";
 import type { Bond, PortfolioPosition, TradingAdviceResponse } from "@/api/types";
@@ -27,6 +27,8 @@ export function PositionsTab({
   accountKind: _accountKind,
   bonds,
   closedPositionsCount: _closedPositionsCount,
+  tradingAdvice,
+  adviceLoading = false,
 }: {
   positions: PortfolioPosition[];
   portfolioId: string;
@@ -34,6 +36,8 @@ export function PositionsTab({
   accountKind: string | null;
   bonds: Bond[];
   closedPositionsCount: number;
+  tradingAdvice?: TradingAdviceResponse;
+  adviceLoading?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [addLots, setAddLots] = useState(1);
@@ -42,14 +46,6 @@ export function PositionsTab({
   const [sellPosition, setSellPosition] = useState<PortfolioPosition | null>(null);
 
   const canSellInTrading = isTrading;
-
-  const { data: tradingAdvice, isLoading: adviceLoading } = useQuery<TradingAdviceResponse>({
-    queryKey: ["trading-advice", portfolioId],
-    queryFn: () => api.getAdvice(portfolioId),
-    enabled: isTrading,
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-  });
 
   const activeSellByFigi = useMemo(() => {
     const map = new Map<string, { lots: number; onExchange: boolean }>();

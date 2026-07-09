@@ -25,6 +25,7 @@ from bond_monitor.interfaces.api.controllers import (
 )
 from bond_monitor.interfaces.auth.jwt_auth import get_jwt_auth
 from bond_monitor.interfaces.config import get_settings
+from bond_monitor.infrastructure.bonds.universe_cache import configure_ttl as configure_bond_cache_ttl
 from bond_monitor.interfaces.logging_config import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,7 @@ async def lifespan(app: Litestar):
 def create_app() -> Litestar:
     settings = get_settings()
     configure_logging(settings.log_level)
+    configure_bond_cache_ttl(settings.bond_cache_ttl_sec)
     on_app_init: list = []
     if settings.auth_enabled:
         on_app_init.append(get_jwt_auth().on_app_init)

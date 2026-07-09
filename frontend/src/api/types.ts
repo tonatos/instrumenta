@@ -275,6 +275,11 @@ export interface TradingAdviceResponse {
   as_of: string;
 }
 
+export interface TradingStateResponse {
+  plan: PlanResponse;
+  advice: TradingAdviceResponse;
+}
+
 export interface HoldingView {
   figi: string;
   isin: string;

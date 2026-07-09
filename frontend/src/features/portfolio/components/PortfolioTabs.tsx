@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
-import { api } from "@/api/client";
-import type { Bond, PlanResponse, Portfolio, PortfolioPosition } from "@/api/types";
+import type { Bond, PlanResponse, Portfolio, PortfolioPosition, TradingAdviceResponse } from "@/api/types";
 import { buildTradingDisplayPositions } from "@/features/portfolio/trading/buildTradingDisplayPositions";
 import { AccountOperationsTable } from "@/features/portfolio/AccountOperationsTable";
 import { CashflowTable } from "@/features/portfolio/CashflowTable";
@@ -19,6 +17,7 @@ export function PortfolioTabs({
   slots,
   bondsList,
   isTrading,
+  tradingAdvice,
   refetchPlan,
 }: {
   active: Portfolio;
@@ -27,6 +26,7 @@ export function PortfolioTabs({
   slots: PlanResponse["slots"];
   bondsList: Bond[];
   isTrading: boolean;
+  tradingAdvice?: TradingAdviceResponse;
   refetchPlan: () => void;
 }) {
   const [activeTab, setActiveTab] = useState("positions");
@@ -45,14 +45,6 @@ export function PortfolioTabs({
     () => new Map(bondsList.map((b) => [b.isin, b])),
     [bondsList],
   );
-
-  const { data: tradingAdvice } = useQuery({
-    queryKey: ["trading-advice", active.id],
-    queryFn: () => api.getAdvice(active.id),
-    enabled: isTrading && Boolean(active.account_id),
-    staleTime: 30_000,
-    refetchOnWindowFocus: false,
-  });
 
   const positionsBadgeCount = useMemo(() => {
     if (!isTrading) {
@@ -118,6 +110,7 @@ export function PortfolioTabs({
           accountKind={active.account_kind}
           bonds={bondsList}
           closedPositionsCount={active.closed_positions_count ?? 0}
+          tradingAdvice={tradingAdvice}
         />
       </TabsContent>
 

@@ -19,29 +19,29 @@ export function useTradingAdvice(portfolio: Portfolio) {
   const queryClient = useQueryClient();
   const enabled = portfolio.mode === "trading" && Boolean(portfolio.account_id);
 
-  const adviceQuery = useQuery({
-    queryKey: ["trading-advice", portfolio.id],
-    queryFn: () => api.getAdvice(portfolio.id),
+  const stateQuery = useQuery({
+    queryKey: ["trading-state", portfolio.id],
+    queryFn: () => api.getTradingState(portfolio.id),
     enabled,
     staleTime: STALE.tradingSync,
     refetchOnWindowFocus: false,
     refetchInterval: (query) => {
       if (!enabled) return false;
-      if (hasActiveOrders(query.state.data)) return 30_000;
+      if (hasActiveOrders(query.state.data?.advice)) return 30_000;
       return false;
     },
+    select: (data) => data.advice,
   });
 
   const afterPlace = () => {
-    void queryClient.invalidateQueries({ queryKey: ["trading-advice", portfolio.id] });
+    void queryClient.invalidateQueries({ queryKey: ["trading-state", portfolio.id] });
     invalidateAfterTradingMutation(queryClient, portfolio.id, {
-      refreshPlan: true,
       refreshOperations: true,
     });
   };
 
   const afterCancel = () => {
-    void queryClient.invalidateQueries({ queryKey: ["trading-advice", portfolio.id] });
+    void queryClient.invalidateQueries({ queryKey: ["trading-state", portfolio.id] });
     invalidateAfterTradingMutation(queryClient, portfolio.id, {
       refreshOperations: true,
     });
@@ -60,7 +60,7 @@ export function useTradingAdvice(portfolio: Portfolio) {
   const isPending = placeMutation.isPending || cancelMutation.isPending;
 
   return {
-    ...adviceQuery,
+    ...stateQuery,
     placeMutation,
     cancelMutation,
     isPending,

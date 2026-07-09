@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import pickle
 import time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -38,7 +39,9 @@ logger = logging.getLogger(__name__)
 _CACHE_DIR: Path = get_cache_dir()
 _METADATA_CACHE_FILE: Path = _CACHE_DIR / "tinvest_asset_metadata.json"
 _ASSET_INDEX_CACHE_FILE: Path = _CACHE_DIR / "tinvest_asset_index.json"
+_BONDS_CACHE_FILE: Path = _CACHE_DIR / "tinvest_bonds.pkl"
 _METADATA_CACHE_TTL_SECONDS: int = 7 * 24 * 60 * 60
+BONDS_CACHE_TTL_SECONDS: int = 15 * 60  # 15 min — bond flags change rarely intraday
 
 
 @dataclass
@@ -158,6 +161,54 @@ def _fetch_all_bonds_from_api(token: str) -> dict[str, _TInvestBondData]:
     return result
 
 
+def _load_bonds_disk_cache() -> dict[str, _TInvestBondData] | None:
+    if not _BONDS_CACHE_FILE.exists():
+        return None
+    age = time.time() - _BONDS_CACHE_FILE.stat().st_mtime
+    if age >= BONDS_CACHE_TTL_SECONDS:
+        return None
+    try:
+        with _BONDS_CACHE_FILE.open("rb") as fh:
+            payload = pickle.load(fh)
+    except Exception:
+        logger.exception("Failed to read T-Invest bonds disk cache")
+        return None
+    if not isinstance(payload, dict):
+        return None
+    logger.info(
+        "T-Invest bonds disk cache hit: %d entries, age=%.0fs",
+        len(payload),
+        age,
+    )
+    return payload
+
+
+def _save_bonds_disk_cache(data: dict[str, _TInvestBondData]) -> None:
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    with _BONDS_CACHE_FILE.open("wb") as fh:
+        pickle.dump(data, fh, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+def invalidate_tinvest_bonds_cache() -> None:
+    """Delete T-Invest GetBonds disk cache."""
+    if _BONDS_CACHE_FILE.exists():
+        _BONDS_CACHE_FILE.unlink()
+        logger.info("T-Invest bonds disk cache invalidated")
+
+
+def get_tinvest_bonds_data(token: str) -> dict[str, _TInvestBondData]:
+    """Return ISIN → bond metadata from disk cache or a single GetBonds API call."""
+    cached = _load_bonds_disk_cache()
+    if cached is not None:
+        return cached
+    data = _fetch_all_bonds_from_api(token)
+    try:
+        _save_bonds_disk_cache(data)
+    except Exception:
+        logger.exception("Failed to write T-Invest bonds disk cache")
+    return data
+
+
 def enrich_bonds_from_tinvest(bonds: list[BondRecord], token: str) -> list[BondRecord]:
     """
     Enrich BondRecord list with flags and risk data from T-Invest API.
@@ -167,7 +218,7 @@ def enrich_bonds_from_tinvest(bonds: list[BondRecord], token: str) -> list[BondR
     """
     try:
         {b.isin for b in bonds}
-        api_data = _fetch_all_bonds_from_api(token)
+        api_data = get_tinvest_bonds_data(token)
     except Exception:
         logger.exception("T-Invest enrichment failed; proceeding without enrichment")
         return bonds

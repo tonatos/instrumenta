@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import dataclass
 
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.screening.scorer import score_bonds
+from bond_monitor.infrastructure.bonds.universe_cache import (
+    BondCacheKey,
+    get as get_cached_bonds,
+    invalidate_all as invalidate_bond_cache,
+    put as put_cached_bonds,
+    token_fingerprint,
+)
 from bond_monitor.infrastructure.moex.client import (
     fetch_all_bonds,
     fetch_all_bonds_unfiltered,
@@ -35,8 +41,6 @@ from bond_monitor.infrastructure.tinvest.read_client import (
 
 logger = logging.getLogger(__name__)
 
-UNIVERSE_CACHE_TTL_SEC = 60.0
-
 
 @dataclass
 class BondLoadResult:
@@ -63,8 +67,17 @@ class BondService:
         self._token = tinkoff_token or None
         self._max_days = max_days
         self._min_volume_rub = min_volume_rub
-        self._universe_cache: BondLoadResult | None = None
-        self._universe_cache_at: float = 0.0
+
+    def _cache_key(self, kind: str, *, filter_by: str = "") -> BondCacheKey:
+        return BondCacheKey(
+            key_rate=self._key_rate,
+            tax_rate=self._tax_rate,
+            token_fingerprint=token_fingerprint(self._token),
+            kind=kind,  # type: ignore[arg-type]
+            filter_by=filter_by,
+            max_days=self._max_days if kind == "screener" else 0,
+            min_volume_rub=self._min_volume_rub if kind == "screener" else 0.0,
+        )
 
     def _enrich_and_score(self, bonds: list[BondRecord]) -> tuple[list[BondRecord], str]:
         source = "MOEX ISS API"
@@ -80,27 +93,32 @@ class BondService:
         return bonds, source
 
     def load_screener_bonds(self, *, filter_by: str = "effective") -> BondLoadResult:
+        cache_key = self._cache_key("screener", filter_by=filter_by)
+        cached = get_cached_bonds(cache_key)
+        if cached is not None:
+            bonds, source = cached
+            return BondLoadResult(bonds=bonds, source=source)
+
         bonds = fetch_all_bonds(
             max_days=self._max_days,
             min_volume_rub=self._min_volume_rub,
             filter_by=filter_by,
         )
         bonds, source = self._enrich_and_score(bonds)
+        put_cached_bonds(cache_key, bonds, source)
         return BondLoadResult(bonds=bonds, source=source)
 
     def load_universe(self) -> BondLoadResult:
-        now = time.monotonic()
-        if (
-            self._universe_cache is not None
-            and (now - self._universe_cache_at) < UNIVERSE_CACHE_TTL_SEC
-        ):
-            return self._universe_cache
+        cache_key = self._cache_key("universe")
+        cached = get_cached_bonds(cache_key)
+        if cached is not None:
+            bonds, source = cached
+            return BondLoadResult(bonds=bonds, source=source)
+
         bonds = fetch_all_bonds_unfiltered()
         bonds, source = self._enrich_and_score(bonds)
-        result = BondLoadResult(bonds=bonds, source=source)
-        self._universe_cache = result
-        self._universe_cache_at = now
-        return result
+        put_cached_bonds(cache_key, bonds, source)
+        return BondLoadResult(bonds=bonds, source=source)
 
     def load_by_isins(self, isins: list[str]) -> list[BondRecord]:
         if not isins:
@@ -143,3 +161,8 @@ class BondService:
         except RatingsScraperError as exc:
             logger.error("Ratings refresh failed: %s", exc)
             raise
+
+
+def invalidate_all_bond_caches() -> None:
+    """Clear shared enriched-universe RAM cache (MOEX/T-Invest disk caches are separate)."""
+    invalidate_bond_cache()

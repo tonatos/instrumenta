@@ -8,6 +8,8 @@ from bond_monitor.domain.bonds.models import BondRecord, RiskLevel
 from bond_monitor.domain.portfolio.models import RiskProfile
 from bond_monitor.domain.portfolio.policies import BondSelectionContext
 from bond_monitor.domain.portfolio.selection import (
+    MaturityIndex,
+    SelectionOptions,
     bond_eligibility_reason,
     eligible_bonds,
     explain_selection_failure,
@@ -237,3 +239,19 @@ def test_eligible_bonds_unified_for_compose_and_reinvest() -> None:
     ctx = _ctx()
     eligible = eligible_bonds([ok, distressed], ctx, profile_step=RiskProfile.AGGRESSIVE)
     assert [b.isin for b in eligible] == ["RU000A7"]
+
+
+def test_maturity_index_limits_window_scan() -> None:
+    in_window = _bond(isin="RU000A9", name="In", maturity=date(2027, 6, 1))
+    out_window = _bond(isin="RU000A10", name="Out", maturity=date(2035, 1, 1))
+    ctx = _ctx()
+    index = MaturityIndex.build([in_window, out_window])
+    narrowed = index.bonds_between(date(2026, 1, 1), date(2028, 1, 1))
+    assert [b.isin for b in narrowed] == ["RU000A9"]
+    eligible = eligible_bonds(
+        [in_window, out_window],
+        ctx,
+        profile_step=RiskProfile.NORMAL,
+        selection_options=SelectionOptions(maturity_index=index),
+    )
+    assert [b.isin for b in eligible] == ["RU000A9"]

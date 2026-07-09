@@ -54,7 +54,11 @@ from bond_monitor.domain.portfolio.reinvestment import (
     select_replacement,
     validate_replacement_bond,
 )
-from bond_monitor.domain.portfolio.selection import has_usable_price
+from bond_monitor.domain.portfolio.selection import (
+    SelectionOptions,
+    build_maturity_index,
+    has_usable_price,
+)
 from bond_monitor.domain.shared.formatting import format_date
 from bond_monitor.domain.shared.money import Rub
 from bond_monitor.domain.shared.position_math import position_cost_basis
@@ -261,6 +265,7 @@ def build_plan(
     """
     horizon = portfolio.horizon_date
     universe_by_isin: dict[str, BondRecord] = {b.isin: b for b in universe}
+    selection_options = SelectionOptions(maturity_index=build_maturity_index(universe))
 
     plan = PortfolioPlan(portfolio=portfolio)
 
@@ -402,6 +407,7 @@ def build_plan(
                 key_rate=key_rate,
                 tax_rate=tax_rate,
                 api_trade_only=portfolio.api_trade_only,
+                selection_options=selection_options,
             )
             if suggested:
                 if selection_note:
@@ -442,6 +448,7 @@ def build_plan(
                     key_rate=key_rate,
                     tax_rate=tax_rate,
                     api_trade_only=portfolio.api_trade_only,
+                    selection_options=selection_options,
                 )
                 if suggested:
                     slot.suggested_isin = suggested.isin
@@ -536,6 +543,7 @@ def build_plan(
             key_rate=key_rate,
             tax_rate=tax_rate,
             assume_best_put_outcome=assume_best_put_outcome,
+            selection_options=selection_options,
         )
 
     plan.resolved_slots = merge_reinvestment_slots(plan.resolved_slots)
@@ -805,6 +813,7 @@ def _maybe_add_coupon_cash_reinvestments(
     key_rate: float,
     tax_rate: float,
     assume_best_put_outcome: bool = False,
+    selection_options: SelectionOptions | None = None,
 ) -> None:
     """Дополнительный проход: реинвестируем накопленный купонный кэш.
 
@@ -850,6 +859,7 @@ def _maybe_add_coupon_cash_reinvestments(
             key_rate=key_rate,
             tax_rate=tax_rate,
             api_trade_only=portfolio.api_trade_only,
+            selection_options=selection_options,
         )
         if candidate is None:
             continue

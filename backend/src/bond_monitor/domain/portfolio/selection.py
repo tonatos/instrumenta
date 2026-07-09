@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import bisect
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from bond_monitor.domain.bonds.models import RATING_ORDER, BondRecord, RiskLevel
@@ -27,6 +28,46 @@ class BondSelectionResult:
     bonds: list[BondRecord]
     fallback_note: str
     effective_profile_filter: RiskProfile | None
+
+
+@dataclass(frozen=True)
+class MaturityIndex:
+    """Bonds sorted by effective end date (maturity or offer) for window queries."""
+
+    _dates: tuple[date, ...]
+    _bonds: tuple[BondRecord, ...]
+
+    @classmethod
+    def build(cls, universe: Sequence[BondRecord]) -> MaturityIndex:
+        dated: list[tuple[date, BondRecord]] = []
+        for bond in universe:
+            end = bond.maturity_date or bond.offer_date
+            if end is not None:
+                dated.append((end, bond))
+        dated.sort(key=lambda item: item[0])
+        if not dated:
+            return cls((), ())
+        dates, bonds = zip(*dated, strict=True)
+        return cls(dates, bonds)
+
+    def bonds_between(self, min_date: date, max_date: date) -> list[BondRecord]:
+        if not self._dates:
+            return []
+        left = bisect.bisect_left(self._dates, min_date)
+        right = bisect.bisect_right(self._dates, max_date)
+        return list(self._bonds[left:right])
+
+
+@dataclass
+class SelectionOptions:
+    """Per-plan selection accelerators (maturity index + ranked-result cache)."""
+
+    maturity_index: MaturityIndex | None = None
+    ranked_cache: dict[tuple[object, ...], BondSelectionResult] = field(default_factory=dict)
+
+
+def build_maturity_index(universe: Sequence[BondRecord]) -> MaturityIndex:
+    return MaturityIndex.build(universe)
 
 
 def has_usable_price(bond: BondRecord) -> bool:
@@ -152,14 +193,23 @@ def eligible_bonds(
     *,
     profile_step: RiskProfile | None,
     check_budget: bool = True,
+    selection_options: SelectionOptions | None = None,
 ) -> list[BondRecord]:
     """Structural + profile filter for one fallback step."""
+    if selection_options is not None and selection_options.maturity_index is not None:
+        search_pool: Sequence[BondRecord] = selection_options.maturity_index.bonds_between(
+            _min_maturity_date(ctx, policy),
+            ctx.horizon_date,
+        )
+    else:
+        search_pool = universe
+
     if profile_step is not None:
-        pool = risk_profile_filter(universe, profile_step)
+        pool = risk_profile_filter(search_pool, profile_step)
     else:
         pool = [
             b
-            for b in universe
+            for b in search_pool
             if not policy.exclude_default or (not b.has_default and not b.has_technical_default)
         ]
 
@@ -279,6 +329,24 @@ def explain_selection_failure(
     )
 
 
+def _ranked_cache_key(
+    ctx: BondSelectionContext,
+    *,
+    key_rate: float,
+    tax_rate: float,
+) -> tuple[object, ...]:
+    budget = None if ctx.budget_rub is None else round(ctx.budget_rub)
+    return (
+        ctx.profile,
+        ctx.horizon_date,
+        ctx.purchase_date,
+        budget,
+        ctx.api_trade_only,
+        key_rate,
+        tax_rate,
+    )
+
+
 def select_ranked_bonds(
     universe: Sequence[BondRecord],
     ctx: BondSelectionContext,
@@ -286,14 +354,27 @@ def select_ranked_bonds(
     *,
     key_rate: float,
     tax_rate: float,
+    selection_options: SelectionOptions | None = None,
 ) -> BondSelectionResult:
     """Main entry: profile fallback chain, then rank by portfolio profile."""
     min_maturity_date = _min_maturity_date(ctx, policy)
     if min_maturity_date > ctx.horizon_date:
         return BondSelectionResult([], "", None)
 
+    if selection_options is not None:
+        cache_key = _ranked_cache_key(ctx, key_rate=key_rate, tax_rate=tax_rate)
+        cached = selection_options.ranked_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
     for step in _fallback_steps(ctx.profile):
-        candidates = eligible_bonds(universe, ctx, policy, profile_step=step)
+        candidates = eligible_bonds(
+            universe,
+            ctx,
+            policy,
+            profile_step=step,
+            selection_options=selection_options,
+        )
         if not candidates:
             continue
         ranked = rank_bonds(
@@ -305,9 +386,17 @@ def select_ranked_bonds(
         if not ranked:
             continue
         note = _fallback_note(ctx, requested_step=ctx.profile, effective_step=step)
-        return BondSelectionResult(ranked, note, step)
+        result = BondSelectionResult(ranked, note, step)
+        if selection_options is not None:
+            selection_options.ranked_cache[_ranked_cache_key(ctx, key_rate=key_rate, tax_rate=tax_rate)] = (
+                result
+            )
+        return result
 
-    return BondSelectionResult([], "", None)
+    empty = BondSelectionResult([], "", None)
+    if selection_options is not None:
+        selection_options.ranked_cache[_ranked_cache_key(ctx, key_rate=key_rate, tax_rate=tax_rate)] = empty
+    return empty
 
 
 def select_best_bond(
@@ -317,6 +406,7 @@ def select_best_bond(
     *,
     key_rate: float,
     tax_rate: float,
+    selection_options: SelectionOptions | None = None,
 ) -> tuple[BondRecord | None, str]:
     """Pick top-ranked bond; second value is note or failure reason."""
     if ctx.budget_rub is not None and ctx.budget_rub <= 0:
@@ -328,6 +418,7 @@ def select_best_bond(
         policy,
         key_rate=key_rate,
         tax_rate=tax_rate,
+        selection_options=selection_options,
     )
     if result.bonds:
         return result.bonds[0], result.fallback_note

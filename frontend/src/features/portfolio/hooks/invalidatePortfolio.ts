@@ -7,6 +7,7 @@ export function invalidatePortfolioStructure(
 ) {
   void queryClient.invalidateQueries({ queryKey: ["portfolios"] });
   void queryClient.invalidateQueries({ queryKey: ["plan", portfolioId] });
+  void queryClient.invalidateQueries({ queryKey: ["trading-state", portfolioId] });
 }
 
 /** After trading mutations: refresh advice and optional plan/operations. */
@@ -16,7 +17,7 @@ export function invalidateAfterTradingMutation(
   options?: { refreshPlan?: boolean; refreshOperations?: boolean },
 ) {
   void queryClient.invalidateQueries({ queryKey: ["portfolios"] });
-  void queryClient.invalidateQueries({ queryKey: ["trading-advice", portfolioId] });
+  void queryClient.invalidateQueries({ queryKey: ["trading-state", portfolioId] });
   if (options?.refreshPlan) {
     void queryClient.invalidateQueries({ queryKey: ["plan", portfolioId] });
   }

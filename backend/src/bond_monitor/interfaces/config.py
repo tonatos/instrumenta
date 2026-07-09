@@ -66,6 +66,7 @@ class Settings(BaseSettings):
     tax_rate: float = 13.0
     max_days: int = 120
     min_volume_rub: float = 500_000.0
+    bond_cache_ttl_sec: float = 120.0
 
     @field_validator("allowed_telegram_ids", mode="before")
     @classmethod

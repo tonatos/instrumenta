@@ -73,8 +73,9 @@ test.describe("Бюджет API-запросов", () => {
     await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
 
     expect(counter.get(/account-operations/)).toBe(0);
-    expect(counter.get(/\/advice$/)).toBeGreaterThanOrEqual(1);
-    expect(counter.get(/\/plan$/)).toBeGreaterThanOrEqual(1);
+    expect(counter.get(/\/trading-state$/)).toBeGreaterThanOrEqual(1);
+    expect(counter.get(/\/plan$/)).toBe(0);
+    expect(counter.get(/\/advice$/)).toBe(0);
 
     await page.getByRole("tab", { name: /История операций/i }).click();
     await expect(page.getByRole("table")).toBeVisible({ timeout: 10_000 });
@@ -83,7 +84,7 @@ test.describe("Бюджет API-запросов", () => {
 
   test("отмена заявки не перезапрашивает plan", async ({ page }) => {
     const portfolio = makeTradingPortfolio(PORTFOLIO_ID);
-    let adviceCalls = 0;
+    let tradingStateCalls = 0;
 
     await mockTradingPortfolioRoutes(page, PORTFOLIO_ID, portfolio, {
       plan: makeEmptyPlan({ invested_capital_rub: 100_000 }),
@@ -102,14 +103,17 @@ test.describe("Бюджет API-запросов", () => {
       },
     );
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
-      adviceCalls += 1;
-      const activeOrders = adviceCalls > 1 ? [] : [activeOrder];
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/trading-state`, async (route) => {
+      tradingStateCalls += 1;
+      const activeOrders = tradingStateCalls > 1 ? [] : [activeOrder];
       await route.fulfill({
-        json: makeAdvice({
-          suggestions: [buySuggestion],
-          active_orders: activeOrders,
-        }),
+        json: {
+          plan: makeEmptyPlan({ invested_capital_rub: 100_000 }),
+          advice: makeAdvice({
+            suggestions: [buySuggestion],
+            active_orders: activeOrders,
+          }),
+        },
       });
     });
 

@@ -24,6 +24,7 @@ from bond_monitor.domain.portfolio.policies import (
 )
 from bond_monitor.domain.portfolio.put_offer import put_offer_buy_blocked
 from bond_monitor.domain.portfolio.selection import (
+    SelectionOptions,
     bond_eligibility_reason,
     explain_selection_failure,
     has_usable_price,
@@ -331,6 +332,7 @@ def select_replacement(
     key_rate: float,
     tax_rate: float,
     api_trade_only: bool = False,
+    selection_options: SelectionOptions | None = None,
 ) -> tuple[BondRecord | None, str]:
     """Подобрать бумагу-замену для слота реинвестиции.
 
@@ -348,6 +350,7 @@ def select_replacement(
         ctx,
         key_rate=key_rate,
         tax_rate=tax_rate,
+        selection_options=selection_options,
     )
 
 

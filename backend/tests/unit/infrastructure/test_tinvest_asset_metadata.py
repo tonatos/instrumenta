@@ -89,7 +89,7 @@ def test_enrich_bonds_from_tinvest_sets_instrument_full_name_and_sector(monkeypa
 
     monkeypatch.setattr(
         module,
-        "_fetch_all_bonds_from_api",
+        "get_tinvest_bonds_data",
         lambda _token: {
             "RU000ATEST": module._TInvestBondData(
                 figi="FIGI1",

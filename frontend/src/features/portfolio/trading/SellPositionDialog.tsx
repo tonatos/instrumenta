@@ -66,7 +66,7 @@ export function SellPositionDialog({
         figi: position!.figi,
       }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["trading-advice", portfolioId] });
+      void queryClient.invalidateQueries({ queryKey: ["trading-state", portfolioId] });
       invalidateAfterTradingMutation(queryClient, portfolioId, {
         refreshPlan: true,
         refreshOperations: true,

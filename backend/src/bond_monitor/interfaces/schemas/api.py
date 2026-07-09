@@ -286,6 +286,11 @@ class TradingAdviceResponse(BaseModel):
     as_of: str = ""
 
 
+class TradingStateResponse(BaseModel):
+    plan: PlanResponse
+    advice: TradingAdviceResponse
+
+
 class PlaceOrderRequest(BaseModel):
     isin: str
     direction: str = Field(pattern="^(BUY|SELL)$")

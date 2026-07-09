@@ -103,6 +103,18 @@ export function makeTradingPortfolio(
   };
 }
 
+export function makeTradingState(
+  overrides: {
+    plan?: ReturnType<typeof makeEmptyPlan>;
+    advice?: ReturnType<typeof makeAdvice>;
+  } = {},
+) {
+  return {
+    plan: overrides.plan ?? makeEmptyPlan(),
+    advice: overrides.advice ?? makeAdvice(),
+  };
+}
+
 export async function mockTradingPortfolioRoutes(
   page: Page,
   portfolioId: string,
@@ -110,6 +122,7 @@ export async function mockTradingPortfolioRoutes(
   options: {
     plan?: ReturnType<typeof makeEmptyPlan>;
     advice?: ReturnType<typeof makeAdvice>;
+    tradingState?: ReturnType<typeof makeTradingState>;
     accountOperations?: unknown[];
   } = {},
 ): Promise<void> {
@@ -124,11 +137,19 @@ export async function mockTradingPortfolioRoutes(
     await route.continue();
   });
 
-  await page.route(`**/api/v1/portfolios/${portfolioId}/plan`, async (route) => {
-    await route.fulfill({ json: options.plan ?? makeEmptyPlan() });
+  const tradingState =
+    options.tradingState ??
+    makeTradingState({ plan: options.plan, advice: options.advice });
+
+  await page.route(`**/api/v1/portfolios/${portfolioId}/trading-state`, async (route) => {
+    await route.fulfill({ json: tradingState });
   });
 
-  const advicePayload = options.advice ?? makeAdvice();
+  await page.route(`**/api/v1/portfolios/${portfolioId}/plan`, async (route) => {
+    await route.fulfill({ json: tradingState.plan });
+  });
+
+  const advicePayload = tradingState.advice;
   await page.route(`**/api/v1/portfolios/${portfolioId}/advice`, async (route) => {
     await route.fulfill({ json: advicePayload });
   });

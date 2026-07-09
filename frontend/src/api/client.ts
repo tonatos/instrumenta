@@ -17,6 +17,7 @@ import type {
   SellPositionPreviewResponse,
   SellQuoteResponse,
   TradingAdviceResponse,
+  TradingStateResponse,
 } from "./types";
 import { getAuthToken, notifyUnauthorized } from "@/features/auth/authStorage";
 
@@ -150,6 +151,8 @@ export const api = {
   resetAllSlotOverrides: (id: string) =>
     request<Portfolio>(`/portfolios/${id}/slots/reset-all`, { method: "POST" }),
   getPlan: (id: string) => request<PlanResponse>(`/portfolios/${id}/plan`),
+  getTradingState: (id: string) =>
+    request<TradingStateResponse>(`/portfolios/${id}/trading-state`),
 
   getAccounts: (kind: "sandbox" | "production" = "sandbox") =>
     request<BrokerAccount[]>(`/accounts?kind=${kind}`),

@@ -62,6 +62,7 @@ export function PortfolioPage() {
     positions,
     slots,
     isTrading,
+    tradingAdvice,
   } = usePortfolioQueries();
 
   const {
@@ -379,6 +380,7 @@ export function PortfolioPage() {
             slots={slots}
             bondsList={bondsList}
             isTrading={isTrading}
+            tradingAdvice={tradingAdvice}
             refetchPlan={refetchPlan}
           />
 

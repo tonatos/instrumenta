@@ -39,9 +39,11 @@ from bond_monitor.interfaces.schemas.api import (
     HoldingResponse,
     SuggestionResponse,
     ActiveOrderResponse,
+    TradingStateResponse,
 )
 from bond_monitor.interfaces.schemas.serializers import (
     account_operation_to_response,
+    plan_to_response,
     portfolio_to_response,
 )
 
@@ -239,6 +241,33 @@ class TradingController(Controller):
                 raise NotFoundException(detail=message)
             raise ClientException(detail=message)
         return advice_to_response(result)
+
+    @get("/portfolios/{portfolio_id:str}/trading-state")
+    async def get_trading_state(
+        self,
+        portfolio_id: str,
+        trading_service: TradingService,
+        bond_service: BondService,
+        settings: Settings,
+    ) -> TradingStateResponse:
+        universe = bond_service.load_universe().bonds
+        try:
+            result = await trading_service.get_trading_state(
+                portfolio_id,
+                universe,
+                key_rate=settings.key_rate,
+                tax_rate=settings.tax_rate_fraction,
+                today=date.today(),
+            )
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        return TradingStateResponse(
+            plan=plan_to_response(result.plan),
+            advice=advice_to_response(result.advice),
+        )
 
     @post(
         "/portfolios/{portfolio_id:str}/orders/preview",

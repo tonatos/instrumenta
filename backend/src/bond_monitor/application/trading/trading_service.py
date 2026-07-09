@@ -10,6 +10,7 @@ from bond_monitor.application.trading.context import TradingContext
 from bond_monitor.application.trading.order_use_case import OrderUseCase
 from bond_monitor.application.trading.sandbox_use_case import SandboxUseCase
 from bond_monitor.application.trading.sell_position_use_case import SellPositionUseCase
+from bond_monitor.application.trading.trading_state_use_case import TradingStateUseCase
 from bond_monitor.application.trading.types import (
     OrderPreviewResult,
     PlaceOrderResult,
@@ -42,6 +43,7 @@ class TradingService:
         self._ctx = ctx
         self._attach = AttachUseCase(ctx)
         self._advise = AdviseUseCase(ctx)
+        self._trading_state = TradingStateUseCase(ctx)
         self._order = OrderUseCase(ctx)
         self._sell = SellPositionUseCase(ctx)
         self._sandbox = SandboxUseCase(ctx)
@@ -132,6 +134,23 @@ class TradingService:
         today: date,
     ) -> TradingAdviceResult:
         return await self._advise.get_advice(
+            portfolio_id,
+            universe,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            today=today,
+        )
+
+    async def get_trading_state(
+        self,
+        portfolio_id: str,
+        universe: list[BondRecord],
+        *,
+        key_rate: float,
+        tax_rate: float,
+        today: date,
+    ):
+        return await self._trading_state.get_trading_state(
             portfolio_id,
             universe,
             key_rate=key_rate,

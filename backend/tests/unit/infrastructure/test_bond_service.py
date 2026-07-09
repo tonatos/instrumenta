@@ -115,10 +115,45 @@ def test_load_universe_uses_in_memory_cache(monkeypatch) -> None:
         fake_fetch_all_bonds_unfiltered,
     )
     monkeypatch.setattr(BondService, "_enrich_and_score", fake_enrich_and_score)
+    monkeypatch.setattr(
+        "bond_monitor.application.bonds.bond_service.invalidate_bond_cache",
+        lambda: None,
+    )
+    from bond_monitor.infrastructure.bonds import universe_cache
+
+    universe_cache.invalidate_all()
 
     service = BondService(key_rate=14.5, tax_rate=0.13, tinkoff_token="")
     first = service.load_universe()
     second = service.load_universe()
 
     assert calls["count"] == 1
-    assert first is second
+    assert first.bonds is not second.bonds
+    assert first.source == second.source
+
+
+def test_load_universe_shared_cache_across_service_instances(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    def fake_fetch_all_bonds_unfiltered():
+        calls["count"] += 1
+        return [BondRecord(secid="A", isin="RU000A", name="Test")]
+
+    monkeypatch.setattr(
+        "bond_monitor.application.bonds.bond_service.fetch_all_bonds_unfiltered",
+        fake_fetch_all_bonds_unfiltered,
+    )
+    monkeypatch.setattr(
+        BondService,
+        "_enrich_and_score",
+        lambda self, bonds: (bonds, "MOEX ISS API"),
+    )
+    from bond_monitor.infrastructure.bonds import universe_cache
+
+    universe_cache.invalidate_all()
+
+    first = BondService(key_rate=14.5, tax_rate=0.13, tinkoff_token="").load_universe()
+    second = BondService(key_rate=14.5, tax_rate=0.13, tinkoff_token="").load_universe()
+
+    assert calls["count"] == 1
+    assert first.bonds[0].isin == second.bonds[0].isin
