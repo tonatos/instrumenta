@@ -46,6 +46,22 @@ interface Props {
 }
 
 type WizardStep = "kind" | "account" | "confirm";
+type AccountKind = "sandbox" | "production";
+
+function resolveDefaultKind(
+  sandboxConfigured: boolean,
+  productionConfigured: boolean,
+): AccountKind {
+  if (productionConfigured && !sandboxConfigured) return "production";
+  return "sandbox";
+}
+
+function needsKindSelection(
+  sandboxConfigured: boolean,
+  productionConfigured: boolean,
+): boolean {
+  return sandboxConfigured && productionConfigured;
+}
 
 export function TradingModeBadge({ portfolio }: { portfolio: Portfolio }) {
   const cfg = MODE_LABELS[portfolio.mode] ?? MODE_LABELS.simulation;
@@ -65,11 +81,13 @@ export function TradingModeWizard({
   onPortfolioDeleted,
 }: Props) {
   const queryClient = useQueryClient();
+  const showKindStep = needsKindSelection(sandboxConfigured, productionConfigured);
+  const defaultKind = resolveDefaultKind(sandboxConfigured, productionConfigured);
   const [open, setOpen] = useState(false);
   const [detachOpen, setDetachOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<BrokerAccount | null>(null);
-  const [step, setStep] = useState<WizardStep>("kind");
-  const [kind, setKind] = useState<"sandbox" | "production">("sandbox");
+  const [step, setStep] = useState<WizardStep>(() => (showKindStep ? "kind" : "account"));
+  const [kind, setKind] = useState<AccountKind>(defaultKind);
   const [selectedAccount, setSelectedAccount] = useState<BrokerAccount | null>(null);
   const [clearPayInRub, setClearPayInRub] = useState(
     () => String(Math.round(portfolio.initial_amount_rub)),
@@ -193,7 +211,8 @@ export function TradingModeWizard({
   });
 
   const resetWizard = () => {
-    setStep("kind");
+    setStep(showKindStep ? "kind" : "account");
+    setKind(defaultKind);
     setSelectedAccount(null);
     setClearPayInRub(String(Math.round(portfolio.initial_amount_rub)));
     clearAttachError();
@@ -276,32 +295,28 @@ export function TradingModeWizard({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Step 1: Kind */}
-        {step === "kind" && (
+        {/* Step 1: Kind — только если настроены оба токена */}
+        {step === "kind" && showKindStep && (
           <div className="space-y-2">
-            {sandboxConfigured && (
-              <KindButton
-                title="Песочница (sandbox)"
-                description="Виртуальные деньги, безопасно для тестирования стратегий"
-                selected={kind === "sandbox"}
-                onClick={() => {
-                  clearAttachError();
-                  setKind("sandbox");
-                }}
-              />
-            )}
-            {productionConfigured && (
-              <KindButton
-                title="Боевой счёт (production)"
-                description="Реальные деньги. Все операции будут отправляться на биржу."
-                selected={kind === "production"}
-                onClick={() => {
-                  clearAttachError();
-                  setKind("production");
-                }}
-                warning
-              />
-            )}
+            <KindButton
+              title="Песочница (sandbox)"
+              description="Виртуальные деньги, безопасно для тестирования стратегий"
+              selected={kind === "sandbox"}
+              onClick={() => {
+                clearAttachError();
+                setKind("sandbox");
+              }}
+            />
+            <KindButton
+              title="Боевой счёт (production)"
+              description="Реальные деньги. Все операции будут отправляться на биржу."
+              selected={kind === "production"}
+              onClick={() => {
+                clearAttachError();
+                setKind("production");
+              }}
+              warning
+            />
             <DialogFooter>
               <Button
                 onClick={() => {
@@ -468,15 +483,17 @@ export function TradingModeWizard({
               </>
             )}
             <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  clearAttachError();
-                  setStep("kind");
-                }}
-              >
-                Назад
-              </Button>
+              {showKindStep && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    clearAttachError();
+                    setStep("kind");
+                  }}
+                >
+                  Назад
+                </Button>
+              )}
               <Button
                 disabled={
                   !selectedAccount ||

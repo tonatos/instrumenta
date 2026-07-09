@@ -123,7 +123,7 @@ test.describe("Мастер режима торговли", () => {
     const tradingButton = page.getByRole("button", { name: "Перевести в торговлю" });
     await expect(tradingButton).toBeVisible({ timeout: 10_000 });
     await tradingButton.click();
-    await page.getByRole("button", { name: "Далее" }).click();
+    await expect(page.getByText("Выберите счёт")).toBeVisible();
 
     await expect(page.getByText("Привязан к портфелю «Уже в торговле»")).toBeVisible();
     await page.getByRole("button", { name: "Sandbox linked" }).click();
@@ -175,7 +175,7 @@ test.describe("Мастер режима торговли", () => {
     const tradingButton = page.getByRole("button", { name: "Перевести в торговлю" });
     await expect(tradingButton).toBeVisible({ timeout: 10_000 });
     await tradingButton.click();
-    await page.getByRole("button", { name: "Далее" }).click();
+    await expect(page.getByText("Выберите счёт")).toBeVisible();
 
     await page.getByRole("button", { name: "Удалить счёт" }).nth(1).click();
     const deleteDialog = page.getByRole("dialog", { name: "Удалить счёт в песочнице" });
@@ -225,7 +225,7 @@ test.describe("Мастер режима торговли", () => {
     const tradingButton = page.getByRole("button", { name: "Перевести в торговлю" });
     await expect(tradingButton).toBeVisible({ timeout: 10_000 });
     await tradingButton.click();
-    await page.getByRole("button", { name: "Далее" }).click();
+    await expect(page.getByText("Выберите счёт")).toBeVisible();
 
     await page.getByRole("button", { name: "Удалить счёт" }).first().click();
     const deleteDialog = page.getByRole("dialog", { name: "Удалить счёт в песочнице" });
@@ -237,5 +237,113 @@ test.describe("Мастер режима торговли", () => {
 
     await deleteDialog.getByRole("button", { name: "Удалить" }).click();
     await expect.poll(() => deleteCalled).toBe(true);
+  });
+
+  test("при одном токене sandbox пропускает выбор контура", async ({ page }) => {
+    const configLoaded = page.waitForResponse(
+      (response) => response.url().includes("/api/v1/config/") && response.ok(),
+    );
+    const portfoliosLoaded = page.waitForResponse((response) => {
+      const { pathname } = new URL(response.url());
+      return (
+        pathname === "/api/v1/portfolios/" &&
+        response.request().method() === "GET" &&
+        response.ok()
+      );
+    });
+
+    await page.goto("/portfolio");
+    await Promise.all([configLoaded, portfoliosLoaded]);
+
+    await page.getByRole("button", { name: "Перевести в торговлю" }).click();
+    await expect(page.getByText("Выберите счёт")).toBeVisible();
+    await expect(page.getByText("Выберите контур T-Invest")).not.toBeVisible();
+    await expect(page.getByText("Песочница (sandbox)")).not.toBeVisible();
+  });
+
+  test("при одном токене production пропускает выбор контура", async ({ page }) => {
+    await page.route("**/api/v1/config/", async (route) => {
+      await route.fulfill({
+        json: {
+          key_rate: 16,
+          tax_rate: 13,
+          max_days: 1825,
+          min_volume_rub: 1_000_000,
+          tinkoff_configured: true,
+          sandbox_configured: false,
+          production_configured: true,
+        },
+      });
+    });
+
+    await page.route("**/api/v1/accounts?kind=production", async (route) => {
+      await route.fulfill({
+        json: [
+          {
+            id: "prod-acc-1",
+            name: "Production account",
+            kind: "production",
+            linked_portfolio: null,
+          },
+        ],
+      });
+    });
+
+    const configLoaded = page.waitForResponse(
+      (response) => response.url().includes("/api/v1/config/") && response.ok(),
+    );
+    const portfoliosLoaded = page.waitForResponse((response) => {
+      const { pathname } = new URL(response.url());
+      return (
+        pathname === "/api/v1/portfolios/" &&
+        response.request().method() === "GET" &&
+        response.ok()
+      );
+    });
+
+    await page.goto("/portfolio");
+    await Promise.all([configLoaded, portfoliosLoaded]);
+
+    await page.getByRole("button", { name: "Перевести в торговлю" }).click();
+    await expect(page.getByText("Выберите счёт")).toBeVisible();
+    await expect(page.getByText("Выберите контур T-Invest")).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "Production account" })).toBeVisible();
+    await expect(page.getByText("Создать счёт в песочнице")).not.toBeVisible();
+  });
+
+  test("при двух токенах показывает выбор контура", async ({ page }) => {
+    await page.route("**/api/v1/config/", async (route) => {
+      await route.fulfill({
+        json: {
+          key_rate: 16,
+          tax_rate: 13,
+          max_days: 1825,
+          min_volume_rub: 1_000_000,
+          tinkoff_configured: true,
+          sandbox_configured: true,
+          production_configured: true,
+        },
+      });
+    });
+
+    const configLoaded = page.waitForResponse(
+      (response) => response.url().includes("/api/v1/config/") && response.ok(),
+    );
+    const portfoliosLoaded = page.waitForResponse((response) => {
+      const { pathname } = new URL(response.url());
+      return (
+        pathname === "/api/v1/portfolios/" &&
+        response.request().method() === "GET" &&
+        response.ok()
+      );
+    });
+
+    await page.goto("/portfolio");
+    await Promise.all([configLoaded, portfoliosLoaded]);
+
+    await page.getByRole("button", { name: "Перевести в торговлю" }).click();
+    await expect(page.getByText("Выберите контур T-Invest")).toBeVisible();
+    await expect(page.getByText("Песочница (sandbox)")).toBeVisible();
+    await expect(page.getByText("Боевой счёт (production)")).toBeVisible();
   });
 });
