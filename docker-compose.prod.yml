@@ -21,13 +21,9 @@ services:
       DOMAIN: ${DOMAIN:?DOMAIN is required}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - ${TLS_CADDY_DATA_DIR:-/opt/tls/caddy}:/data
+      - ${TLS_CADDY_CONFIG_DIR:-/opt/tls/caddy-config}:/config
     depends_on:
       web:
         condition: service_started
     restart: unless-stopped
-
-volumes:
-  caddy_data:
-  caddy_config:

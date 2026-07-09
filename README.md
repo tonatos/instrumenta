@@ -143,6 +143,25 @@ task deploy:update
 - Web UI: `https://<DOMAIN>/`
 - Health: `https://<DOMAIN>/health`
 
+### Общие TLS-сертификаты (Caddy)
+
+Caddy хранит сертификаты на хосте в `/opt/tls/caddy` (bind-mount контейнера `/data`). При продлении ACME Caddy перезаписывает те же файлы — отдельный скрипт не нужен.
+
+Пути к сертификату домена (после первого выпуска):
+
+```
+/opt/tls/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/<DOMAIN>/<DOMAIN>.crt
+/opt/tls/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/<DOMAIN>/<DOMAIN>.key
+```
+
+Пример для другого docker-compose:
+
+```yaml
+volumes:
+  - /opt/tls/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/example.com/example.com.crt:/etc/ssl/certs/site.pem:ro
+  - /opt/tls/caddy/caddy/certificates/acme-v02.api.letsencrypt.org-directory/example.com/example.com.key:/etc/ssl/private/site.key:ro
+```
+
 ### Обновление
 
 1. `git push` в `main` → **Docker** (сборка) → **Deploy** (выкат на VPS)

@@ -14,6 +14,8 @@ COMPOSE_FILE_NAMES = host.data.get(
 COMPOSE_FILES = [f"{APP_DIR}/{name}" for name in COMPOSE_FILE_NAMES]
 GIT_REPO = host.data.git_repo
 GIT_BRANCH = host.data.get("git_branch", "main")
+TLS_CADDY_DATA_DIR = host.data.get("tls_caddy_data_dir", "/opt/tls/caddy")
+TLS_CADDY_CONFIG_DIR = host.data.get("tls_caddy_config_dir", "/opt/tls/caddy-config")
 
 
 def _allowed_telegram_ids() -> str:
@@ -61,6 +63,20 @@ server.shell(
     _sudo=True,
 )
 
+server.shell(
+    name="Ensure shared TLS directories exist",
+    commands=[
+        f"mkdir -p {TLS_CADDY_DATA_DIR} {TLS_CADDY_CONFIG_DIR}",
+        f"chmod 755 {TLS_CADDY_DATA_DIR} {TLS_CADDY_CONFIG_DIR}",
+        (
+            "docker volume inspect bond-monitor_caddy_data >/dev/null 2>&1 "
+            f"&& docker run --rm -v bond-monitor_caddy_data:/from -v {TLS_CADDY_DATA_DIR}:/to "
+            "alpine sh -c 'cp -an /from/. /to/' || true"
+        ),
+    ],
+    _sudo=True,
+)
+
 files.template(
     name="Generate production .env",
     src="templates/env.prod.j2",
@@ -82,6 +98,8 @@ files.template(
     telegram_oidc_client_secret=host.data.get("telegram_oidc_client_secret", ""),
     allowed_telegram_ids=_allowed_telegram_ids(),
     image_tag=host.data.get("image_tag", "main"),
+    tls_caddy_data_dir=TLS_CADDY_DATA_DIR,
+    tls_caddy_config_dir=TLS_CADDY_CONFIG_DIR,
     _sudo=True,
 )
 
