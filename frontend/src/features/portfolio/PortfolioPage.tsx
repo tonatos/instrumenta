@@ -23,6 +23,7 @@ import { usePortfolioQueries } from "@/features/portfolio/hooks/usePortfolioQuer
 import { RISK_LABELS } from "@/features/portfolio/labels";
 import { PortfolioValueChart } from "@/features/portfolio/PortfolioValueChart";
 import { TradingActionQueue } from "@/features/portfolio/trading/TradingActionQueue";
+import { NotificationsPanel } from "@/features/portfolio/NotificationsPanel";
 import { TradingModeBadge, TradingModeWizard } from "@/features/portfolio/TradingModeWizard";
 import { portfolioInvestedCapitalRub, portfolioPath } from "@/features/portfolio/utils";
 import { Button } from "@/components/ui/button";
@@ -352,6 +353,10 @@ export function PortfolioPage() {
               </div>
             </div>
           </div>
+
+          {isTrading && activeId && (
+            <NotificationsPanel portfolioId={activeId} />
+          )}
 
           {isTrading && (
             <TradingActionQueue

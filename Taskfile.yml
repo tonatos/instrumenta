@@ -14,6 +14,13 @@ tasks:
     cmds:
       - npm run dev
 
+  run:notifier:
+    desc: Run notification worker locally
+    deps: [sync:back]
+    dotenv: [.env]
+    cmds:
+      - uv run --directory backend python -m bond_monitor.notifier
+
   test:
     desc: All tests (back, then front)
     cmds:

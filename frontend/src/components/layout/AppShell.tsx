@@ -37,13 +37,11 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen bg-background">
       <aside className="hidden w-64 flex-col border-r border-border bg-card md:flex">
-        <div className="flex h-16 items-center gap-2 border-b border-border px-6">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <TrendingUp className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold">Bond Monitor</p>
-            <p className="text-xs text-muted-foreground">Краткосрочные ОФЗ и корп.</p>
+        <div className="flex h-16 items-center gap-3 border-b border-border px-6">
+          <img src="/favicon.svg" alt="" width={32} height={32} className="shrink-0" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold tracking-tight">Bond Monitor</p>
+            <p className="truncate text-xs text-muted-foreground">Краткосрочные ОФЗ и корп.</p>
           </div>
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-4" aria-label="Основная навигация">
@@ -93,7 +91,10 @@ export function AppShell() {
 
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center justify-between border-b border-border px-4 md:hidden">
-          <p className="font-semibold">Bond Monitor</p>
+          <div className="flex items-center gap-2">
+            <img src="/favicon.svg" alt="" width={28} height={28} className="shrink-0" />
+            <p className="font-semibold tracking-tight">Bond Monitor</p>
+          </div>
           <div className="flex gap-2">
             <Button variant="outline" size="icon" onClick={toggle} aria-label="Тема">
               {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}

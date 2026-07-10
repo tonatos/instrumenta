@@ -15,6 +15,7 @@ from bond_monitor.interfaces.api.controllers.portfolio import (
     PortfoliosController,
 )
 from bond_monitor.interfaces.api.controllers.trading import TradingController
+from bond_monitor.interfaces.api.controllers.notifications import NotificationsController
 from bond_monitor.interfaces.api.providers import (
     provide_portfolio_service,
     provide_trading_service,
@@ -27,6 +28,7 @@ __all__ = [
     "ConfigController",
     "FavoritesController",
     "HealthController",
+    "NotificationsController",
     "PortfoliosController",
     "RatingsController",
     "TradingController",

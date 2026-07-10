@@ -25,30 +25,21 @@ from bond_monitor.domain.portfolio.policies import (
     RiskMonitorPolicy,
 )
 from bond_monitor.domain.portfolio.position_factory import position_end_date, position_from_bond, sync_put_offer_from_bond
-from bond_monitor.domain.bonds.offers import (
-    bond_offer_view,
-    put_offer_action_message,
-    put_offer_awareness_message,
-)
-from bond_monitor.domain.portfolio.put_offer import put_offer_awareness_due, put_offer_submit_due
+from bond_monitor.domain.notifications.policies import NotificationPolicy
+from bond_monitor.domain.notifications.rules import collect_alerts
+from bond_monitor.domain.notifications.suggestions import alerts_to_suggestions
 from bond_monitor.domain.portfolio.selection import select_ranked_bonds
 from bond_monitor.domain.shared.money import PriceUnitPct, Rub
+from bond_monitor.domain.trading.holdings import HoldingView
 from bond_monitor.domain.trading.ids import stable_id
 from bond_monitor.domain.trading.policies import (
     buy_limit_price_buffer,
-    reference_market_price_pct,
-    sell_limit_price_buffer,
     suggested_buy_limit_price_pct,
-    suggested_sell_limit_price_pct,
-)
-from bond_monitor.domain.portfolio.risk_monitor import (
-    detect_risk_escalations,
-    risk_snapshot_from_bond,
 )
 from bond_monitor.domain.trading.ports import BrokerActiveOrder, BrokerOperation, BrokerSnapshot
 from bond_monitor.domain.trading.yield_calc import ActualPerformance, summarize_actual_performance
 
-SuggestionKind = Literal["buy", "reinvest", "put_offer_reminder", "put_offer_watch", "sell"]
+from bond_monitor.domain.trading.suggestions import Suggestion, SuggestionKind
 
 _MIN_BUY_CASH_RUB = 5_000.0
 _REINVEST_LOOKAHEAD_DAYS = 14
@@ -88,47 +79,6 @@ def validate_attach_soft(
         warnings=warnings,
         effective_initial_amount_rub=effective,
     )
-
-
-@dataclass(frozen=True)
-class HoldingView:
-    """Позиция на счёте, обогащённая рыночными данными."""
-
-    figi: str
-    isin: str
-    name: str
-    lots: int
-    quantity: int
-    lot_size: int
-    current_price_pct: float | None
-    current_nkd_rub: float | None
-    ytm: float | None
-    maturity_date: date | None
-    offer_date: date | None
-    market_value_rub: float | None
-
-
-@dataclass(frozen=True)
-class Suggestion:
-    """Рекомендация к действию (не persisted pending)."""
-
-    id: str
-    kind: SuggestionKind
-    isin: str
-    name: str
-    lots: int
-    figi: str | None
-    suggested_price_pct: float | None
-    reason: str
-    market_price_pct: float | None = None
-    due_date: date | None = None
-    source_isin: str | None = None
-    chat_template: str | None = None
-    urgency: Literal["normal", "soon", "critical"] = "normal"
-    risk_acknowledgeable: bool = False
-    offer_window_status: str | None = None
-    submission_start: date | None = None
-    submission_end: date | None = None
 
 
 @dataclass
@@ -486,117 +436,6 @@ def _reinvest_suggestions(
     return suggestions
 
 
-def _put_offer_suggestions(
-    portfolio: Portfolio,
-    positions: list[PortfolioPosition],
-    *,
-    today: date,
-) -> list[Suggestion]:
-    suggestions: list[Suggestion] = []
-    for position in positions:
-        view = bond_offer_view(position, today)
-        if view is None:
-            continue
-        base_fields = {
-            "isin": position.isin,
-            "name": position.name,
-            "lots": position.lots,
-            "figi": position.figi,
-            "suggested_price_pct": position.offer_price_pct,
-            "offer_window_status": view.window_status.value,
-            "submission_start": view.submission_start,
-            "submission_end": view.submission_end,
-        }
-        if put_offer_submit_due(position, today):
-            days_until = (
-                (view.submission_end - today).days
-                if view.submission_end is not None
-                else (view.execution_date - today).days
-            )
-            urgency: Literal["normal", "soon", "critical"] = (
-                "critical" if days_until <= 7 else "soon"
-            )
-            template = (
-                f"Здравствуйте! Прошу принять к исполнению заявку на досрочное погашение "
-                f"облигаций {position.name} (ISIN {position.isin}) по пут-оферте."
-            )
-            suggestions.append(
-                Suggestion(
-                    id=stable_id(portfolio.id, "put_offer", position.isin),
-                    kind="put_offer_reminder",
-                    reason=put_offer_action_message(view),
-                    due_date=view.submission_end or view.execution_date,
-                    chat_template=template,
-                    urgency=urgency,
-                    **base_fields,
-                )
-            )
-            continue
-        if put_offer_awareness_due(position, today):
-            suggestions.append(
-                Suggestion(
-                    id=stable_id(portfolio.id, "put_offer_watch", position.isin),
-                    kind="put_offer_watch",
-                    reason=put_offer_awareness_message(view),
-                    due_date=view.execution_date,
-                    chat_template=None,
-                    urgency="normal",
-                    **base_fields,
-                )
-            )
-    return suggestions
-
-
-def _risk_sell_suggestions(
-    portfolio: Portfolio,
-    holdings: list[HoldingView],
-    universe_by_isin: dict[str, BondRecord],
-    *,
-    risk_policy: RiskMonitorPolicy = DEFAULT_RISK_MONITOR_POLICY,
-) -> list[Suggestion]:
-    suggestions: list[Suggestion] = []
-    for holding in holdings:
-        if not holding.isin or holding.lots <= 0:
-            continue
-        baseline = portfolio.risk_baselines.get(holding.isin)
-        if baseline is None:
-            continue
-        bond = universe_by_isin.get(holding.isin)
-        if bond is None:
-            continue
-        current = risk_snapshot_from_bond(bond)
-        escalations = detect_risk_escalations(baseline, current, policy=risk_policy)
-        if not escalations:
-            continue
-        urgency: Literal["normal", "soon", "critical"] = (
-            "critical" if any(e.urgency == "critical" for e in escalations) else "soon"
-        )
-        reason = "; ".join(e.reason for e in escalations)
-        market_price = reference_market_price_pct(
-            bond_last_price=bond.last_price,
-            broker_current_price_pct=holding.current_price_pct,
-        )
-        buffer = sell_limit_price_buffer(portfolio.account_kind)
-        suggested_price = float(suggested_sell_limit_price_pct(market_price, buffer))
-        primary_kind = escalations[0].kind
-        suggestions.append(
-            Suggestion(
-                id=stable_id(portfolio.id, "risk_sell", f"{holding.isin}:{primary_kind}"),
-                kind="sell",
-                isin=holding.isin,
-                name=holding.name,
-                lots=holding.lots,
-                figi=holding.figi,
-                suggested_price_pct=suggested_price,
-                market_price_pct=market_price,
-                reason=f"Ухудшение риск-профиля эмитента: {reason}. Рекомендуем продать.",
-                urgency=urgency,
-                risk_acknowledgeable=True,
-            )
-        )
-    return suggestions
-
-
 def collect_account_warnings(
     snapshot: BrokerSnapshot,
     universe_by_isin: dict[str, BondRecord],
@@ -688,16 +527,18 @@ def advise(
         planning=planning_policy,
         duration_policy=duration_policy,
     )
-    put_offer_suggestions = _put_offer_suggestions(portfolio, positions, today=today)
-    risk_sell_suggestions = _risk_sell_suggestions(
-        portfolio,
-        holdings,
-        universe_by_isin,
-        risk_policy=risk_policy,
+    alert_suggestions = alerts_to_suggestions(
+        collect_alerts(
+            portfolio,
+            holdings=holdings,
+            positions=positions,
+            universe=universe,
+            today=today,
+            risk_policy=risk_policy,
+            notification_policy=NotificationPolicy(include_put_offer_watch_in_alerts=True),
+        )
     )
-    suggestions = (
-        buy_suggestions + reinvest_suggestions + put_offer_suggestions + risk_sell_suggestions
-    )
+    suggestions = buy_suggestions + reinvest_suggestions + alert_suggestions
     warnings = collect_account_warnings(snapshot, universe_by_isin, holdings)
     weighted_dur = weighted_duration_by_market(
         holdings, universe_by_isin, duration_policy=duration_policy
