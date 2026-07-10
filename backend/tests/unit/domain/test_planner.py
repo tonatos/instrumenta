@@ -6,6 +6,7 @@ from datetime import date, timedelta
 
 import pytest
 
+from bond_monitor.domain.bonds.offers import PutOfferDecision
 from bond_monitor.domain.portfolio.models import (
     Portfolio,
     PortfolioMode,
@@ -918,7 +919,7 @@ def test_plan_cashflow_running_balance_never_negative() -> None:
 
 
 def test_build_plan_trading_put_offer_in_cashflow() -> None:
-    """TRADING: пут-оферта по номиналу попадает в cashflow и слоты реинвеста."""
+    """TRADING: пут-оферта по номиналу попадает в cashflow при решении EXERCISE."""
     today = date(2026, 7, 8)
     offer_date = date(2026, 8, 7)
     maturity = date(2027, 7, 30)
@@ -953,6 +954,7 @@ def test_build_plan_trading_put_offer_in_cashflow() -> None:
         coupon_period_days=91,
         next_coupon_date=date(2026, 10, 7),
         source=PositionSourceType.ADOPTED,
+        put_offer_decision=PutOfferDecision.EXERCISE,
     )
     portfolio = Portfolio(
         id="put-offer-cf",

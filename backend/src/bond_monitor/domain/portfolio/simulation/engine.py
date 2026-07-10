@@ -36,8 +36,10 @@ from bond_monitor.domain.portfolio.position_factory import (
 )
 from bond_monitor.domain.portfolio.position_status import open_positions
 from bond_monitor.domain.portfolio.put_offer import (
+    put_offer_awareness_due,
     put_offer_can_exercise,
     put_offer_submission_closed,
+    put_offer_submit_due,
 )
 from bond_monitor.domain.portfolio.redemption import net_redemption_amount
 from bond_monitor.domain.portfolio.policies import DurationPolicy
@@ -270,14 +272,7 @@ def _maybe_append_put_offer_reminder(
         days_until_sub_end = (position.offer_submission_end - today).days
     can_exercise = put_offer_can_exercise(position, today)
     submission_closed = put_offer_submission_closed(position, today)
-    show_reminder = (
-        days_until <= PUT_OFFER_REMINDER_DAYS
-        or can_exercise
-        or (
-            days_until_sub_end is not None
-            and 0 <= days_until_sub_end <= PUT_OFFER_REMINDER_DAYS
-        )
-    )
+    show_reminder = put_offer_submit_due(position, today) or put_offer_awareness_due(position, today)
     if not show_reminder:
         return
     result.upcoming_put_offers.append(

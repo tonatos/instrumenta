@@ -5,31 +5,29 @@ import {
   XCircle,
 } from "lucide-react";
 import type { ActiveOrder, Suggestion } from "@/api/types";
-import { formatOrderStatus } from "@/features/portfolio/labels";
+import { formatOrderStatus, SUGGESTION_KIND_LABELS } from "@/features/portfolio/labels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn, formatDate, formatRub } from "@/lib/utils";
 import { suggestionDirection } from "@/features/portfolio/trading/hooks/useOrderPreview";
 
 const KIND_LABELS: Record<string, string> = {
-  buy: "Покупка",
-  reinvest: "Реинвест",
-  put_offer_reminder: "Пут-оферта",
-  sell: "Продажа",
+  ...SUGGESTION_KIND_LABELS,
 };
 
 export function groupSuggestions(suggestions: Suggestion[]) {
   const urgent = suggestions.filter(
     (s) =>
       s.kind === "put_offer_reminder" ||
-      s.urgency === "critical" ||
-      s.urgency === "soon",
+      ((s.urgency === "critical" || s.urgency === "soon") &&
+        s.kind !== "put_offer_watch"),
   );
+  const watch = suggestions.filter((s) => s.kind === "put_offer_watch");
   const buys = suggestions.filter(
     (s) => (s.kind === "buy" || s.kind === "reinvest") && !urgent.includes(s),
   );
   const sells = suggestions.filter((s) => s.kind === "sell" && !urgent.includes(s));
-  return { urgent, buys, sells };
+  return { urgent, watch, buys, sells };
 }
 
 export function SuggestionCard({
@@ -91,6 +89,12 @@ export function SuggestionCard({
       <p className="text-sm text-muted-foreground">{suggestion.reason}</p>
       {suggestion.due_date && (
         <p className="text-xs text-muted-foreground">Срок: {formatDate(suggestion.due_date)}</p>
+      )}
+      {suggestion.submission_start && (
+        <p className="text-xs text-muted-foreground">
+          Приём заявок: {formatDate(suggestion.submission_start)}
+          {suggestion.submission_end ? ` — ${formatDate(suggestion.submission_end)}` : ""}
+        </p>
       )}
       {direction && (
         <p className="text-sm">

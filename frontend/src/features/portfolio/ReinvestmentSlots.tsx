@@ -163,8 +163,9 @@ function SlotCard({
         <div className="flex items-start gap-2 rounded-lg bg-orange-500/10 px-3 py-2 text-sm text-orange-800 dark:text-orange-300">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>
-            Необходимо подать заявку на досрочный выкуп в T-Инвестициях до даты оферты. Средства
-            поступят на счёт {slot.gap_days > 0 ? `через ${slot.gap_days} дн.` : "в тот же день"}.
+            План предполагает предъявление по пут-оферте — подайте заявку в T-Инвестициях в окне
+            приёма. Средства поступят на счёт{" "}
+            {slot.gap_days > 0 ? `через ${slot.gap_days} дн.` : "в тот же день"}.
           </span>
         </div>
       )}

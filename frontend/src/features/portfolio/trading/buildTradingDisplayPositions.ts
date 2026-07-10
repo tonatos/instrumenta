@@ -8,8 +8,11 @@ export function buildTradingDisplayPositions(
 ): PortfolioPosition[] {
   const holdingIsins = new Set(holdings.map((h) => h.isin));
 
+  const planByIsin = new Map(planPositions.map((p) => [p.isin, p]));
+
   const fromHoldings: PortfolioPosition[] = holdings.map((h) => {
     const bond = bondsByIsin.get(h.isin);
+    const planPosition = planByIsin.get(h.isin);
     const bondsCount = h.lots * h.lot_size;
     const dirtyPerBond =
       h.market_value_rub != null && bondsCount > 0
@@ -17,20 +20,27 @@ export function buildTradingDisplayPositions(
         : ((bond?.last_price ?? 100) / 100) * (bond?.face_value ?? 1000);
     return {
       isin: h.isin,
-      secid: bond?.secid ?? h.isin,
+      secid: bond?.secid ?? planPosition?.secid ?? h.isin,
       name: h.name,
       lots: h.lots,
       lot_size: h.lot_size,
       purchase_clean_price_pct: h.current_price_pct ?? bond?.last_price ?? 100,
       purchase_dirty_price_rub: dirtyPerBond,
       purchase_aci_rub: h.current_nkd_rub ?? 0,
-      purchase_date: new Date().toISOString().slice(0, 10),
+      purchase_date: planPosition?.purchase_date ?? new Date().toISOString().slice(0, 10),
       purchase_amount_rub: h.market_value_rub ?? dirtyPerBond * bondsCount,
-      coupon_rate: bond?.coupon_rate ?? null,
-      face_value: bond?.face_value ?? 1000,
-      maturity_date: h.maturity_date ?? bond?.maturity_date ?? null,
-      offer_date: h.offer_date ?? bond?.offer_date ?? null,
-      source: "adopted",
+      coupon_rate: bond?.coupon_rate ?? planPosition?.coupon_rate ?? null,
+      face_value: bond?.face_value ?? planPosition?.face_value ?? 1000,
+      maturity_date: h.maturity_date ?? bond?.maturity_date ?? planPosition?.maturity_date ?? null,
+      offer_date: planPosition?.offer_date ?? h.offer_date ?? bond?.offer_date ?? null,
+      offer_submission_start: planPosition?.offer_submission_start ?? bond?.offer_submission_start ?? null,
+      offer_submission_end: planPosition?.offer_submission_end ?? bond?.offer_submission_end ?? null,
+      offer_price_pct: planPosition?.offer_price_pct ?? bond?.offer_price_pct ?? null,
+      put_offer_decision: planPosition?.put_offer_decision ?? "pending",
+      offer_kind: planPosition?.offer_kind ?? bond?.offer_kind ?? null,
+      offer_window_status:
+        planPosition?.offer_window_status ?? bond?.offer_window_status ?? null,
+      source: planPosition?.source ?? "adopted",
       figi: h.figi,
       status: "active",
     };

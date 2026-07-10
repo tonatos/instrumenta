@@ -22,7 +22,22 @@ export const SUGGESTION_KIND_LABELS: Record<string, string> = {
   buy: "Покупка",
   reinvest: "Реинвестиция",
   put_offer_reminder: "Пут-оферта",
+  put_offer_watch: "На контроле",
   sell: "Продажа",
+};
+
+export const OFFER_WINDOW_STATUS_LABELS: Record<string, string> = {
+  unknown: "Окно не объявлено",
+  not_open: "Приём скоро",
+  open: "Можно подать",
+  closed: "Окно закрыто",
+  expired: "Оферта прошла",
+};
+
+export const PUT_OFFER_DECISION_LABELS: Record<string, string> = {
+  pending: "Не решено",
+  exercise: "Предъявить",
+  hold: "Держать",
 };
 
 export const KIND_LABELS: Record<string, string> = {

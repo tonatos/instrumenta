@@ -5,6 +5,11 @@ export interface Bond {
   figi: string;
   maturity_date: string | null;
   offer_date: string | null;
+  offer_submission_start?: string | null;
+  offer_submission_end?: string | null;
+  offer_price_pct?: number | null;
+  offer_kind?: string | null;
+  offer_window_status?: string | null;
   call_date: string | null;
   effective_date: string | null;
   days_to_maturity: number | null;
@@ -73,6 +78,15 @@ export interface AuthMeResponse {
 
 export type PositionStatus = "pending" | "active" | "drift" | "closed";
 
+export type PutOfferDecision = "pending" | "exercise" | "hold";
+
+export type OfferWindowStatus =
+  | "unknown"
+  | "not_open"
+  | "open"
+  | "closed"
+  | "expired";
+
 export interface PortfolioPosition {
   isin: string;
   secid: string;
@@ -88,6 +102,12 @@ export interface PortfolioPosition {
   face_value: number;
   maturity_date: string | null;
   offer_date: string | null;
+  offer_submission_start?: string | null;
+  offer_submission_end?: string | null;
+  offer_price_pct?: number | null;
+  put_offer_decision?: PutOfferDecision;
+  offer_kind?: string | null;
+  offer_window_status?: OfferWindowStatus | null;
   source: string;
   figi: string | null;
   status?: PositionStatus;
@@ -197,6 +217,20 @@ export interface PlanResponse {
     maturity_date: string | null;
   }>;
   slots: ReinvestmentSlot[];
+  upcoming_put_offers?: UpcomingPutOffer[];
+}
+
+export interface UpcomingPutOffer {
+  isin: string;
+  name: string;
+  offer_date: string | null;
+  submission_start: string | null;
+  submission_end: string | null;
+  offer_price_pct: number | null;
+  days_until: number;
+  days_until_submission_end: number | null;
+  can_exercise: boolean;
+  put_offer_decision: PutOfferDecision;
 }
 
 export interface CalculatorResponse {
@@ -324,7 +358,12 @@ export interface PerformanceData {
   as_of: string;
 }
 
-export type SuggestionKind = "buy" | "reinvest" | "put_offer_reminder" | "sell";
+export type SuggestionKind =
+  | "buy"
+  | "reinvest"
+  | "put_offer_reminder"
+  | "put_offer_watch"
+  | "sell";
 
 export type SuggestionUrgency = "normal" | "soon" | "critical";
 
@@ -343,6 +382,9 @@ export interface Suggestion {
   chat_template?: string | null;
   urgency: SuggestionUrgency;
   risk_acknowledgeable?: boolean;
+  offer_window_status?: OfferWindowStatus | null;
+  submission_start?: string | null;
+  submission_end?: string | null;
 }
 
 export interface ActiveOrder {

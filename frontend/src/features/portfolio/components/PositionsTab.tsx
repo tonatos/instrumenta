@@ -2,9 +2,14 @@ import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, X } from "lucide-react";
 import { api } from "@/api/client";
-import type { Bond, PortfolioPosition, TradingAdviceResponse } from "@/api/types";
+import type { Bond, PortfolioPosition, PutOfferDecision, TradingAdviceResponse } from "@/api/types";
 import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
-import { POSITION_STATUS_LABELS, SOURCE_LABELS } from "@/features/portfolio/labels";
+import {
+  OFFER_WINDOW_STATUS_LABELS,
+  POSITION_STATUS_LABELS,
+  PUT_OFFER_DECISION_LABELS,
+  SOURCE_LABELS,
+} from "@/features/portfolio/labels";
 import { SellPositionDialog } from "@/features/portfolio/trading/SellPositionDialog";
 import { buildTradingDisplayPositions } from "@/features/portfolio/trading/buildTradingDisplayPositions";
 import { Badge } from "@/components/ui/badge";
@@ -93,6 +98,17 @@ export function PositionsTab({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["portfolios"] });
       queryClient.invalidateQueries({ queryKey: ["plan", portfolioId] });
+    },
+  });
+
+  const putOfferDecisionMutation = useMutation({
+    mutationFn: ({ isin, decision }: { isin: string; decision: PutOfferDecision }) =>
+      api.setPutOfferDecision(portfolioId, isin, decision),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["portfolios"] });
+      queryClient.invalidateQueries({ queryKey: ["plan", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["trading-advice", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["trading-state", portfolioId] });
     },
   });
 
@@ -228,9 +244,48 @@ export function PositionsTab({
                     {SOURCE_LABELS[pos.source] ?? pos.source}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
-                    {pos.offer_date
-                      ? <span className="text-orange-600 dark:text-orange-400">{formatDate(pos.offer_date)} ⚡</span>
-                      : formatDate(pos.maturity_date)}
+                    <div className="space-y-1">
+                      {pos.offer_date ? (
+                        <>
+                          <span className="text-orange-600 dark:text-orange-400">
+                            {formatDate(pos.offer_date)} ⚡
+                          </span>
+                          {pos.offer_window_status && (
+                            <Badge variant="outline" className="block w-fit text-[10px] font-normal">
+                              {OFFER_WINDOW_STATUS_LABELS[pos.offer_window_status] ??
+                                pos.offer_window_status}
+                            </Badge>
+                          )}
+                          {(pos.offer_window_status === "open" ||
+                            pos.put_offer_decision === "exercise" ||
+                            pos.put_offer_decision === "hold") && (
+                            <div className="flex flex-wrap gap-1 pt-1">
+                              {(["exercise", "hold"] as const).map((decision) => (
+                                <Button
+                                  key={decision}
+                                  type="button"
+                                  size="sm"
+                                  variant={
+                                    pos.put_offer_decision === decision ? "default" : "outline"
+                                  }
+                                  className="h-6 px-2 text-[10px]"
+                                  disabled={putOfferDecisionMutation.isPending}
+                                  data-testid={`put-offer-${decision}-${pos.isin}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    putOfferDecisionMutation.mutate({ isin: pos.isin, decision });
+                                  }}
+                                >
+                                  {PUT_OFFER_DECISION_LABELS[decision]}
+                                </Button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        formatDate(pos.maturity_date)
+                      )}
+                    </div>
                   </td>
                   {canSellInTrading && (
                     <td className="px-2 py-2">

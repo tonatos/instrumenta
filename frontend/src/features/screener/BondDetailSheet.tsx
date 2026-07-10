@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, HelpCircle, Star, AlertTriangle } from "lucide-react";
 import { api } from "@/api/client";
 import type { Bond } from "@/api/types";
+import { OFFER_WINDOW_STATUS_LABELS } from "@/features/portfolio/labels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -207,7 +208,33 @@ export function BondDetailSheet({ secid, onClose }: Props) {
                 <InfoRow
                   label="Дата пут-оферты"
                   value={formatDate(bond.offer_date)}
-                  tooltip="Пут-оферта — дата, когда инвестор может потребовать выкупа облигации по заранее оговорённой цене. Удобно, если ставки выросли."
+                  tooltip="Дата исполнения пут-оферты — когда поступят деньги, если вы подали заявку в окне приёма."
+                />
+                <InfoRow
+                  label="Окно подачи"
+                  value={
+                    bond.offer_submission_start || bond.offer_submission_end
+                      ? `${formatDate(bond.offer_submission_start)} — ${formatDate(bond.offer_submission_end)}`
+                      : bond.offer_date
+                        ? "ещё не объявлено"
+                        : "—"
+                  }
+                  tooltip="Период, когда можно подать заявку эмитенту на досрочный выкуп."
+                />
+                <InfoRow
+                  label="Цена выкупа"
+                  value={
+                    bond.offer_price_pct != null ? `${bond.offer_price_pct.toFixed(2)}%` : "—"
+                  }
+                />
+                <InfoRow
+                  label="Статус оферты"
+                  value={
+                    bond.offer_window_status
+                      ? (OFFER_WINDOW_STATUS_LABELS[bond.offer_window_status] ??
+                        bond.offer_window_status)
+                      : "—"
+                  }
                 />
                 <InfoRow
                   label="Дата колл-оферты"

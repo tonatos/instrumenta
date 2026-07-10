@@ -25,6 +25,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
+from bond_monitor.domain.bonds.offers import PutOfferDecision
 from bond_monitor.domain.trading.models import (
     AccountKind,
     FrozenForecast,
@@ -143,6 +144,7 @@ class PortfolioPosition:
     next_coupon_date: date | None = None
     source: PositionSourceType = PositionSourceType.INITIAL
     figi: str | None = None
+    put_offer_decision: PutOfferDecision = PutOfferDecision.PENDING
 
     @property
     def bonds_count(self) -> int:
@@ -178,6 +180,7 @@ class PortfolioPosition:
             ),
             "source": self.source.value,
             "figi": self.figi,
+            "put_offer_decision": self.put_offer_decision.value,
         }
 
     @classmethod
@@ -230,6 +233,9 @@ class PortfolioPosition:
             ),
             source=PositionSourceType(data.get("source", PositionSourceType.INITIAL.value)),
             figi=(str(data["figi"]) if data.get("figi") else None),
+            put_offer_decision=PutOfferDecision(
+                data.get("put_offer_decision", PutOfferDecision.PENDING.value)
+            ),
         )
 
 

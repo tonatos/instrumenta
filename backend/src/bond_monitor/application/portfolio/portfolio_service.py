@@ -157,6 +157,25 @@ class PortfolioService:
         portfolio.touch()
         return await self._repo.save(portfolio)
 
+    async def set_put_offer_decision(
+        self,
+        portfolio_id: str,
+        isin: str,
+        *,
+        decision: str,
+    ) -> Portfolio:
+        from bond_monitor.domain.bonds.offers import PutOfferDecision
+
+        portfolio = await self._repo.get_by_id(portfolio_id)
+        if portfolio is None:
+            raise ValueError(f"Portfolio {portfolio_id} not found")
+        position = next((p for p in portfolio.positions if p.isin == isin), None)
+        if position is None:
+            raise LookupError(f"Position with ISIN {isin} not found in portfolio")
+        position.put_offer_decision = PutOfferDecision(decision)
+        portfolio.touch()
+        return await self._repo.save(portfolio)
+
     async def add_position(
         self,
         portfolio_id: str,

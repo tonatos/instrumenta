@@ -39,6 +39,11 @@ class BondResponse(BaseModel):
     figi: str = ""
     maturity_date: date | None = None
     offer_date: date | None = None
+    offer_submission_start: date | None = None
+    offer_submission_end: date | None = None
+    offer_price_pct: float | None = None
+    offer_kind: str | None = None
+    offer_window_status: str | None = None
     call_date: date | None = None
     effective_date: date | None = None
     days_to_maturity: int | None = None
@@ -102,6 +107,9 @@ class PortfolioPositionData(BaseModel):
     offer_submission_start: str | None = None
     offer_submission_end: str | None = None
     offer_price_pct: float | None = None
+    put_offer_decision: str = "pending"
+    offer_kind: str | None = None
+    offer_window_status: str | None = None
     coupon_period_days: int | None = None
     next_coupon_date: str | None = None
     source: str
@@ -183,6 +191,7 @@ class PlanResponse(BaseModel):
     value_timeline: list[dict[str, Any]] = Field(default_factory=list)
     held_positions: list[dict[str, Any]] = Field(default_factory=list)
     slots: list[dict[str, Any]] = Field(default_factory=list)
+    upcoming_put_offers: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class UpdatePortfolioRequest(BaseModel):
@@ -203,6 +212,10 @@ class AddPositionRequest(BaseModel):
 class SetSlotOverrideRequest(BaseModel):
     source_position_isin: str
     confirmed_isin: str | None = None
+
+
+class SetPutOfferDecisionRequest(BaseModel):
+    decision: str = Field(pattern="^(pending|exercise|hold)$")
 
 
 class CalculatorRequest(BaseModel):
@@ -256,6 +269,9 @@ class SuggestionResponse(BaseModel):
     chat_template: str | None = None
     urgency: str = "normal"
     risk_acknowledgeable: bool = False
+    offer_window_status: str | None = None
+    submission_start: str | None = None
+    submission_end: str | None = None
 
 
 class ActiveOrderResponse(BaseModel):

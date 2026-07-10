@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import pytest
 
-from bond_monitor.domain.portfolio.models import PositionSourceType, RiskProfile
+from bond_monitor.domain.portfolio.models import PortfolioPosition, PositionSourceType, RiskProfile
 from bond_monitor.domain.portfolio.risk_monitor import RiskSnapshot
 from bond_monitor.domain.shared.money import PriceUnitPct, Rub
 from bond_monitor.domain.trading.advisory import (
@@ -166,6 +166,60 @@ def test_advise_put_offer_reminder_for_near_offer() -> None:
     assert len(reminders) == 1
     assert reminders[0].chat_template
     assert reminders[0].urgency in ("soon", "critical")
+
+
+def test_advise_put_offer_watch_when_window_unknown() -> None:
+    offer_date = date(2026, 8, 7)
+    bond = make_bond(
+        isin="RU000A109874",
+        name="СамолетP15",
+        figi="FIGI-SAM",
+        maturity=date(2027, 7, 30),
+    )
+    bond.offer_date = offer_date
+    bond.offer_price_pct = 100.0
+    portfolio = make_portfolio(horizon_date=date(2028, 1, 1))
+    portfolio.positions = [
+        PortfolioPosition(
+            isin=bond.isin,
+            secid=bond.secid,
+            name=bond.name,
+            lots=10,
+            lot_size=1,
+            purchase_clean_price_pct=99.0,
+            purchase_dirty_price_rub=990.0,
+            purchase_aci_rub=0.0,
+            purchase_date=date(2026, 7, 8),
+            purchase_amount_rub=99_000.0,
+            coupon_rate=12.0,
+            face_value=1000.0,
+            maturity_date=date(2027, 7, 30),
+            offer_date=offer_date,
+            offer_price_pct=100.0,
+            coupon_period_days=91,
+            source=PositionSourceType.ADOPTED,
+        )
+    ]
+    snapshot = make_account_snapshot(
+        5_000.0,
+        bond_positions={"FIGI-SAM": _bond_position(figi="FIGI-SAM", lots=10)},
+    )
+    advice = advise(
+        portfolio,
+        snapshot,
+        active_orders=[],
+        operations=[],
+        universe=[bond],
+        key_rate=16.0,
+        tax_rate=0.13,
+        today=date(2026, 7, 10),
+    )
+    reminders = [s for s in advice.suggestions if s.kind == "put_offer_reminder"]
+    watches = [s for s in advice.suggestions if s.kind == "put_offer_watch"]
+    assert not reminders
+    assert len(watches) == 1
+    assert watches[0].offer_window_status == "unknown"
+    assert "не объявлено" in watches[0].reason
 
 
 def test_advise_includes_performance_and_active_orders() -> None:

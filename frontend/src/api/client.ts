@@ -13,6 +13,7 @@ import type {
   PlaceOrderResponse,
   PlanResponse,
   Portfolio,
+  PutOfferDecision,
   SandboxPayInResponse,
   SellPositionPreviewResponse,
   SellQuoteResponse,
@@ -153,6 +154,11 @@ export const api = {
     }),
   removePosition: (id: string, isin: string) =>
     request<void>(`/portfolios/${id}/positions/${isin}`, { method: "DELETE" }),
+  setPutOfferDecision: (id: string, isin: string, decision: PutOfferDecision) =>
+    request<Portfolio>(`/portfolios/${id}/positions/${isin}/put-offer-decision`, {
+      method: "PATCH",
+      body: JSON.stringify({ decision }),
+    }),
   setSlotOverride: (
     id: string,
     sourcePositionIsin: string,

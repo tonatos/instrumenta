@@ -5,13 +5,14 @@ from __future__ import annotations
 from datetime import date
 
 from bond_monitor.domain.bonds.models import BondRecord
+from bond_monitor.domain.bonds.offers import PutOfferDecision
 from bond_monitor.domain.portfolio.models import (
     PortfolioPosition,
     PositionSourceType,
 )
 from bond_monitor.domain.portfolio.put_offer import (
+    position_plans_put_exit,
     put_offer_buy_blocked,
-    put_offer_submission_closed,
 )
 
 
@@ -71,10 +72,13 @@ def sync_put_offer_from_bond(position: PortfolioPosition, bond: BondRecord) -> N
     """Подтянуть окно пут-оферты из live-универса MOEX в позицию."""
     if bond.offer_date is None or bond.offer_date < position.purchase_date:
         return
+    previous_offer_date = position.offer_date
     position.offer_date = bond.offer_date
     position.offer_submission_start = bond.offer_submission_start
     position.offer_submission_end = bond.offer_submission_end
     position.offer_price_pct = bond.offer_price_pct
+    if previous_offer_date != bond.offer_date:
+        position.put_offer_decision = PutOfferDecision.PENDING
 
 
 def position_end_date(
@@ -90,15 +94,15 @@ def position_end_date(
     выхода: бумаги подбираются под ``effective_date``, и cashflow должен
     отражать тот же горизонт удержания.
     """
-    _ = assume_best_put_outcome  # сохранён для обратной совместимости вызовов
     if (
         position.offer_date is not None
-        and position.offer_date > today
-        and not put_offer_submission_closed(position, today)
         and position.offer_date <= horizon
+        and position_plans_put_exit(
+            position,
+            today=today,
+            assume_best_put_outcome=assume_best_put_outcome,
+        )
     ):
-        offer_price = position.offer_price_pct if position.offer_price_pct is not None else 100.0
-        if offer_price >= 100.0:
-            return position.offer_date
+        return position.offer_date
 
     return position.maturity_date

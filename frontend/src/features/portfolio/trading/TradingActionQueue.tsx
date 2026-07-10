@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  Eye,
   Loader2,
   RefreshCw,
   ShoppingCart,
@@ -231,6 +232,22 @@ export function TradingActionQueue({ portfolio, suggestionConfirmId }: Props) {
                 setConfirmError(null);
                 setConfirmSuggestion(item);
               }}
+            />
+          ))}
+        </AdvisorySection>
+
+        <AdvisorySection
+          title="На контроле"
+          icon={<Eye className="h-3.5 w-3.5" />}
+          count={groups.watch.length}
+        >
+          {groups.watch.map((s) => (
+            <SuggestionCard
+              key={s.id}
+              suggestion={s}
+              isProduction={isProduction}
+              isPending={isPending}
+              onConfirm={() => undefined}
             />
           ))}
         </AdvisorySection>

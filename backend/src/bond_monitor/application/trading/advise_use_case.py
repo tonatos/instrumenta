@@ -66,7 +66,13 @@ def _suggestion_to_response(s) -> SuggestionResponse:
         chat_template=s.chat_template,
         urgency=s.urgency,
         risk_acknowledgeable=s.risk_acknowledgeable,
+        offer_window_status=s.offer_window_status,
+        submission_start=s.submission_start.isoformat() if s.submission_start else None,
+        submission_end=s.submission_end.isoformat() if s.submission_end else None,
     )
+
+
+def _active_order_to_response(o) -> ActiveOrderResponse:
     return ActiveOrderResponse(
         order_id=o.order_id,
         request_uid=o.request_uid,

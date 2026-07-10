@@ -91,6 +91,9 @@ class SuggestionResponse:
     chat_template: str | None = None
     urgency: str = "normal"
     risk_acknowledgeable: bool = False
+    offer_window_status: str | None = None
+    submission_start: str | None = None
+    submission_end: str | None = None
 
 
 @dataclass

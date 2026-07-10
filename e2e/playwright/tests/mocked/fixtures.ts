@@ -49,6 +49,7 @@ export function makeEmptyPlan(overrides: Record<string, unknown> = {}) {
     value_timeline: [],
     held_positions: [],
     slots: [],
+    upcoming_put_offers: [],
     ...overrides,
   };
 }

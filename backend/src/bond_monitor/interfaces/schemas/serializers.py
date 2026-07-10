@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date
 
 from bond_monitor.domain.bonds.models import BondRecord
+from bond_monitor.domain.bonds.offers import bond_offer_view
 from bond_monitor.domain.portfolio.invested_capital import invested_capital_rub
 from bond_monitor.domain.portfolio.cashflow import cashflow_rows_with_balance
 from bond_monitor.domain.portfolio.models import Portfolio
@@ -25,7 +26,9 @@ from bond_monitor.interfaces.schemas.api import (
 )
 
 
-def bond_to_response(bond: BondRecord) -> BondResponse:
+def bond_to_response(bond: BondRecord, *, today: date | None = None) -> BondResponse:
+    ref_date = today or date.today()
+    view = bond_offer_view(bond, ref_date)
     return BondResponse(
         secid=bond.secid,
         isin=bond.isin,
@@ -33,6 +36,11 @@ def bond_to_response(bond: BondRecord) -> BondResponse:
         figi=bond.figi,
         maturity_date=bond.maturity_date,
         offer_date=bond.offer_date,
+        offer_submission_start=bond.offer_submission_start,
+        offer_submission_end=bond.offer_submission_end,
+        offer_price_pct=bond.offer_price_pct,
+        offer_kind=view.kind.value if view is not None else None,
+        offer_window_status=view.window_status.value if view is not None else None,
         call_date=bond.call_date,
         effective_date=bond.effective_date,
         days_to_maturity=bond.days_to_maturity,
@@ -127,6 +135,27 @@ def plan_to_response(plan: PortfolioPlan) -> PlanResponse:
             for h in plan.held_positions
         ],
         slots=[s.to_plan_dict() for s in plan.resolved_slots],
+        upcoming_put_offers=[
+            {
+                "isin": item.position.isin,
+                "name": item.position.name,
+                "offer_date": item.position.offer_date.isoformat()
+                if item.position.offer_date
+                else None,
+                "submission_start": item.submission_start.isoformat()
+                if item.submission_start
+                else None,
+                "submission_end": item.submission_end.isoformat()
+                if item.submission_end
+                else None,
+                "offer_price_pct": item.offer_price_pct,
+                "days_until": item.days_until,
+                "days_until_submission_end": item.days_until_submission_end,
+                "can_exercise": item.can_exercise,
+                "put_offer_decision": item.position.put_offer_decision.value,
+            }
+            for item in plan.upcoming_put_offers
+        ],
     )
 
 

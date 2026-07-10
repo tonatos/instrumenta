@@ -31,6 +31,7 @@ from bond_monitor.interfaces.schemas.api import (
     CreatePortfolioRequest,
     PlanResponse,
     PortfolioResponse,
+    SetPutOfferDecisionRequest,
     SetSlotOverrideRequest,
     UpdatePortfolioRequest,
 )
@@ -193,6 +194,26 @@ class PortfoliosController(Controller):
             raise NotFoundException(detail="Portfolio not found")
         except LookupError:
             raise NotFoundException(detail=f"Position {isin} not found")
+
+    @patch("/{portfolio_id:str}/positions/{isin:str}/put-offer-decision", status_code=HTTP_200_OK)
+    async def set_put_offer_decision(
+        self,
+        portfolio_id: str,
+        isin: str,
+        data: SetPutOfferDecisionRequest,
+        portfolio_service: PortfolioService,
+    ) -> PortfolioResponse:
+        try:
+            portfolio = await portfolio_service.set_put_offer_decision(
+                portfolio_id,
+                isin,
+                decision=data.decision,
+            )
+        except ValueError:
+            raise NotFoundException(detail="Portfolio not found")
+        except LookupError:
+            raise NotFoundException(detail=f"Position {isin} not found")
+        return portfolio_to_response(portfolio)
 
     @post("/{portfolio_id:str}/slots/override", status_code=HTTP_200_OK)
     async def set_slot_override(

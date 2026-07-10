@@ -25,7 +25,12 @@ from bond_monitor.domain.portfolio.policies import (
     RiskMonitorPolicy,
 )
 from bond_monitor.domain.portfolio.position_factory import position_end_date, position_from_bond, sync_put_offer_from_bond
-from bond_monitor.domain.portfolio.put_offer import put_offer_submit_due
+from bond_monitor.domain.bonds.offers import (
+    bond_offer_view,
+    put_offer_action_message,
+    put_offer_awareness_message,
+)
+from bond_monitor.domain.portfolio.put_offer import put_offer_awareness_due, put_offer_submit_due
 from bond_monitor.domain.portfolio.selection import select_ranked_bonds
 from bond_monitor.domain.shared.money import PriceUnitPct, Rub
 from bond_monitor.domain.trading.ids import stable_id
@@ -43,7 +48,7 @@ from bond_monitor.domain.portfolio.risk_monitor import (
 from bond_monitor.domain.trading.ports import BrokerActiveOrder, BrokerOperation, BrokerSnapshot
 from bond_monitor.domain.trading.yield_calc import ActualPerformance, summarize_actual_performance
 
-SuggestionKind = Literal["buy", "reinvest", "put_offer_reminder", "sell"]
+SuggestionKind = Literal["buy", "reinvest", "put_offer_reminder", "put_offer_watch", "sell"]
 
 _MIN_BUY_CASH_RUB = 5_000.0
 _REINVEST_LOOKAHEAD_DAYS = 14
@@ -121,6 +126,9 @@ class Suggestion:
     chat_template: str | None = None
     urgency: Literal["normal", "soon", "critical"] = "normal"
     risk_acknowledgeable: bool = False
+    offer_window_status: str | None = None
+    submission_start: date | None = None
+    submission_end: date | None = None
 
 
 @dataclass
@@ -478,7 +486,7 @@ def _reinvest_suggestions(
     return suggestions
 
 
-def _put_offer_reminder_suggestions(
+def _put_offer_suggestions(
     portfolio: Portfolio,
     positions: list[PortfolioPosition],
     *,
@@ -486,29 +494,56 @@ def _put_offer_reminder_suggestions(
 ) -> list[Suggestion]:
     suggestions: list[Suggestion] = []
     for position in positions:
-        if not put_offer_submit_due(position, today):
+        view = bond_offer_view(position, today)
+        if view is None:
             continue
-        days_until = (position.offer_date - today).days if position.offer_date else 0
-        urgency: Literal["normal", "soon", "critical"] = "critical" if days_until <= 7 else "soon"
-        template = (
-            f"Здравствуйте! Прошу принять к исполнению заявку на досрочное погашение "
-            f"облигаций {position.name} (ISIN {position.isin}) по пут-оферте."
-        )
-        suggestions.append(
-            Suggestion(
-                id=stable_id(portfolio.id, "put_offer", position.isin),
-                kind="put_offer_reminder",
-                isin=position.isin,
-                name=position.name,
-                lots=position.lots,
-                figi=position.figi,
-                suggested_price_pct=position.offer_price_pct,
-                reason=f"Скоро пут-оферта {position.offer_date.strftime('%d.%m.%Y') if position.offer_date else '—'}",
-                due_date=position.offer_date,
-                chat_template=template,
-                urgency=urgency,
+        base_fields = {
+            "isin": position.isin,
+            "name": position.name,
+            "lots": position.lots,
+            "figi": position.figi,
+            "suggested_price_pct": position.offer_price_pct,
+            "offer_window_status": view.window_status.value,
+            "submission_start": view.submission_start,
+            "submission_end": view.submission_end,
+        }
+        if put_offer_submit_due(position, today):
+            days_until = (
+                (view.submission_end - today).days
+                if view.submission_end is not None
+                else (view.execution_date - today).days
             )
-        )
+            urgency: Literal["normal", "soon", "critical"] = (
+                "critical" if days_until <= 7 else "soon"
+            )
+            template = (
+                f"Здравствуйте! Прошу принять к исполнению заявку на досрочное погашение "
+                f"облигаций {position.name} (ISIN {position.isin}) по пут-оферте."
+            )
+            suggestions.append(
+                Suggestion(
+                    id=stable_id(portfolio.id, "put_offer", position.isin),
+                    kind="put_offer_reminder",
+                    reason=put_offer_action_message(view),
+                    due_date=view.submission_end or view.execution_date,
+                    chat_template=template,
+                    urgency=urgency,
+                    **base_fields,
+                )
+            )
+            continue
+        if put_offer_awareness_due(position, today):
+            suggestions.append(
+                Suggestion(
+                    id=stable_id(portfolio.id, "put_offer_watch", position.isin),
+                    kind="put_offer_watch",
+                    reason=put_offer_awareness_message(view),
+                    due_date=view.execution_date,
+                    chat_template=None,
+                    urgency="normal",
+                    **base_fields,
+                )
+            )
     return suggestions
 
 
@@ -653,7 +688,7 @@ def advise(
         planning=planning_policy,
         duration_policy=duration_policy,
     )
-    put_offer_suggestions = _put_offer_reminder_suggestions(portfolio, positions, today=today)
+    put_offer_suggestions = _put_offer_suggestions(portfolio, positions, today=today)
     risk_sell_suggestions = _risk_sell_suggestions(
         portfolio,
         holdings,
