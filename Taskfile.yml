@@ -14,6 +14,34 @@ tasks:
     cmds:
       - npm run dev
 
+  run:notifier:
+    desc: Run notification worker locally
+    deps: [sync:back]
+    dotenv: [.env]
+    cmds:
+      - uv run --directory backend python -m bond_monitor.notifier
+
+  dev:notify:simulate:
+    desc: "Write dev notification overrides (usage: task dev:notify:simulate -- put-offer --portfolio <id>)"
+    deps: [sync:back]
+    dotenv: [.env]
+    cmds:
+      - uv run --directory backend python -m bond_monitor.dev.notifications simulate {{.CLI_ARGS}}
+
+  dev:notify:scan:
+    desc: Run one notifier scan cycle (requires NOTIFICATIONS_DEV=true)
+    deps: [sync:back]
+    dotenv: [.env]
+    cmds:
+      - uv run --directory backend python -m bond_monitor.dev.notifications scan
+
+  dev:notify:reset:
+    desc: "Clear notifier ledger (usage: task dev:notify:reset -- --portfolio <id>)"
+    deps: [sync:back]
+    dotenv: [.env]
+    cmds:
+      - uv run --directory backend python -m bond_monitor.dev.notifications reset {{.CLI_ARGS}}
+
   test:
     desc: All tests (back, then front)
     cmds:

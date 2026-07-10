@@ -45,3 +45,19 @@ class AppSettingRow(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class UserNotificationRow(Base):
+    """In-app notification read-model."""
+
+    __tablename__ = "user_notifications"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    fingerprint: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    portfolio_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    urgency: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

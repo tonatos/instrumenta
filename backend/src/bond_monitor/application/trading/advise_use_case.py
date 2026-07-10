@@ -14,7 +14,6 @@ from bond_monitor.application.trading.types import (
 )
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.policies import DurationPolicy, duration_policy_for_portfolio
-from bond_monitor.application.trading.risk_monitoring import prepare_trading_risk_monitoring
 from bond_monitor.domain.trading.advisory import advise, build_holdings
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import (
     broker_active_orders_from_infrastructure,
@@ -157,15 +156,6 @@ class AdviseUseCase:
     ) -> TradingAdviceResult:
         broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
         policy = duration_policy or duration_policy_for_portfolio(portfolio)
-
-        holdings = build_holdings(broker_snapshot, universe)
-        holding_isins = {h.isin for h in holdings if h.isin}
-        await prepare_trading_risk_monitoring(
-            self._ctx,
-            portfolio,
-            universe,
-            holding_isins,
-        )
 
         advice = advise(
             portfolio,

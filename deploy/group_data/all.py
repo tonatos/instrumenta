@@ -8,5 +8,6 @@ git_branch = "main"
 image_tag = "main"
 ghcr_api_image = "ghcr.io/tonatos/bond-monitor-api"
 ghcr_web_image = "ghcr.io/tonatos/bond-monitor-web"
+# notifier reuses ghcr_api_image (same image, different CMD)
 tls_caddy_data_dir = "/opt/tls/caddy"
 tls_caddy_config_dir = "/opt/tls/caddy-config"

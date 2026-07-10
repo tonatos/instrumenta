@@ -68,6 +68,23 @@ class Settings(BaseSettings):
     min_volume_rub: float = 500_000.0
     bond_cache_ttl_sec: float = 120.0
 
+    # Notifier worker
+    redis_url: str = "redis://localhost:6379/0"
+    notifier_scan_interval_sec: int = 3600
+    telegram_bot_token: str = ""
+    telegram_notify_user_id: int = 0
+    notifier_ledger_path: Path = _REPO_ROOT / "cache" / "notifier_ledger.db"
+    notifications_dev: bool = False
+
+    @field_validator("notifications_dev", mode="before")
+    @classmethod
+    def _parse_notifications_dev(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None or value == "":
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
     @field_validator("allowed_telegram_ids", mode="before")
     @classmethod
     def _parse_allowed_telegram_ids(cls, value: object) -> list[int]:
@@ -78,6 +95,13 @@ class Settings(BaseSettings):
         if isinstance(value, list):
             return [int(item) for item in value]
         return [int(value)]
+
+    @field_validator("telegram_notify_user_id", mode="before")
+    @classmethod
+    def _parse_telegram_notify_user_id(cls, value: object) -> int:
+        if value is None or value == "":
+            return 0
+        return int(value)
 
     @property
     def auth_enabled(self) -> bool:

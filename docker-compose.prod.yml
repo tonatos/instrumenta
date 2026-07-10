@@ -5,6 +5,13 @@ services:
     ports: !reset []
     environment:
       LOG_LEVEL: INFO
+      REDIS_URL: redis://redis:6379/0
+
+  notifier:
+    image: ghcr.io/tonatos/bond-monitor-api:${IMAGE_TAG:-main}
+    environment:
+      LOG_LEVEL: INFO
+      REDIS_URL: redis://redis:6379/0
 
   web:
     image: ghcr.io/tonatos/bond-monitor-web:${IMAGE_TAG:-main}

@@ -462,3 +462,20 @@ class AccountOperationResponse(BaseModel):
 
 class AccountOperationsResponse(BaseModel):
     operations: list[AccountOperationResponse]
+
+
+class NotificationResponse(BaseModel):
+    id: str
+    fingerprint: str
+    portfolio_id: str
+    kind: str
+    payload: dict[str, Any]
+    urgency: str
+    created_at: str
+    read_at: str | None = None
+    dismissed_at: str | None = None
+    is_unread: bool
+
+
+class NotificationsListResponse(BaseModel):
+    notifications: list[NotificationResponse]

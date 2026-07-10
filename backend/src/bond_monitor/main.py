@@ -19,10 +19,12 @@ from bond_monitor.interfaces.api.controllers import (
     ConfigController,
     FavoritesController,
     HealthController,
+    NotificationsController,
     PortfoliosController,
     RatingsController,
     TradingController,
 )
+from bond_monitor.application.notifications.consumer import NotificationConsumer
 from bond_monitor.interfaces.auth.jwt_auth import get_jwt_auth
 from bond_monitor.interfaces.config import get_settings
 from bond_monitor.infrastructure.bonds.universe_cache import configure_ttl as configure_bond_cache_ttl
@@ -40,7 +42,13 @@ async def log_unhandled_exception(exc: Exception) -> None:
 async def lifespan(app: Litestar):
     await init_db()
     await migrate_json_to_db()
-    yield
+    settings = get_settings()
+    consumer = NotificationConsumer(settings.redis_url)
+    await consumer.start()
+    try:
+        yield
+    finally:
+        await consumer.stop()
 
 
 def create_app() -> Litestar:
@@ -61,6 +69,7 @@ def create_app() -> Litestar:
             CalculatorController,
             RatingsController,
             TradingController,
+            NotificationsController,
         ],
         dependencies={
             "db_session": Provide(get_db_session),

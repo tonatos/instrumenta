@@ -26,6 +26,12 @@ export const SUGGESTION_KIND_LABELS: Record<string, string> = {
   sell: "Продажа",
 };
 
+export const NOTIFICATION_KIND_LABELS: Record<string, string> = {
+  put_offer_action: "Пут-оферта",
+  put_offer_watch: "На контроле",
+  risk_escalation: "Риск эмитента",
+};
+
 export const OFFER_WINDOW_STATUS_LABELS: Record<string, string> = {
   unknown: "Окно не объявлено",
   not_open: "Приём скоро",

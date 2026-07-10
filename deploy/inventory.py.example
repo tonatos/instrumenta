@@ -26,6 +26,10 @@ bond_monitor = (
         "telegram_oidc_client_id": "",
         "telegram_oidc_client_secret": "",
         "allowed_telegram_ids": "",  # comma-separated, e.g. "123456789,987654321"
+        # Notifier worker
+        "notifier_scan_interval_sec": 3600,
+        "telegram_bot_token": "",
+        "telegram_notify_user_id": 139693774,
         # GHCR (only for private packages; public images pull without login)
         # "ghcr_username": "tonatos",
         # "ghcr_token": "",  # PAT with read:packages

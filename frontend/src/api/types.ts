@@ -424,6 +424,25 @@ export interface SandboxPayInResponse {
   money_rub: number;
 }
 
+export type NotificationKind = "put_offer_action" | "risk_escalation" | "put_offer_watch";
+
+export interface Notification {
+  id: string;
+  fingerprint: string;
+  portfolio_id: string;
+  kind: NotificationKind;
+  payload: Record<string, unknown>;
+  urgency: SuggestionUrgency;
+  created_at: string;
+  read_at: string | null;
+  dismissed_at: string | null;
+  is_unread: boolean;
+}
+
+export interface NotificationsListResponse {
+  notifications: Notification[];
+}
+
 export interface AccountOperation {
   id: string;
   type: string;

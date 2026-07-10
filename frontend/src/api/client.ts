@@ -19,6 +19,7 @@ import type {
   SellQuoteResponse,
   TradingAdviceResponse,
   TradingStateResponse,
+  NotificationsListResponse,
 } from "./types";
 import { getAuthToken, notifyUnauthorized } from "@/features/auth/authStorage";
 import { getRateScenario } from "@/features/settings/durationPreferences";
@@ -264,6 +265,19 @@ export const api = {
     } | null>(`/portfolios/${id}/performance`),
   getAccountOperations: (id: string) =>
     request<AccountOperationsResponse>(`/portfolios/${id}/account-operations`),
+
+  getNotifications: (id: string, unreadOnly = false) =>
+    request<NotificationsListResponse>(
+      `/portfolios/${id}/notifications${unreadOnly ? "?unread_only=true" : ""}`,
+    ),
+  markNotificationRead: (notificationId: string) =>
+    request<void>(`/notifications/${encodeURIComponent(notificationId)}/read`, {
+      method: "POST",
+    }),
+  dismissNotification: (notificationId: string) =>
+    request<void>(`/notifications/${encodeURIComponent(notificationId)}/dismiss`, {
+      method: "POST",
+    }),
 
   calculatePortfolio: (body: {
     secids: string[];
