@@ -14,6 +14,7 @@ from bond_monitor.domain.trading.advisory import (
     build_holdings,
     build_holdings_cashflow,
     effective_trading_positions,
+    holding_isins_from_snapshot,
     validate_attach_soft,
 )
 from bond_monitor.domain.trading.ports import BrokerBondPosition
@@ -52,6 +53,16 @@ def test_build_holdings_from_snapshot_and_universe() -> None:
     assert holdings[0].ytm == 17.5
     assert holdings[0].market_value_rub is not None
     assert holdings[0].market_value_rub > 0
+
+
+def test_holding_isins_from_snapshot_requires_universe_for_figi_mapping() -> None:
+    bond = make_bond(isin="RU000A1", figi="FIGI-HOLD")
+    snapshot = make_account_snapshot(
+        50_000.0,
+        bond_positions={"FIGI-HOLD": _bond_position()},
+    )
+    assert holding_isins_from_snapshot(snapshot, []) == set()
+    assert holding_isins_from_snapshot(snapshot, [bond]) == {"RU000A1"}
 
 
 def test_advise_builds_cashflow_from_holdings() -> None:
@@ -328,6 +339,30 @@ def test_validate_attach_soft_counts_deployed_bonds_in_effective_initial() -> No
     portfolio = make_portfolio(initial_amount_rub=100_000.0)
     validation = validate_attach_soft(snapshot, portfolio, [bond])
     assert validation.effective_initial_amount_rub > 20_000.0
+
+
+def test_validate_attach_soft_handles_missing_price_per_lot() -> None:
+    bond = make_bond(isin="RU000A1", figi="FIGI-HOLD", last_price=None)
+    snapshot = make_account_snapshot(
+        20_000.0,
+        bond_positions={
+            "FIGI-HOLD": BrokerBondPosition(
+                figi="FIGI-HOLD",
+                instrument_uid="uid-hold",
+                ticker="SU26238",
+                quantity=2,
+                lots=2,
+                blocked=0,
+                current_price_pct=None,
+                current_nkd_rub=None,
+                average_price_pct=None,
+            )
+        },
+    )
+    portfolio = make_portfolio(initial_amount_rub=100_000.0)
+    validation = validate_attach_soft(snapshot, portfolio, [bond])
+    assert validation.can_attach is True
+    assert validation.effective_initial_amount_rub == 100_000.0
 
 
 def test_advise_emits_risk_sell_on_default_escalation() -> None:

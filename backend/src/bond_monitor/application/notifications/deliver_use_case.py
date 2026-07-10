@@ -12,7 +12,7 @@ from bond_monitor.domain.notifications.fingerprint import (
     telegram_allowed_for_alert,
 )
 from bond_monitor.domain.notifications.models import Alert
-from bond_monitor.domain.notifications.policies import NotificationPolicy
+from bond_monitor.domain.notifications.policies import DEFAULT_NOTIFICATION_POLICY, NotificationPolicy
 from bond_monitor.infrastructure.notifications.ledger_repository import LedgerRepository
 from bond_monitor.infrastructure.notifications.notifications_repository import NotificationsRepository
 from bond_monitor.infrastructure.notifications.redis_bus import NotificationBus
@@ -45,6 +45,10 @@ class DeliverNotificationsUseCase:
         self._telegram = telegram
         self._notifications_repo = notifications_repo
         self._policy = policy
+
+    @property
+    def _effective_policy(self) -> NotificationPolicy:
+        return self._policy or DEFAULT_NOTIFICATION_POLICY
 
     async def process_alert(self, alert: Alert, *, portfolio_name: str) -> None:
         fingerprint = alert_fingerprint(alert)
@@ -101,13 +105,13 @@ class DeliverNotificationsUseCase:
         *,
         portfolio_name: str,
     ) -> None:
-        if not telegram_allowed_for_alert(alert, policy=self._policy):
+        if not telegram_allowed_for_alert(alert, policy=self._effective_policy):
             return
         entry = self._ledger.get(fingerprint)
         if entry is not None and entry.telegram_sent_at is not None:
             if not should_send_telegram(
                 last_telegram_sent_at=entry.telegram_sent_at,
-                policy=self._policy,
+                policy=self._effective_policy,
             ):
                 return
         if not self._telegram.configured:

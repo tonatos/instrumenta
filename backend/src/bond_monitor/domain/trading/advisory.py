@@ -163,6 +163,14 @@ def build_holdings(
     return holdings
 
 
+def holding_isins_from_snapshot(
+    snapshot: BrokerSnapshot,
+    universe: Sequence[BondRecord],
+) -> set[str]:
+    """ISINs held on the broker account (requires universe for FIGI→ISIN mapping)."""
+    return {h.isin for h in build_holdings(snapshot, universe) if h.isin}
+
+
 def _apply_average_purchase_price(
     position: PortfolioPosition,
     average_price_pct: float,
@@ -301,7 +309,7 @@ def _holdings_deployed_value(
             total += holding.market_value_rub
             continue
         bond = universe_by_isin.get(holding.isin)
-        lot_cost = bond.price_per_lot_rub if bond else 0.0
+        lot_cost = (bond.price_per_lot_rub or 0.0) if bond else 0.0
         if lot_cost > 0:
             total += holding.lots * lot_cost
     return total

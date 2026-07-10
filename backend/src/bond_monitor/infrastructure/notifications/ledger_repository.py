@@ -78,6 +78,30 @@ class LedgerRepository:
             row = conn.execute("SELECT COUNT(*) AS c FROM delivery_ledger").fetchone()
         return int(row["c"]) if row else 0
 
+    def delete_all(self) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute("DELETE FROM delivery_ledger")
+            conn.commit()
+            return cursor.rowcount
+
+    def delete_for_portfolio(self, portfolio_id: str) -> int:
+        with self._connect() as conn:
+            rows = conn.execute("SELECT fingerprint, payload_json FROM delivery_ledger").fetchall()
+            to_delete = [
+                row["fingerprint"]
+                for row in rows
+                if _payload_portfolio_id(row["payload_json"]) == portfolio_id
+            ]
+            if not to_delete:
+                return 0
+            placeholders = ",".join("?" for _ in to_delete)
+            cursor = conn.execute(
+                f"DELETE FROM delivery_ledger WHERE fingerprint IN ({placeholders})",
+                to_delete,
+            )
+            conn.commit()
+            return cursor.rowcount
+
     def mark_bus_published(self, fingerprint: str, *, at: datetime) -> bool:
         return self._mark_timestamp(fingerprint, "bus_published_at", at)
 
@@ -147,3 +171,12 @@ def _parse_dt(value: str | None) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=UTC)
     return parsed
+
+
+def _payload_portfolio_id(payload_json: str) -> str | None:
+    try:
+        payload = json.loads(payload_json)
+    except json.JSONDecodeError:
+        return None
+    portfolio_id = payload.get("portfolio_id")
+    return str(portfolio_id) if portfolio_id else None

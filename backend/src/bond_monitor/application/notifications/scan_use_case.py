@@ -11,7 +11,12 @@ from bond_monitor.application.trading.context import TradingContext
 from bond_monitor.domain.notifications.rules import WORKER_ALERT_RULES, collect_alerts
 from bond_monitor.domain.portfolio.models import PortfolioMode
 from bond_monitor.domain.portfolio.risk_monitor import sync_risk_baselines
-from bond_monitor.domain.trading.advisory import build_holdings, effective_trading_positions
+from bond_monitor.domain.trading.advisory import (
+    build_holdings,
+    effective_trading_positions,
+    holding_isins_from_snapshot,
+)
+from bond_monitor.dev.overrides import apply_dev_notification_overrides, notifications_dev_enabled
 from bond_monitor.infrastructure.moex.defaults_client import (
     apply_defaults_from_cache,
     refresh_defaults_for_isins,
@@ -73,9 +78,18 @@ class ScanPortfoliosUseCase:
             account_id,
         )
         broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
-        holdings = build_holdings(broker_snapshot, [])
-        holding_isins = {h.isin for h in holdings if h.isin}
+        bond_lots = sum(1 for pos in broker_snapshot.bond_positions.values() if pos.lots > 0)
+        if bond_lots == 0:
+            return 0
+
+        universe_lookup = self._bond_service.load_universe().bonds
+        holding_isins = holding_isins_from_snapshot(broker_snapshot, universe_lookup)
         if not holding_isins:
+            logger.warning(
+                "Portfolio %s has %d bond positions but no ISIN mapping in universe",
+                portfolio.id,
+                bond_lots,
+            )
             return 0
 
         universe = self._bond_service.load_by_isins(sorted(holding_isins))
@@ -100,6 +114,14 @@ class ScanPortfoliosUseCase:
             universe,
             purchase_date=today,
         )
+        if notifications_dev_enabled():
+            apply_dev_notification_overrides(
+                portfolio,
+                universe,
+                positions,
+                portfolio_id=portfolio.id,
+                today=today,
+            )
         alerts = collect_alerts(
             portfolio,
             holdings=holdings,

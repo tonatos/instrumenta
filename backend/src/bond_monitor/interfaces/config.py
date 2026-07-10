@@ -74,6 +74,16 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     telegram_notify_user_id: int = 0
     notifier_ledger_path: Path = _REPO_ROOT / "cache" / "notifier_ledger.db"
+    notifications_dev: bool = False
+
+    @field_validator("notifications_dev", mode="before")
+    @classmethod
+    def _parse_notifications_dev(cls, value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if value is None or value == "":
+            return False
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
     @field_validator("allowed_telegram_ids", mode="before")
     @classmethod
