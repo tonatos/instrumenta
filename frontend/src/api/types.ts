@@ -1,3 +1,10 @@
+export type OfferWindowStatus =
+  | "unknown"
+  | "not_open"
+  | "open"
+  | "closed"
+  | "expired";
+
 export interface Bond {
   secid: string;
   isin: string;
@@ -9,7 +16,7 @@ export interface Bond {
   offer_submission_end?: string | null;
   offer_price_pct?: number | null;
   offer_kind?: string | null;
-  offer_window_status?: string | null;
+  offer_window_status?: OfferWindowStatus | null;
   call_date: string | null;
   effective_date: string | null;
   days_to_maturity: number | null;
@@ -79,13 +86,6 @@ export interface AuthMeResponse {
 export type PositionStatus = "pending" | "active" | "drift" | "closed";
 
 export type PutOfferDecision = "pending" | "exercise" | "hold";
-
-export type OfferWindowStatus =
-  | "unknown"
-  | "not_open"
-  | "open"
-  | "closed"
-  | "expired";
 
 export interface PortfolioPosition {
   isin: string;
