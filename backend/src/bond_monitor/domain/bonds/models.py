@@ -159,6 +159,11 @@ class BondRecord:
             and self.days_to_maturity > 0
         )
 
+    @property
+    def is_floating_coupon(self) -> bool:
+        """Плавающий купон (привязан к КС/RUONIA) — низкая чувствительность к ставке."""
+        return self.floating_coupon_flag or self.coupon_type == CouponType.FLOATING
+
     # --- Risk flags (from T-Invest API) ---
     amortization_flag: bool = False
     floating_coupon_flag: bool = False

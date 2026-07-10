@@ -8,7 +8,7 @@ from datetime import date
 from litestar import Controller, delete, get, post
 from litestar.di import Provide
 from litestar.exceptions import ClientException, NotFoundException
-from litestar.status_codes import HTTP_200_OK, HTTP_201_CREATED
+from litestar.status_codes import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CONTENT
 
 from bond_monitor.application.bonds.bond_service import BondService
 from bond_monitor.application.portfolio.portfolio_service import PortfolioService
@@ -284,6 +284,26 @@ class TradingController(Controller):
             plan=plan_to_response(result.plan),
             advice=advice_to_response(result.advice),
         )
+
+    @post(
+        "/portfolios/{portfolio_id:str}/risk-alerts/{isin:str}/acknowledge",
+        status_code=HTTP_204_NO_CONTENT,
+    )
+    async def acknowledge_risk_alert(
+        self,
+        portfolio_id: str,
+        isin: str,
+        trading_service: TradingService,
+        bond_service: BondService,
+    ) -> None:
+        universe = bond_service.load_universe().bonds
+        try:
+            await trading_service.acknowledge_risk_alert(portfolio_id, isin, universe)
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
 
     @post(
         "/portfolios/{portfolio_id:str}/orders/preview",

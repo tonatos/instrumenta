@@ -16,7 +16,6 @@ class PlanningPolicy:
     reinvestment_gap_days: int = 2
     put_offer_reminder_days: int = 30
     max_reinvest_depth: int = 10
-    coupon_cash_reinvest_interval_days: int = 30
 
 
 DEFAULT_PLANNING_POLICY = PlanningPolicy()
@@ -87,6 +86,8 @@ class DurationPolicy:
     # 0.0 = дюрация не влияет на ранжирование.
     duration_score_weight: float = 0.0
     rate_scenario: RateScenario = RateScenario.HOLD
+    # Эффективная чувствительность флоатера к ключевой ставке (годы).
+    floater_rate_duration_years: float = 0.0
 
 
 DEFAULT_DURATION_POLICY = DurationPolicy()
@@ -138,6 +139,21 @@ def duration_policy_for_portfolio(
         max_weighted_duration_years=max_years,
         target_duration_years=target_years,
     )
+
+
+@dataclass(frozen=True)
+class RiskMonitorPolicy:
+    """Thresholds for issuer risk escalation alerts on held positions."""
+
+    # Ordinal floor for investment grade (BBB- = 3 in RATING_ORDER).
+    investment_grade_ordinal_min: int = 3
+    # Ratings at or below this ordinal are distress (CCC = -4).
+    distress_rating_ordinal_max: int = -4
+    # Minimum rating notch drop to trigger major_downgrade.
+    major_downgrade_steps: int = 3
+
+
+DEFAULT_RISK_MONITOR_POLICY = RiskMonitorPolicy()
 
 
 @dataclass(frozen=True)

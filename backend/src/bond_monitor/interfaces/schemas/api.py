@@ -175,6 +175,7 @@ class PlanResponse(BaseModel):
     total_invested_rub: float
     final_cash_balance: float
     final_portfolio_value: float
+    initial_cash_rub: float = 0.0
     expected_xirr_pct: float | None = None
     weighted_duration_years: float | None = None
     notes: list[str] = Field(default_factory=list)
@@ -254,6 +255,7 @@ class SuggestionResponse(BaseModel):
     source_isin: str | None = None
     chat_template: str | None = None
     urgency: str = "normal"
+    risk_acknowledgeable: bool = False
 
 
 class ActiveOrderResponse(BaseModel):

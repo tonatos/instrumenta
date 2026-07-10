@@ -14,6 +14,7 @@ from bond_monitor.domain.portfolio.policies import (
     DurationPolicy,
     RateScenario,
 )
+from bond_monitor.domain.portfolio.duration_metrics import rate_sensitive_duration
 
 logger = logging.getLogger(__name__)
 
@@ -411,8 +412,15 @@ def calc_target_duration_adjustment(
     return closeness * weight * 50.0
 
 
-def _duration_scale_years(bonds: Sequence[BondRecord]) -> float:
-    duration_values = [d for b in bonds if (d := b.duration_years) is not None]
+def _duration_scale_years(
+    bonds: Sequence[BondRecord],
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
+) -> float:
+    duration_values = [
+        d
+        for b in bonds
+        if (d := rate_sensitive_duration(b, duration_policy)) is not None
+    ]
     return max(duration_values) if duration_values else 0.0
 
 
@@ -423,14 +431,15 @@ def _apply_duration_score_adjustments(
     duration_policy: DurationPolicy,
 ) -> None:
     weight = duration_policy.duration_score_weight
+    sensitive_duration = rate_sensitive_duration(bond, duration_policy)
     bond.score = (bond.score or 0.0) + calc_duration_adjustment(
-        bond.duration_years,
+        sensitive_duration,
         scale_years=duration_scale,
         scenario=duration_policy.rate_scenario,
         weight=weight,
     )
     bond.score += calc_target_duration_adjustment(
-        bond.duration_years,
+        sensitive_duration,
         target_years=duration_policy.target_duration_years,
         scale_years=duration_scale,
         weight=weight,
@@ -448,7 +457,7 @@ def apply_duration_scoring(
         and duration_policy.target_duration_years is None
     ):
         return list(bonds)
-    duration_scale = _duration_scale_years(bonds)
+    duration_scale = _duration_scale_years(bonds, duration_policy)
     result = list(bonds)
     for bond in result:
         _apply_duration_score_adjustments(
@@ -499,7 +508,7 @@ def score_bonds_for_profile(
         scale_ytm_net = risk_free_net
     max_spread = max(scale_ytm_net - risk_free_net, 0.0)
 
-    duration_scale = _duration_scale_years(bonds)
+    duration_scale = _duration_scale_years(bonds, duration_policy)
 
     result: list[BondRecord] = []
     for bond in bonds:

@@ -24,7 +24,6 @@ _selection = DEFAULT_BOND_SELECTION_POLICY
 REINVESTMENT_GAP_DAYS: int = _planning.reinvestment_gap_days
 PUT_OFFER_REMINDER_DAYS: int = _planning.put_offer_reminder_days
 MAX_REINVEST_DEPTH: int = _planning.max_reinvest_depth
-COUPON_CASH_REINVEST_INTERVAL_DAYS: int = _planning.coupon_cash_reinvest_interval_days
 
 MAX_POSITION_SHARE: float = _alloc.max_position_share
 TARGET_POSITION_SHARE: float = _alloc.target_position_share
@@ -137,5 +136,7 @@ class PortfolioPlan:
     weighted_duration_years: float | None = None
     # Срок плана (для пересчёта эффективной доходности и формул в UI).
     horizon_days: int = 0
+    # Стартовый кэш для cashflow (SIMULATION: initial_amount; TRADING: money_rub).
+    initial_cash_rub: float = 0.0
     # Точки роста стоимости портфеля (кэш + бумаги) от ``today`` до горизонта.
     value_timeline: list[PortfolioValuePoint] = field(default_factory=list)

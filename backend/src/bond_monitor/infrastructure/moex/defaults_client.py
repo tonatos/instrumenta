@@ -96,11 +96,11 @@ def _save_cache(cache: dict[str, dict]) -> None:
         logger.warning("Defaults cache save failed", exc_info=True)
 
 
-def _cache_entry_is_fresh(entry: dict, now: float) -> bool:
+def _cache_entry_is_fresh(entry: dict, now: float, *, cache_ttl_seconds: int) -> bool:
     ts = entry.get("ts")
     if not isinstance(ts, int | float):
         return False
-    return (now - ts) < CACHE_TTL_SECONDS
+    return (now - ts) < cache_ttl_seconds
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -149,7 +149,11 @@ def _fetch_one(client: httpx.Client, isin: str) -> DefaultStatus | None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def enrich_bonds_with_defaults(bonds: list[BondRecord]) -> list[BondRecord]:
+def enrich_bonds_with_defaults(
+    bonds: list[BondRecord],
+    *,
+    cache_ttl_seconds: int = CACHE_TTL_SECONDS,
+) -> list[BondRecord]:
     """
     Populate ``has_default`` / ``has_technical_default`` on each BondRecord.
 
@@ -170,7 +174,7 @@ def enrich_bonds_with_defaults(bonds: list[BondRecord]) -> list[BondRecord]:
         if not b.isin:
             continue
         entry = cache.get(b.isin)
-        if not entry or not _cache_entry_is_fresh(entry, now):
+        if not entry or not _cache_entry_is_fresh(entry, now, cache_ttl_seconds=cache_ttl_seconds):
             to_fetch.append(b.isin)
 
     if to_fetch:
@@ -218,4 +222,33 @@ def enrich_bonds_with_defaults(bonds: list[BondRecord]) -> list[BondRecord]:
             n_default,
             n_tech,
         )
+    return bonds
+
+
+PORTFOLIO_DEFAULTS_TTL_SECONDS: int = 60 * 60  # 1 h for held positions
+
+
+def refresh_defaults_for_isins(
+    isins: list[str],
+    *,
+    cache_ttl_seconds: int = PORTFOLIO_DEFAULTS_TTL_SECONDS,
+) -> None:
+    """Refresh MOEX default flags for portfolio holdings (max ~10 ISINs)."""
+    if not isins:
+        return
+    stubs = [BondRecord(isin=isin, secid="", name="") for isin in isins if isin]
+    enrich_bonds_with_defaults(stubs, cache_ttl_seconds=cache_ttl_seconds)
+
+
+def apply_defaults_from_cache(bonds: list[BondRecord]) -> list[BondRecord]:
+    """Overlay cached MOEX default flags onto bonds without network I/O."""
+    if not bonds:
+        return bonds
+    cache = _load_cache()
+    for bond in bonds:
+        entry = cache.get(bond.isin)
+        if not entry:
+            continue
+        bond.has_default = bool(entry.get("has_default", False))
+        bond.has_technical_default = bool(entry.get("has_technical_default", False))
     return bonds

@@ -17,6 +17,7 @@ from bond_monitor.domain.portfolio.auto_compose import (
     compose_buy_allocations,
     format_share,
 )
+from bond_monitor.domain.portfolio.deploy_cash import deploy_cash, max_affordable_lots
 from bond_monitor.domain.portfolio.cashflow import CashflowEvent, merge_cashflow_events
 from bond_monitor.domain.portfolio.plan_builder import _net_redemption_amount, build_plan
 from bond_monitor.domain.portfolio.plan_models import (
@@ -56,8 +57,10 @@ __all__ = [
     "build_plan",
     "clear_downstream_slot_overrides",
     "compose_buy_allocations",
+    "deploy_cash",
     "enrich_reinvestment_slot",
     "format_share",
+    "max_affordable_lots",
     "portfolio_universe_filter",
     "position_from_bond",
     "prune_stale_slot_overrides",

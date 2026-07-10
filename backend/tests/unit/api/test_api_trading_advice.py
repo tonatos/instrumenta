@@ -120,3 +120,15 @@ def test_advice_passes_from_date_to_operations() -> None:
         mock_snapshot.assert_called_once()
         mock_operations.assert_called_once()
         assert "from_date" in mock_operations.call_args.kwargs
+
+
+def test_acknowledge_risk_alert_returns_204() -> None:
+    from bond_monitor.application.bonds.bond_service import BondService
+
+    bond = make_bond(isin="RU000A1", figi="FIGI-HOLD", name="Held Bond")
+    universe = type("U", (), {"bonds": [bond]})()
+    with portfolio_client("Risk Ack") as (client, pid):
+        attach_trading_portfolio(client, pid, auto_compose=False)
+        with patch.object(BondService, "load_universe", return_value=universe):
+            resp = client.post(f"/api/v1/portfolios/{pid}/risk-alerts/RU000A1/acknowledge")
+        assert resp.status_code == 204, resp.text

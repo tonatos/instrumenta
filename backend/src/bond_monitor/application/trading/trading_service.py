@@ -10,6 +10,7 @@ from bond_monitor.application.trading.context import TradingContext
 from bond_monitor.application.trading.order_use_case import OrderUseCase
 from bond_monitor.application.trading.sandbox_use_case import SandboxUseCase
 from bond_monitor.application.trading.sell_position_use_case import SellPositionUseCase
+from bond_monitor.application.trading.risk_monitoring import acknowledge_trading_risk
 from bond_monitor.application.trading.trading_state_use_case import TradingStateUseCase
 from bond_monitor.application.trading.types import (
     OrderPreviewResult,
@@ -266,3 +267,12 @@ class TradingService:
 
     async def get_account_operations_history(self, portfolio_id: str) -> list[OperationRecord]:
         return await self._advise.get_account_operations_history(portfolio_id)
+
+    async def acknowledge_risk_alert(
+        self,
+        portfolio_id: str,
+        isin: str,
+        universe: list[BondRecord],
+    ) -> None:
+        portfolio = await self._ctx.get_trading_portfolio(portfolio_id)
+        await acknowledge_trading_risk(self._ctx, portfolio, isin, universe)

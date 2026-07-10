@@ -36,12 +36,14 @@ export function SuggestionCard({
   suggestion,
   isProduction,
   onConfirm,
+  onAcknowledgeRisk,
   onOpenDetail,
   isPending,
 }: {
   suggestion: Suggestion;
   isProduction: boolean;
   onConfirm: (s: Suggestion) => void;
+  onAcknowledgeRisk?: (s: Suggestion) => void;
   onOpenDetail?: () => void;
   isPending: boolean;
 }) {
@@ -113,6 +115,18 @@ export function SuggestionCard({
           >
             {direction === "BUY" ? "Подтвердить покупку" : "Подтвердить продажу"}
             {isProduction && " (боевой)"}
+          </Button>
+        )}
+        {suggestion.risk_acknowledgeable && onAcknowledgeRisk && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onAcknowledgeRisk(suggestion)}
+            disabled={isPending}
+            data-testid={`acknowledge-risk-${suggestion.isin}`}
+          >
+            Принять риск
           </Button>
         )}
       </div>

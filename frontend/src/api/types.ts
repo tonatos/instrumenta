@@ -170,6 +170,7 @@ export interface PlanResponse {
   total_invested_rub: number;
   final_cash_balance: number;
   final_portfolio_value: number;
+  initial_cash_rub: number;
   expected_xirr_pct: number | null;
   weighted_duration_years: number | null;
   notes: string[];
@@ -180,6 +181,7 @@ export interface PlanResponse {
     label: string;
     lots?: number | null;
     bonds_count?: number | null;
+    balance_after_rub?: number;
   }>;
   value_timeline: Array<{
     date: string;
@@ -340,6 +342,7 @@ export interface Suggestion {
   source_isin?: string | null;
   chat_template?: string | null;
   urgency: SuggestionUrgency;
+  risk_acknowledgeable?: boolean;
 }
 
 export interface ActiveOrder {

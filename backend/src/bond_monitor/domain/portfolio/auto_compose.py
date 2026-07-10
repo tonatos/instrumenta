@@ -16,6 +16,7 @@ from bond_monitor.domain.portfolio.plan_models import (
     MIN_POSITION_SHARE,
     TARGET_POSITION_SHARE,
 )
+from bond_monitor.domain.portfolio.duration_metrics import rate_sensitive_duration
 from bond_monitor.domain.portfolio.policies import (
     DEFAULT_DURATION_POLICY,
     DurationPolicy,
@@ -44,7 +45,11 @@ def _apply_duration_guardrail(
     limit = duration_policy.max_weighted_duration_years
     if limit is None:
         return bonds
-    kept = [b for b in bonds if b.duration_years is None or b.duration_years <= limit]
+    kept = [
+        b
+        for b in bonds
+        if (d := rate_sensitive_duration(b, duration_policy)) is None or d <= limit
+    ]
     dropped = len(bonds) - len(kept)
     if dropped > 0:
         notes.append(
@@ -256,6 +261,102 @@ def auto_compose(
             )
 
     return positions, remaining, notes
+
+
+def sweep_remaining_cash(
+    *,
+    remaining_cash_rub: float,
+    current_lots_by_isin: dict[str, int],
+    universe: Sequence[BondRecord],
+    profile: RiskProfile,
+    horizon_date: date,
+    as_of_date: date,
+    key_rate: float,
+    tax_rate: float,
+    api_trade_only: bool,
+    account_kind: AccountKind | None,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
+    total_budget_rub: float,
+) -> tuple[list[BuyAllocation], list[str]]:
+    """Докупить лоты лучших бумаг, пока остаток ≥ стоимости лота."""
+    notes: list[str] = []
+    if remaining_cash_rub <= 0:
+        return [], notes
+
+    selection_ctx = selection_context(
+        profile=profile,
+        horizon_date=horizon_date,
+        purchase_date=as_of_date,
+        api_trade_only=api_trade_only,
+    )
+    scored = select_ranked_bonds(
+        universe,
+        selection_ctx,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+        duration_policy=duration_policy,
+    ).bonds
+    scored = _apply_duration_guardrail(scored, duration_policy, notes)
+    if not scored:
+        return [], notes
+
+    universe_by_isin = {bond.isin: bond for bond in universe}
+    max_per_position = total_budget_rub * MAX_POSITION_SHARE
+    buffer = buy_limit_price_buffer(account_kind)
+    allocations_by_isin: dict[str, BuyAllocation] = {}
+    remaining = remaining_cash_rub
+    current_cost_by_isin: dict[str, float] = {}
+    for isin, lots in current_lots_by_isin.items():
+        bond = universe_by_isin.get(isin)
+        if bond is None:
+            continue
+        lot_cost = bond.price_per_lot_rub or 0.0
+        current_cost_by_isin[isin] = lots * lot_cost
+
+    changed = True
+    while changed and remaining > 0:
+        changed = False
+        for bond in scored:
+            lot_cost = bond.price_per_lot_rub or 0.0
+            if lot_cost <= 0 or remaining + 0.01 < lot_cost:
+                continue
+            current_cost = current_cost_by_isin.get(bond.isin, 0.0)
+            if current_cost + lot_cost > max_per_position + 0.01:
+                continue
+            last_price = bond.last_price if bond.last_price is not None else 100.0
+            existing = allocations_by_isin.get(bond.isin)
+            if existing is None:
+                allocations_by_isin[bond.isin] = BuyAllocation(
+                    isin=bond.isin,
+                    figi=bond.figi or None,
+                    name=bond.name,
+                    lots=1,
+                    suggested_price_pct=float(
+                        suggested_buy_limit_price_pct(last_price, buffer)
+                    ),
+                    estimated_amount_rub=lot_cost,
+                    is_existing_position=bond.isin in current_lots_by_isin,
+                )
+            else:
+                allocations_by_isin[bond.isin] = BuyAllocation(
+                    isin=existing.isin,
+                    figi=existing.figi,
+                    name=existing.name,
+                    lots=existing.lots + 1,
+                    suggested_price_pct=existing.suggested_price_pct,
+                    estimated_amount_rub=existing.estimated_amount_rub + lot_cost,
+                    is_existing_position=existing.is_existing_position,
+                )
+            current_cost_by_isin[bond.isin] = current_cost + lot_cost
+            remaining -= lot_cost
+            changed = True
+            break
+
+    if remaining_cash_rub - remaining > 0:
+        notes.append(
+            f"Добор остатка: вложено ещё {remaining_cash_rub - remaining:,.0f} ₽."
+        )
+    return list(allocations_by_isin.values()), notes
 
 
 def format_share(value: float, total: float) -> str:

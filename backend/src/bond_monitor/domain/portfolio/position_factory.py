@@ -86,12 +86,13 @@ def position_end_date(
 ) -> date | None:
     """Эффективная дата возврата номинала по позиции.
 
-    В simulation с ``assume_best_put_outcome=True`` для оферт выбирается
-    выгоднейший сценарий по расписанию MOEX.
+    Ближайшая пут-оферта по номиналу или выше считается плановой датой
+    выхода: бумаги подбираются под ``effective_date``, и cashflow должен
+    отражать тот же горизонт удержания.
     """
+    _ = assume_best_put_outcome  # сохранён для обратной совместимости вызовов
     if (
-        assume_best_put_outcome
-        and position.offer_date is not None
+        position.offer_date is not None
         and position.offer_date > today
         and not put_offer_submission_closed(position, today)
         and position.offer_date <= horizon

@@ -1,0 +1,7 @@
+{
+  "portfolio_id": "aa19dfd359c5489988adac94df8bfe8b",
+  "snapshot_date": "2026-07-10",
+  "initial_cash_rub": 632.14,
+  "positions_count": 8,
+  "note": "Live trading portfolio snapshot; regression via aa19dfd_live_portfolio() in factories.py"
+}

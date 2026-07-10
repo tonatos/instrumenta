@@ -14,7 +14,8 @@ from bond_monitor.application.trading.types import (
 )
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.policies import DurationPolicy, duration_policy_for_portfolio
-from bond_monitor.domain.trading.advisory import advise
+from bond_monitor.application.trading.risk_monitoring import prepare_trading_risk_monitoring
+from bond_monitor.domain.trading.advisory import advise, build_holdings
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import (
     broker_active_orders_from_infrastructure,
     broker_operations_from_infrastructure,
@@ -64,10 +65,8 @@ def _suggestion_to_response(s) -> SuggestionResponse:
         source_isin=s.source_isin,
         chat_template=s.chat_template,
         urgency=s.urgency,
+        risk_acknowledgeable=s.risk_acknowledgeable,
     )
-
-
-def _active_order_to_response(o) -> ActiveOrderResponse:
     return ActiveOrderResponse(
         order_id=o.order_id,
         request_uid=o.request_uid,
@@ -125,7 +124,7 @@ class AdviseUseCase:
             portfolio.account_kind,  # type: ignore[arg-type]
             account_id=account_id,
         )
-        return self.build_advice_result(
+        return await self.build_advice_result(
             portfolio,
             universe,
             snapshot=snapshot,
@@ -137,7 +136,7 @@ class AdviseUseCase:
             duration_policy=duration_policy,
         )
 
-    def build_advice_result(
+    async def build_advice_result(
         self,
         portfolio,
         universe: list[BondRecord],
@@ -152,6 +151,15 @@ class AdviseUseCase:
     ) -> TradingAdviceResult:
         broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
         policy = duration_policy or duration_policy_for_portfolio(portfolio)
+
+        holdings = build_holdings(broker_snapshot, universe)
+        holding_isins = {h.isin for h in holdings if h.isin}
+        await prepare_trading_risk_monitoring(
+            self._ctx,
+            portfolio,
+            universe,
+            holding_isins,
+        )
 
         advice = advise(
             portfolio,

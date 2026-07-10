@@ -69,7 +69,11 @@ export function CashflowTable({
     let balance = initialCash;
     return cashflow.map((e) => {
       balance += e.amount_rub;
-      return { ...e, running_balance: balance };
+      return {
+        ...e,
+        running_balance:
+          e.balance_after_rub != null ? e.balance_after_rub : balance,
+      };
     });
   }, [cashflow, initialCash]);
 

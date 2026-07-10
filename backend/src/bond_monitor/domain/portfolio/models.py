@@ -362,6 +362,8 @@ class Portfolio:
     # `from_date` для расчёта XIRR и фильтрации операций по портфелю.
     trading_started_at: str | None = None
     frozen_forecast: FrozenForecast | None = None
+    # Baseline risk state per ISIN for escalation alerts (trading mode).
+    risk_baselines: dict[str, object] = field(default_factory=dict)
 
     def touch(self) -> None:
         """Обновить ``updated_at`` — вызывать перед каждым ``save_portfolios``."""
@@ -391,6 +393,14 @@ class Portfolio:
             "account_label": self.account_label,
             "trading_started_at": self.trading_started_at,
             "frozen_forecast": (self.frozen_forecast.to_dict() if self.frozen_forecast else None),
+            "risk_baselines": {
+                isin: (
+                    snap.to_dict()
+                    if hasattr(snap, "to_dict")
+                    else dict(snap)  # type: ignore[arg-type]
+                )
+                for isin, snap in sorted(self.risk_baselines.items())
+            },
             "positions": [p.to_dict() for p in self.positions],
             "slots": [s.to_dict() for s in self.slots],
         }
@@ -402,6 +412,14 @@ class Portfolio:
         # breaking changes для существующих файлов.
         account_kind_raw = data.get("account_kind")
         frozen_raw = data.get("frozen_forecast")
+        from bond_monitor.domain.portfolio.risk_monitor import RiskSnapshot
+
+        risk_baselines_raw = data.get("risk_baselines") or {}
+        risk_baselines = {
+            str(isin): RiskSnapshot.from_dict(snap)
+            for isin, snap in risk_baselines_raw.items()
+            if isinstance(snap, dict)
+        }
         return cls(
             id=str(data.get("id") or _new_portfolio_id()),
             name=str(data["name"]),
@@ -430,6 +448,7 @@ class Portfolio:
                 str(data["trading_started_at"]) if data.get("trading_started_at") else None
             ),
             frozen_forecast=(FrozenForecast.from_dict(frozen_raw) if frozen_raw else None),
+            risk_baselines=risk_baselines,
             positions=[PortfolioPosition.from_dict(p) for p in data.get("positions", [])],
             slots=[ReinvestmentSlot.from_dict(s) for s in data.get("slots", [])],
         )

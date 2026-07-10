@@ -68,6 +68,7 @@ export function TradingActionQueue({ portfolio, suggestionConfirmId }: Props) {
     cancelMutation,
     isPending,
     parseApiError,
+    acknowledgeRiskMutation,
   } = useTradingAdvice(portfolio);
 
   const suggestions = data?.suggestions ?? [];
@@ -221,6 +222,11 @@ export function TradingActionQueue({ portfolio, suggestionConfirmId }: Props) {
               suggestion={s}
               isProduction={isProduction}
               isPending={isPending}
+              onAcknowledgeRisk={
+                s.risk_acknowledgeable
+                  ? (item) => acknowledgeRiskMutation.mutate(item.isin)
+                  : undefined
+              }
               onConfirm={(item) => {
                 setConfirmError(null);
                 setConfirmSuggestion(item);

@@ -51,8 +51,11 @@ smart-lab ──► infrastructure/ratings/ ──┘
 
 | Модуль | Ответственность |
 |--------|-----------------|
-| `auto_compose.py` | `auto_compose`, `compose_buy_allocations` — единый алгоритм; `compose_buy_allocations` учитывает `MAX_AUTO_POSITIONS` (10) с holdings: новых ISIN ≤ `10 − N`, при ≥10 — только докупка топ-10 держимых |
-| `planner.py` | Facade: `auto_compose`, `compose_buy_allocations`, `build_plan` |
+| `auto_compose.py` | `auto_compose`, `compose_buy_allocations`, `sweep_remaining_cash` — единый алгоритм корзины; `compose_buy_allocations` учитывает `MAX_AUTO_POSITIONS` (10) с holdings |
+| `deploy_cash.py` | **Единая** точка развёртывания кэша (план + advisory): `auto_compose` / `compose_buy_allocations` + sweep остатка |
+| `simulation/` | Event-sourced симулятор: `state.py`, `events.py`, `engine.run_simulation()` — очередь событий, lazy lifecycle |
+| `plan_builder.py` | Thin facade: `build_plan` → `run_simulation()`, read-model (слоты, XIRR, timeline) |
+| `planner.py` | Facade: `auto_compose`, `compose_buy_allocations`, `deploy_cash`, `build_plan` |
 | `selection.py` | Единый eligibility/ranking для compose и reinvest |
 | `position_factory.py` | `position_from_bond`, `position_end_date` |
 | `coupon_schedule.py` | Расписание купонов |
@@ -68,7 +71,7 @@ smart-lab ──► infrastructure/ratings/ ──┘
 
 | Модуль | Ответственность |
 |--------|-----------------|
-| `advisory.py` | Stateless `advise()`: holdings, suggestions, active orders, cashflow; buy — через `compose_buy_allocations` |
+| `advisory.py` | Stateless `advise()`: holdings, suggestions, active orders, cashflow; buy — через `deploy_cash` |
 | `models.py` | `AccountKind`, `FrozenForecast`, advisory DTO |
 | `ports.py` | `BrokerSnapshot`, `BrokerOperation` — порты без SDK |
 | `ids.py` | `stable_id()` для детерминированных ключей заявок |
@@ -169,7 +172,7 @@ cd e2e/playwright && npx playwright test tests/mocked
 cd e2e/playwright && npx playwright test tests/live
 ```
 
-Покрытие P0: `test_planner.py`, `test_scorer.py`, `test_trading_advisory.py`, yield.
+Покрытие P0: `test_planner.py`, `test_plan_simulation.py`, `test_scorer.py`, `test_trading_advisory.py`, yield.
 
 ---
 

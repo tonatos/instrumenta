@@ -6,6 +6,7 @@ from datetime import date
 
 from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.invested_capital import invested_capital_rub
+from bond_monitor.domain.portfolio.cashflow import cashflow_rows_with_balance
 from bond_monitor.domain.portfolio.models import Portfolio
 from bond_monitor.domain.portfolio.planner import PortfolioPlan
 from bond_monitor.domain.portfolio.position_status import open_positions, position_to_api_dict
@@ -99,20 +100,11 @@ def plan_to_response(plan: PortfolioPlan) -> PlanResponse:
         total_invested_rub=plan.total_invested_rub,
         final_cash_balance=plan.final_cash_balance_rub,
         final_portfolio_value=plan.final_portfolio_value_rub,
+        initial_cash_rub=plan.initial_cash_rub,
         expected_xirr_pct=plan.effective_annual_return_pct,
         weighted_duration_years=plan.weighted_duration_years,
         notes=list(plan.notes),
-        cashflow=[
-            {
-                "date": e.date.isoformat(),
-                "amount_rub": e.amount_rub,
-                "kind": e.kind,
-                "label": e.description,
-                "lots": e.lots,
-                "bonds_count": e.bonds_count,
-            }
-            for e in plan.events
-        ],
+        cashflow=cashflow_rows_with_balance(plan.events, plan.initial_cash_rub),
         value_timeline=[
             {
                 "date": p.date.isoformat(),

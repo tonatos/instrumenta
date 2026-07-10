@@ -141,11 +141,7 @@ export function PortfolioTabs({
         {plan && plan.cashflow.length > 0 ? (
           <CashflowTable
             cashflow={plan.cashflow}
-            initialCash={
-              active.mode === "trading"
-                ? active.cash_balance_rub
-                : active.initial_amount_rub
-            }
+            initialCash={plan.initial_cash_rub}
           />
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">

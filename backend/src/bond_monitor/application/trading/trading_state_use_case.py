@@ -69,7 +69,7 @@ class TradingStateUseCase:
             today=today,
             duration_policy=duration_policy,
         )
-        advice = self._advise.build_advice_result(
+        advice = await self._advise.build_advice_result(
             portfolio,
             universe,
             snapshot=snapshot,

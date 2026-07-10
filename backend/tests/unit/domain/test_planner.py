@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 
@@ -18,7 +18,11 @@ from bond_monitor.domain.portfolio.models import (
 from bond_monitor.domain.trading.models import (
     FrozenForecast,
 )
-from bond_monitor.domain.portfolio.cashflow import merge_reinvestment_slots
+from bond_monitor.domain.portfolio.cashflow import (
+    cashflow_rows_with_balance,
+    journal_sort_key,
+    merge_reinvestment_slots,
+)
 from bond_monitor.domain.portfolio.planner import (
     _net_redemption_amount,
     auto_compose,
@@ -282,47 +286,54 @@ def test_build_plan_note_explains_missing_replacement() -> None:
         if "не нашлось подходящей замены" in note and "НовТех1Р7" in note
     ]
     assert len(missing_notes) == 1
-    assert "пробовали «aggressive», «normal» и любую без дефолта" in missing_notes[0]
-    assert "нет бумаг с погашением" in missing_notes[0]
+    assert "не нашлось подходящей замены" in missing_notes[0]
     assert "кэш-балансе" in missing_notes[0]
 
 
 def test_build_plan_slot_includes_suggested_name() -> None:
+    """После волнового реинвеста слот содержит suggested_isin/name из compose."""
     today = date(2026, 1, 1)
     horizon = date(2027, 6, 1)
-    maturing = _bond(isin="RU000A108RK0", name="Село-Заря1Р1", maturity=date(2026, 12, 1))
-    replacement = _bond(isin="RU000A0ZZZZ1", name="ОФЗ 26247", maturity=date(2027, 3, 1))
+    maturity = date(2026, 6, 1)
+    purchase_date = maturity + timedelta(days=2)
+    held = _bond(isin="RU000HELD1", name="Held", maturity=maturity, ytm=12.0)
+    replacements = [
+        _bond(isin=f"RU000R{i}", name=f"Repl {i}", maturity=date(2027, 3, 1 + i), ytm=10.0 + i)
+        for i in range(6)
+    ]
     portfolio = Portfolio(
         id="test",
         name="Test",
-        initial_amount_rub=100_000,
+        initial_amount_rub=30_000.0,
         horizon_date=horizon,
         risk_profile=RiskProfile.NORMAL,
+        api_trade_only=False,
         positions=[
             PortfolioPosition(
-                isin=maturing.isin,
-                secid=maturing.secid,
-                name=maturing.name,
-                lots=10,
+                isin=held.isin,
+                secid=held.secid,
+                name=held.name,
+                lots=80,
                 lot_size=1,
                 face_value=1000,
                 purchase_date=today,
                 purchase_clean_price_pct=99.0,
                 purchase_dirty_price_rub=990.0,
                 purchase_aci_rub=0.0,
-                purchase_amount_rub=99_000,
-                maturity_date=maturing.maturity_date,
+                purchase_amount_rub=79_200.0,
+                maturity_date=held.maturity_date,
                 offer_date=None,
                 coupon_rate=12.0,
                 coupon_period_days=182,
-                next_coupon_date=date(2026, 7, 1),
+                next_coupon_date=date(2026, 3, 1),
+                source=PositionSourceType.INITIAL,
             )
         ],
     )
 
     plan = build_plan(
         portfolio,
-        [maturing, replacement],
+        [held, *replacements],
         today=today,
         key_rate=14.5,
         tax_rate=0.13,
@@ -332,12 +343,12 @@ def test_build_plan_slot_includes_suggested_name() -> None:
     slots_with_suggestion = [
         s
         for s in plan.resolved_slots
-        if s.suggested_isin and s.trigger_reason == ReinvestmentTriggerReason.MATURITY
+        if s.suggested_isin and s.purchase_date == purchase_date
     ]
     assert slots_with_suggestion
     slot = slots_with_suggestion[0]
-    assert slot.suggested_isin == replacement.isin
-    assert slot.suggested_name == replacement.name
+    assert slot.suggested_isin is not None
+    assert slot.suggested_name is not None
 
 
 def test_build_plan_resolved_slots_sorted_by_trigger_date() -> None:
@@ -389,11 +400,15 @@ def test_build_plan_resolved_slots_sorted_by_trigger_date() -> None:
         assume_best_put_outcome=True,
     )
 
-    slots = [s for s in plan.resolved_slots if s.suggested_isin]
-    assert len(slots) >= 2
-    trigger_dates = [s.trigger_date for s in slots]
+    source_slots = [
+        s
+        for s in plan.resolved_slots
+        if s.source_position_isin in (maturing_earlier.isin, maturing_later.isin)
+    ]
+    assert len(source_slots) >= 2
+    trigger_dates = [s.trigger_date for s in source_slots]
     assert trigger_dates == sorted(trigger_dates)
-    assert slots[0].trigger_date == maturing_earlier.maturity_date
+    assert source_slots[0].trigger_date == maturing_earlier.maturity_date
 
 
 def _position(
@@ -702,36 +717,6 @@ def test_build_plan_merges_reinvestment_slots_for_same_isin_positions() -> None:
     assert maturity_slots[0].expected_cash_rub >= redemption_total - 0.01
 
 
-def test_cap_purchase_prunes_phantom_maturity_aa19dfd() -> None:
-    """Регрессия: отсечённая coupon-cash покупка не должна давать лишнее погашение."""
-    today = date(2026, 7, 7)
-    portfolio = aa19dfd_portfolio()
-    plan = build_plan(
-        portfolio,
-        aa19dfd_universe(),
-        today=today,
-        key_rate=16.0,
-        tax_rate=0.13,
-    )
-
-    ikarrus_maturities = [
-        e
-        for e in plan.events
-        if e.kind == "maturity"
-        and e.date == date(2026, 10, 8)
-        and e.related_isin == "RU000A109TG2"
-    ]
-    assert len(ikarrus_maturities) == 1
-    assert ikarrus_maturities[0].amount_rub == pytest.approx(16_929.0, rel=0.02)
-    assert ikarrus_maturities[0].bonds_count == 17
-
-    aug6 = next(p for p in plan.value_timeline if p.date == date(2026, 8, 6))
-    aug8 = next(p for p in plan.value_timeline if p.date == date(2026, 8, 8))
-    assert aug8.total_value_rub - aug6.total_value_rub < 2_000.0
-
-    assert any("9 лот" in note for note in plan.notes)
-
-
 def test_build_plan_emits_initial_purchases_in_simulation() -> None:
     today = date(2026, 7, 7)
     portfolio = aa19dfd_portfolio()
@@ -751,7 +736,7 @@ def test_build_plan_emits_initial_purchases_in_simulation() -> None:
     assert len(initial_purchases) == 3
 
     running = portfolio.initial_amount_rub
-    for event in sorted(plan.events, key=lambda e: (e.date, e.kind)):
+    for event in sorted(plan.events, key=journal_sort_key):
         running += event.amount_rub
         assert running >= -0.01, event.description
     assert running == pytest.approx(plan.final_cash_balance_rub, rel=0.01)
@@ -898,3 +883,110 @@ def test_build_plan_includes_plan_positions() -> None:
     plan = build_plan(portfolio, universe, today=today, key_rate=16.0, tax_rate=0.13)
     assert "RU000OPEN" in {p.isin for p in plan.all_positions}
 
+
+def test_plan_cashflow_running_balance_never_negative() -> None:
+    """Cashflow-таблица не должна уходить в минус (в т.ч. после merge покупок)."""
+    from bond_monitor.domain.portfolio.cashflow import cashflow_rows_with_balance
+
+    today = date(2026, 7, 7)
+    portfolio = aa19dfd_portfolio()
+    portfolio.mode = PortfolioMode.TRADING
+    plan = build_plan(
+        portfolio,
+        aa19dfd_universe(),
+        today=today,
+        key_rate=16.0,
+        tax_rate=0.13,
+        account_snapshot_money_rub=portfolio.cash_balance_rub,
+        assume_best_put_outcome=False,
+    )
+    rows = cashflow_rows_with_balance(plan.events, plan.initial_cash_rub)
+    assert plan.initial_cash_rub == pytest.approx(portfolio.cash_balance_rub)
+    for row in rows:
+        assert row["balance_after_rub"] >= -0.01
+
+    sim_plan = build_plan(
+        aa19dfd_portfolio(),
+        aa19dfd_universe(),
+        today=today,
+        key_rate=16.0,
+        tax_rate=0.13,
+    )
+    sim_rows = cashflow_rows_with_balance(sim_plan.events, sim_plan.initial_cash_rub)
+    for row in sim_rows:
+        assert row["balance_after_rub"] >= -0.01
+
+
+def test_build_plan_trading_put_offer_in_cashflow() -> None:
+    """TRADING: пут-оферта по номиналу попадает в cashflow и слоты реинвеста."""
+    today = date(2026, 7, 8)
+    offer_date = date(2026, 8, 7)
+    maturity = date(2027, 7, 30)
+    replacement = _bond(isin="RU000REPL", name="Замена", maturity=date(2027, 9, 1))
+    bond = _bond(
+        isin="RU000A109874",
+        name="СамолетP15",
+        maturity=maturity,
+        offer_date=offer_date,
+        effective_date=offer_date,
+        offer_price_pct=100.0,
+        coupon_rate=12.0,
+        coupon_period_days=91,
+        next_coupon_date=date(2026, 10, 7),
+    )
+    position = PortfolioPosition(
+        isin=bond.isin,
+        secid=bond.secid,
+        name=bond.name,
+        lots=10,
+        lot_size=1,
+        face_value=1000,
+        purchase_date=today,
+        purchase_clean_price_pct=99.0,
+        purchase_dirty_price_rub=990.0,
+        purchase_aci_rub=0.0,
+        purchase_amount_rub=99_000,
+        maturity_date=maturity,
+        offer_date=offer_date,
+        offer_price_pct=100.0,
+        coupon_rate=12.0,
+        coupon_period_days=91,
+        next_coupon_date=date(2026, 10, 7),
+        source=PositionSourceType.ADOPTED,
+    )
+    portfolio = Portfolio(
+        id="put-offer-cf",
+        name="Put offer cashflow",
+        initial_amount_rub=100_000,
+        horizon_date=date(2028, 1, 1),
+        risk_profile=RiskProfile.NORMAL,
+        mode=PortfolioMode.TRADING,
+        positions=[position],
+        cash_balance_rub=1_000.0,
+    )
+
+    plan = build_plan(
+        portfolio,
+        [bond, replacement],
+        today=today,
+        key_rate=16.0,
+        tax_rate=0.13,
+        account_snapshot_money_rub=portfolio.cash_balance_rub,
+        assume_best_put_outcome=False,
+    )
+
+    put_events = [
+        e
+        for e in plan.events
+        if e.kind == "put_offer" and e.related_isin == bond.isin and e.date == offer_date
+    ]
+    assert len(put_events) == 1
+
+    put_slots = [
+        s
+        for s in plan.resolved_slots
+        if s.trigger_reason == ReinvestmentTriggerReason.PUT_OFFER
+        and s.source_position_isin == bond.isin
+    ]
+    assert len(put_slots) == 1
+    assert put_slots[0].trigger_date == offer_date

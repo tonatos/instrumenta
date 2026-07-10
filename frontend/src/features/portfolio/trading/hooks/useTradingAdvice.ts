@@ -57,12 +57,21 @@ export function useTradingAdvice(portfolio: Portfolio) {
     onSuccess: afterCancel,
   });
 
-  const isPending = placeMutation.isPending || cancelMutation.isPending;
+  const acknowledgeRiskMutation = useMutation({
+    mutationFn: (isin: string) => api.acknowledgeRiskAlert(portfolio.id, isin),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["trading-state", portfolio.id] });
+    },
+  });
+
+  const isPending =
+    placeMutation.isPending || cancelMutation.isPending || acknowledgeRiskMutation.isPending;
 
   return {
     ...stateQuery,
     placeMutation,
     cancelMutation,
+    acknowledgeRiskMutation,
     isPending,
     parseApiError,
   };

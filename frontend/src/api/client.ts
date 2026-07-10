@@ -170,6 +170,11 @@ export const api = {
   getPlan: (id: string) => request<PlanResponse>(withRateScenario(`/portfolios/${id}/plan`)),
   getTradingState: (id: string) =>
     request<TradingStateResponse>(withRateScenario(`/portfolios/${id}/trading-state`)),
+  acknowledgeRiskAlert: (portfolioId: string, isin: string) =>
+    request<void>(
+      `/portfolios/${portfolioId}/risk-alerts/${encodeURIComponent(isin)}/acknowledge`,
+      { method: "POST" },
+    ),
 
   getAccounts: (kind: "sandbox" | "production" = "sandbox") =>
     request<BrokerAccount[]>(`/accounts?kind=${kind}`),

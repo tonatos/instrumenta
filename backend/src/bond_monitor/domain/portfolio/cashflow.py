@@ -31,12 +31,83 @@ class CashflowEvent:
     position_id: int | None = None
     lots: int | None = None
     bonds_count: int | None = None
+    journal_seq: int = 0
+
+
+_CAUSAL_KIND_ORDER = {"coupon": 0, "maturity": 1, "put_offer": 1, "purchase": 2}
 
 
 def event_sort_key(event: CashflowEvent) -> tuple[date, int]:
-    """Сортировка событий: внутри одной даты сначала покупки, потом купоны/погашения."""
+    """Legacy: покупки перед притоками в один день (только для обратной совместимости)."""
     order = {"purchase": 0, "coupon": 1, "maturity": 2, "put_offer": 2}
     return (event.date, order.get(event.kind, 3))
+
+
+def journal_sort_key(event: CashflowEvent) -> tuple[date, int]:
+    """Порядок журнала симуляции: ``journal_seq`` или causal fallback."""
+    if event.journal_seq > 0:
+        return (event.date, event.journal_seq)
+    return (event.date, _CAUSAL_KIND_ORDER.get(event.kind, 3))
+
+
+def _sorted_journal(events: Sequence[CashflowEvent]) -> list[CashflowEvent]:
+    return sorted(events, key=journal_sort_key)
+
+
+def running_cash_before_purchase(
+    events: Sequence[CashflowEvent],
+    purchase_date: date,
+    initial_cash: float,
+) -> float:
+    """Кэш на дату deploy до первой покупки (притоки того же дня уже учтены)."""
+    cash = initial_cash
+    for event in _sorted_journal(events):
+        if event.date > purchase_date:
+            break
+        if event.date < purchase_date:
+            cash += event.amount_rub
+            continue
+        if event.kind == "purchase":
+            break
+        cash += event.amount_rub
+    return cash
+
+
+def cash_on_hand_before_date(
+    events: Sequence[CashflowEvent],
+    as_of: date,
+    initial_cash: float,
+) -> float:
+    """Кэш на начало ``as_of`` — без событий в этот день."""
+    cash = initial_cash
+    for event in _sorted_journal(events):
+        if event.date >= as_of:
+            break
+        cash += event.amount_rub
+    return cash
+
+
+def cashflow_rows_with_balance(
+    events: Sequence[CashflowEvent],
+    initial_cash: float,
+) -> list[dict[str, float | str | int | None]]:
+    """События cashflow с running balance в журнальном порядке."""
+    running = initial_cash
+    rows: list[dict[str, float | str | int | None]] = []
+    for event in _sorted_journal(events):
+        running += event.amount_rub
+        rows.append(
+            {
+                "date": event.date.isoformat(),
+                "amount_rub": event.amount_rub,
+                "kind": event.kind,
+                "label": event.description,
+                "lots": event.lots,
+                "bonds_count": event.bonds_count,
+                "balance_after_rub": round(running, 2),
+            }
+        )
+    return rows
 
 
 def _format_bonds_count_suffix(bonds_count: int | None) -> str:
@@ -111,7 +182,7 @@ def merge_cashflow_events(events: list[CashflowEvent]) -> list[CashflowEvent]:
     эмитят отдельные купоны/погашения/покупки на одну дату — для UI
     суммируем их в одно событие.
     """
-    sorted_input = sorted(events, key=event_sort_key)
+    sorted_input = _sorted_journal(events)
     merged: dict[tuple[date, str, str], CashflowEvent] = {}
     merge_order: list[tuple[date, str, str]] = []
     passthrough: list[CashflowEvent] = []
@@ -132,11 +203,16 @@ def merge_cashflow_events(events: list[CashflowEvent]) -> list[CashflowEvent]:
                 is_projected=event.is_projected,
                 lots=event.lots,
                 bonds_count=event.bonds_count,
+                journal_seq=event.journal_seq,
             )
             merge_order.append(key)
             continue
         existing.amount_rub += event.amount_rub
         existing.is_projected = existing.is_projected or event.is_projected
+        if event.journal_seq > 0 and (
+            existing.journal_seq == 0 or event.journal_seq < existing.journal_seq
+        ):
+            existing.journal_seq = event.journal_seq
         if event.lots is not None:
             existing.lots = (existing.lots or 0) + event.lots
         if event.bonds_count is not None:
@@ -144,7 +220,7 @@ def merge_cashflow_events(events: list[CashflowEvent]) -> list[CashflowEvent]:
         _refresh_merged_cashflow_description(existing)
 
     result = [merged[key] for key in merge_order] + passthrough
-    result.sort(key=event_sort_key)
+    result.sort(key=journal_sort_key)
     return result
 
 

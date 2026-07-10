@@ -90,6 +90,7 @@ class SuggestionResponse:
     source_isin: str | None = None
     chat_template: str | None = None
     urgency: str = "normal"
+    risk_acknowledgeable: bool = False
 
 
 @dataclass
@@ -101,9 +102,9 @@ class ActiveOrderResponse:
     lots_requested: int
     lots_executed: int
     status: str
-    price_pct: float | None
-    total_order_amount_rub: float | None
-    initial_commission_rub: float | None
+    price_pct: float | None = None
+    total_order_amount_rub: float | None = None
+    initial_commission_rub: float | None = None
 
 
 @dataclass

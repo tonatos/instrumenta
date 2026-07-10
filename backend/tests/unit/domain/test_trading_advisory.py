@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime, timedelta
 import pytest
 
 from bond_monitor.domain.portfolio.models import PositionSourceType, RiskProfile
+from bond_monitor.domain.portfolio.risk_monitor import RiskSnapshot
 from bond_monitor.domain.shared.money import PriceUnitPct, Rub
 from bond_monitor.domain.trading.advisory import (
     advise,
@@ -273,3 +274,59 @@ def test_validate_attach_soft_counts_deployed_bonds_in_effective_initial() -> No
     portfolio = make_portfolio(initial_amount_rub=100_000.0)
     validation = validate_attach_soft(snapshot, portfolio, [bond])
     assert validation.effective_initial_amount_rub > 20_000.0
+
+
+def test_advise_emits_risk_sell_on_default_escalation() -> None:
+    bond = make_bond(isin="RU000A1", name="Risk Bond", figi="FIGI-HOLD", ytm=17.5)
+    bond.has_default = True
+    portfolio = make_portfolio(
+        horizon_date=date.today() + timedelta(days=365),
+        risk_profile=RiskProfile.NORMAL,
+    )
+    portfolio.risk_baselines = {
+        "RU000A1": RiskSnapshot(has_default=False, credit_rating=bond.credit_rating),
+    }
+    snapshot = make_account_snapshot(
+        10_000.0,
+        bond_positions={"FIGI-HOLD": _bond_position()},
+    )
+    advice = advise(
+        portfolio,
+        snapshot,
+        [],
+        [],
+        [bond],
+        key_rate=14.5,
+        tax_rate=0.13,
+    )
+    sells = [s for s in advice.suggestions if s.kind == "sell"]
+    assert len(sells) == 1
+    assert sells[0].isin == "RU000A1"
+    assert sells[0].risk_acknowledgeable is True
+    assert sells[0].urgency == "critical"
+
+
+def test_advise_skips_risk_sell_when_baseline_matches_current() -> None:
+    bond = make_bond(isin="RU000A1", name="Risk Bond", figi="FIGI-HOLD", ytm=17.5)
+    bond.has_default = True
+    portfolio = make_portfolio(
+        horizon_date=date.today() + timedelta(days=365),
+        risk_profile=RiskProfile.NORMAL,
+    )
+    portfolio.risk_baselines = {
+        "RU000A1": RiskSnapshot(has_default=True, credit_rating=bond.credit_rating),
+    }
+    snapshot = make_account_snapshot(
+        10_000.0,
+        bond_positions={"FIGI-HOLD": _bond_position()},
+    )
+    advice = advise(
+        portfolio,
+        snapshot,
+        [],
+        [],
+        [bond],
+        key_rate=14.5,
+        tax_rate=0.13,
+    )
+    assert [s for s in advice.suggestions if s.kind == "sell"] == []

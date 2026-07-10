@@ -11,7 +11,8 @@ from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.portfolio.models import Portfolio, PortfolioMode
 from bond_monitor.application.trading.plan_from_broker import build_trading_plan
 from bond_monitor.domain.shared.money import Lots, PriceUnitPct, Rub
-from bond_monitor.domain.trading.advisory import AttachPreviewValidation, validate_attach_soft
+from bond_monitor.application.trading.risk_monitoring import prepare_trading_risk_monitoring
+from bond_monitor.domain.trading.advisory import AttachPreviewValidation, build_holdings, validate_attach_soft
 from bond_monitor.domain.trading.models import AccountKind, FrozenForecast
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import broker_snapshot_from_infrastructure
 from bond_monitor.application.trading import broker
@@ -322,6 +323,10 @@ class AttachUseCase:
             frozen_initial_amount_rub=portfolio.initial_amount_rub,
             horizon_date=portfolio.horizon_date,
         )
+        broker_snap = broker_snapshot_from_infrastructure(snapshot)
+        holdings = build_holdings(broker_snap, universe)
+        holding_isins = {h.isin for h in holdings if h.isin}
+        await prepare_trading_risk_monitoring(self._ctx, portfolio, universe, holding_isins)
         return await self._ctx.repo.save(portfolio)
 
     async def detach_account(self, portfolio_id: str) -> Portfolio:
