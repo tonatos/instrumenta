@@ -116,6 +116,21 @@ export function makeTradingState(
   };
 }
 
+export async function mockTradingStateRoute(
+  page: Page,
+  portfolioId: string,
+  handler: (
+    route: import("@playwright/test").Route,
+    state: ReturnType<typeof makeTradingState>,
+  ) => Promise<void> | void,
+  initialState?: ReturnType<typeof makeTradingState>,
+): Promise<void> {
+  const state = initialState ?? makeTradingState();
+  await page.route(`**/api/v1/portfolios/${portfolioId}/trading-state**`, async (route) => {
+    await handler(route, state);
+  });
+}
+
 export async function mockTradingPortfolioRoutes(
   page: Page,
   portfolioId: string,
@@ -142,21 +157,21 @@ export async function mockTradingPortfolioRoutes(
     options.tradingState ??
     makeTradingState({ plan: options.plan, advice: options.advice });
 
-  await page.route(`**/api/v1/portfolios/${portfolioId}/trading-state`, async (route) => {
+  await page.route(`**/api/v1/portfolios/${portfolioId}/trading-state**`, async (route) => {
     await route.fulfill({ json: tradingState });
   });
 
-  await page.route(`**/api/v1/portfolios/${portfolioId}/plan`, async (route) => {
+  await page.route(`**/api/v1/portfolios/${portfolioId}/plan**`, async (route) => {
     await route.fulfill({ json: tradingState.plan });
   });
 
   const advicePayload = tradingState.advice;
-  await page.route(`**/api/v1/portfolios/${portfolioId}/advice`, async (route) => {
+  await page.route(`**/api/v1/portfolios/${portfolioId}/advice**`, async (route) => {
     await route.fulfill({ json: advicePayload });
   });
 
   await page.route(
-    `**/api/v1/portfolios/${portfolioId}/account-operations`,
+    `**/api/v1/portfolios/${portfolioId}/account-operations**`,
     async (route) => {
       await route.fulfill({
         json: {

@@ -38,10 +38,15 @@ docker compose up --build
 # Backend
 cp .env.example .env
 uv sync --directory backend --extra dev --python 3.12
+
 uv run --directory backend uvicorn bond_monitor.main:app --reload --port 8000
+# или
+task run:back
 
 # Frontend (другой терминал)
 cd frontend && npm install && npm run dev
+# или
+task run:front
 ```
 
 - Web UI: http://localhost:5173 (прокси `/api` → `:8000`)

@@ -12,9 +12,17 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: process.env.CI
     ? undefined
-    : {
-        command: "cd ../../frontend && npm run dev",
-        url: "http://localhost:5173",
-        reuseExistingServer: true,
-      },
+    : [
+        {
+          command: "cd ../../backend && uv run uvicorn bond_monitor.main:app --port 8000",
+          url: "http://localhost:8000/health",
+          reuseExistingServer: true,
+          timeout: 120_000,
+        },
+        {
+          command: "cd ../../frontend && npm run dev",
+          url: "http://localhost:5173",
+          reuseExistingServer: true,
+        },
+      ],
 });

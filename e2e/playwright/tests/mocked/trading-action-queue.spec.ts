@@ -3,20 +3,24 @@
  */
 
 import { test, expect } from "@playwright/test";
+import {
+  gotoPortfolio,
+  makeAdvice,
+  makeEmptyPlan,
+  makeTradingPortfolio,
+  makeTradingState,
+  mockConfig,
+  mockTradingPortfolioRoutes,
+} from "./fixtures";
 
 const PORTFOLIO_ID = "trading-portfolio-1";
 const SUGGESTION_ID = "suggestion-buy-1";
 
-const tradingPortfolio = {
-  id: PORTFOLIO_ID,
+const tradingPortfolio = makeTradingPortfolio(PORTFOLIO_ID, {
   name: "Trading E2E",
   initial_amount_rub: 100_000,
   horizon_date: "2027-01-01",
-  risk_profile: "normal",
   cash_balance_rub: 100_000,
-  mode: "trading",
-  account_id: "acc-e2e",
-  account_kind: "sandbox",
   positions_count: 1,
   invested_capital_rub: 200_000,
   data: {
@@ -46,12 +50,19 @@ const tradingPortfolio = {
     cash_balance_rub: 100_000,
     initial_amount_rub: 100_000,
     horizon_date: "2027-01-01",
-    mode: "trading",
-    account_id: "acc-e2e",
-    account_kind: "sandbox",
     frozen_forecast: null,
   },
-};
+});
+
+const planMock = makeEmptyPlan({
+  total_net_profit_rub: 10_000,
+  total_net_profit_with_held_rub: 10_000,
+  invested_capital_rub: 200_000,
+  total_invested_rub: 200_000,
+  final_cash_balance: 0,
+  final_portfolio_value: 110_000,
+  expected_xirr_pct: 12,
+});
 
 const buySuggestion = {
   id: SUGGESTION_ID,
@@ -107,19 +118,12 @@ function adviceResponse(
   suggestions = [buySuggestion],
   overrides: Record<string, unknown> = {},
 ) {
-  return {
-    holdings: [],
-    cashflow: [],
-    performance: null,
+  return makeAdvice({
     suggestions,
-    active_orders: [],
     money_rub: 100_000,
     available_money_rub: 100_000,
-    blocked_money_rub: 0,
-    warnings: [],
-    as_of: new Date().toISOString(),
     ...overrides,
-  };
+  });
 }
 
 const diversifiedBuySuggestions = [
@@ -151,136 +155,120 @@ const diversifiedBuySuggestions = [
   },
 ];
 
-test.describe("Советы по торговле", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.route("**/api/v1/config/", async (route) => {
-      await route.fulfill({
-        json: {
-          key_rate: 16,
-          tax_rate: 13,
-          max_days: 1825,
-          min_volume_rub: 0,
-          tinkoff_configured: true,
-          sandbox_configured: true,
-          production_configured: false,
-        },
-      });
-    });
-
-    await page.route("**/api/v1/bonds/?*", async (route) => {
-      await route.fulfill({
-        json: {
-          bonds: [testBondDetail],
-          source: "mock",
-          count: 1,
-        },
-      });
-    });
-
-    await page.route("**/api/v1/bonds/TEST1", async (route) => {
+async function mockBondRoutes(page: import("@playwright/test").Page) {
+  await page.route("**/api/v1/bonds/**", async (route) => {
+    const url = route.request().url();
+    if (url.includes("/bonds/TEST1") && !url.includes("?")) {
       await route.fulfill({
         json: {
           bond: testBondDetail,
           coupons: [],
         },
       });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        bonds: [testBondDetail],
+        source: "mock",
+        count: 1,
+      },
     });
+  });
+}
 
-    await page.route("**/api/v1/portfolios/", async (route) => {
-      if (route.request().method() === "GET") {
-        await route.fulfill({ json: [tradingPortfolio] });
-        return;
+async function setupTradingMocks(
+  page: import("@playwright/test").Page,
+  options: {
+    adviceFactory?: (call: number) => ReturnType<typeof makeAdvice>;
+  } = {},
+) {
+  await mockConfig(page);
+  await mockTradingPortfolioRoutes(page, PORTFOLIO_ID, tradingPortfolio, {
+    plan: planMock,
+    advice: adviceResponse(),
+  });
+  await mockBondRoutes(page);
+
+  let adviceCount = 0;
+  const adviceFactory =
+    options.adviceFactory ??
+    ((call: number) => {
+      if (call === 1) {
+        return adviceResponse();
       }
-      await route.continue();
-    });
-
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/plan`, async (route) => {
-      await route.fulfill({
-        json: {
-          total_net_profit_rub: 10_000,
-          total_net_profit_with_held_rub: 10_000,
-          invested_capital_rub: 200_000,
-          total_invested_rub: 200_000,
-          final_cash_balance: 0,
-          final_portfolio_value: 110_000,
-          expected_xirr_pct: 12,
-          notes: [],
-          cashflow: [],
-          value_timeline: [],
-          held_positions: [],
-          slots: [],
-        },
+      return adviceResponse([], {
+        active_orders: [
+          {
+            order_id: "order-e2e-123",
+            request_uid: "req-e2e-1",
+            figi: "FIGI_TEST",
+            direction: "BUY",
+            lots_requested: 5,
+            lots_executed: 0,
+            status: "EXECUTION_REPORT_STATUS_NEW",
+            price_pct: 100.5,
+            total_order_amount_rub: 5055,
+            initial_commission_rub: 5,
+          },
+        ],
       });
     });
 
-    let adviceCount = 0;
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
-      adviceCount += 1;
-      if (adviceCount === 1) {
-        await route.fulfill({ json: adviceResponse() });
-        return;
-      }
-      await route.fulfill({
-        json: adviceResponse([], {
-          active_orders: [
-            {
-              order_id: "order-e2e-123",
-              request_uid: "req-e2e-1",
-              figi: "FIGI_TEST",
-              direction: "BUY",
-              lots_requested: 5,
-              lots_executed: 0,
-              status: "EXECUTION_REPORT_STATUS_NEW",
-              price_pct: 100.5,
-              total_order_amount_rub: 5055,
-              initial_commission_rub: 5,
-            },
-          ],
-        }),
-      });
+  await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/trading-state**`, async (route) => {
+    adviceCount += 1;
+    const advice = adviceFactory(adviceCount);
+    await route.fulfill({
+      json: makeTradingState({ plan: planMock, advice }),
     });
+  });
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/preview`, async (route) => {
-      const body = route.request().postDataJSON() as { lots?: number; price_pct?: number };
-      const lots = body.lots ?? buySuggestion.lots;
-      const pricePct = body.price_pct ?? buySuggestion.suggested_price_pct;
-      const aciPerBond = 5;
-      const cleanAmount = (lots * 1000 * pricePct) / 100;
-      const dirtyAmount = cleanAmount + aciPerBond * lots;
-      const commission = 10;
-      await route.fulfill({
-        json: {
-          order_lots: lots,
-          order_bonds: lots,
-          lot_size: 1,
-          order_price_pct: pricePct,
-          clean_amount_rub: cleanAmount,
-          aci_rub_per_bond: aciPerBond,
-          local_total_amount_rub: dirtyAmount,
-          broker_clean_amount_rub: cleanAmount,
-          broker_aci_amount_rub: aciPerBond * lots,
-          broker_total_amount_rub: dirtyAmount + commission,
-          broker_commission_rub: commission,
-          money_rub: 100_000,
-          sufficient_cash: true,
-          preview_source: "broker",
-        },
-      });
+  await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/preview**`, async (route) => {
+    const body = route.request().postDataJSON() as { lots?: number; price_pct?: number };
+    const lots = body.lots ?? buySuggestion.lots;
+    const pricePct = body.price_pct ?? buySuggestion.suggested_price_pct;
+    const aciPerBond = 5;
+    const cleanAmount = (lots * 1000 * pricePct) / 100;
+    const dirtyAmount = cleanAmount + aciPerBond * lots;
+    const commission = 10;
+    await route.fulfill({
+      json: {
+        order_lots: lots,
+        order_bonds: lots,
+        lot_size: 1,
+        order_price_pct: pricePct,
+        clean_amount_rub: cleanAmount,
+        aci_rub_per_bond: aciPerBond,
+        local_total_amount_rub: dirtyAmount,
+        broker_clean_amount_rub: cleanAmount,
+        broker_aci_amount_rub: aciPerBond * lots,
+        broker_total_amount_rub: dirtyAmount + commission,
+        broker_commission_rub: commission,
+        money_rub: 100_000,
+        sufficient_cash: true,
+        preview_source: "broker",
+      },
     });
+  });
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/place`, async (route) => {
-      await route.fulfill({
-        json: {
-          order_id: "order-e2e-123",
-          status: "EXECUTION_REPORT_STATUS_NEW",
-          request_uid: "req-e2e-1",
-          lots_requested: 5,
-          lots_executed: 0,
-          total_order_amount_rub: 5055,
-          initial_commission_rub: 5,
-        },
-      });
+  await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/place**`, async (route) => {
+    await route.fulfill({
+      json: {
+        order_id: "order-e2e-123",
+        status: "EXECUTION_REPORT_STATUS_NEW",
+        request_uid: "req-e2e-1",
+        lots_requested: 5,
+        lots_executed: 0,
+        total_order_amount_rub: 5055,
+        initial_commission_rub: 5,
+      },
     });
+  });
+}
+
+test.describe("Советы по торговле", () => {
+  test.beforeEach(async ({ page }) => {
+    await setupTradingMocks(page);
   });
 
   test("advice показывает покупку, confirm-диалог отправляет заявку", async ({ page }) => {
@@ -311,16 +299,19 @@ test.describe("Советы по торговле", () => {
   });
 
   test("advice со свободным кэшем показывает баннер и рекомендации покупки", async ({ page }) => {
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/trading-state**`, async (route) => {
       await route.fulfill({
-        json: adviceResponse(diversifiedBuySuggestions, {
-          available_money_rub: 20_000,
-          money_rub: 20_000,
+        json: makeTradingState({
+          plan: planMock,
+          advice: adviceResponse(diversifiedBuySuggestions, {
+            available_money_rub: 20_000,
+            money_rub: 20_000,
+          }),
         }),
       });
     });
 
-    await page.goto(`/portfolio/${PORTFOLIO_ID}`);
+    await gotoPortfolio(page, PORTFOLIO_ID);
 
     await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/старт.*100/)).toBeVisible();
@@ -331,7 +322,7 @@ test.describe("Советы по торговле", () => {
   });
 
   test("клик по названию в секции «Покупки» открывает карточку облигации", async ({ page }) => {
-    await page.goto(`/portfolio/${PORTFOLIO_ID}`);
+    await gotoPortfolio(page, PORTFOLIO_ID);
 
     await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
     await page.getByTestId(`suggestion-bond-title-${SUGGESTION_ID}`).click();
@@ -352,11 +343,16 @@ test.describe("Советы по торговле", () => {
       reason: "Свободный кэш",
     };
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
-      await route.fulfill({ json: adviceResponse([mtsBuy]) });
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/trading-state**`, async (route) => {
+      await route.fulfill({
+        json: makeTradingState({
+          plan: planMock,
+          advice: adviceResponse([mtsBuy]),
+        }),
+      });
     });
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/preview`, async (route) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/preview**`, async (route) => {
       await route.fulfill({
         json: {
           order_lots: 1,
@@ -405,11 +401,16 @@ test.describe("Советы по торговле", () => {
       chat_template: "Текст для чата",
     };
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
-      await route.fulfill({ json: adviceResponse([putOfferSuggestion]) });
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/trading-state**`, async (route) => {
+      await route.fulfill({
+        json: makeTradingState({
+          plan: planMock,
+          advice: adviceResponse([putOfferSuggestion]),
+        }),
+      });
     });
 
-    await page.goto(`/portfolio/${PORTFOLIO_ID}`);
+    await gotoPortfolio(page, PORTFOLIO_ID);
 
     await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/предъявите бумаги/i)).toBeVisible();
@@ -420,24 +421,27 @@ test.describe("Советы по торговле", () => {
   test("в песочнице можно добавить средства на счёт", async ({ page }) => {
     let adviceCalls = 0;
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sandbox-pay-in`, async (route) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/sandbox-pay-in**`, async (route) => {
       await route.fulfill({
         status: 201,
         json: { amount_added_rub: 50_000, money_rub: 150_000 },
       });
     });
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/trading-state**`, async (route) => {
       adviceCalls += 1;
       await route.fulfill({
-        json: adviceResponse(diversifiedBuySuggestions, {
-          money_rub: adviceCalls > 1 ? 150_000 : 100_000,
-          available_money_rub: adviceCalls > 1 ? 150_000 : 100_000,
+        json: makeTradingState({
+          plan: planMock,
+          advice: adviceResponse(diversifiedBuySuggestions, {
+            money_rub: adviceCalls > 1 ? 150_000 : 100_000,
+            available_money_rub: adviceCalls > 1 ? 150_000 : 100_000,
+          }),
         }),
       });
     });
 
-    await page.goto(`/portfolio/${PORTFOLIO_ID}`);
+    await gotoPortfolio(page, PORTFOLIO_ID);
 
     await expect(page.getByText("Песочница · добавить средства")).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Добавить средства" }).click();
@@ -446,17 +450,20 @@ test.describe("Советы по торговле", () => {
   });
 
   test("показывает свободный и заблокированный кэш", async ({ page }) => {
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/advice`, async (route) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/trading-state**`, async (route) => {
       await route.fulfill({
-        json: adviceResponse([buySuggestion], {
-          money_rub: 50_000,
-          available_money_rub: 2_000,
-          blocked_money_rub: 48_000,
+        json: makeTradingState({
+          plan: planMock,
+          advice: adviceResponse([buySuggestion], {
+            money_rub: 50_000,
+            available_money_rub: 2_000,
+            blocked_money_rub: 48_000,
+          }),
         }),
       });
     });
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/preview`, async (route) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/orders/preview**`, async (route) => {
       await route.fulfill({
         json: {
           order_lots: 5,

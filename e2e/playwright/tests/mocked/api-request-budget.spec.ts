@@ -103,7 +103,7 @@ test.describe("Бюджет API-запросов", () => {
       },
     );
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/trading-state`, async (route) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/trading-state**`, async (route) => {
       tradingStateCalls += 1;
       const activeOrders = tradingStateCalls > 1 ? [] : [activeOrder];
       await route.fulfill({

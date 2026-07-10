@@ -21,7 +21,8 @@ def test_get_plan_trading_includes_cashflow_from_account_holdings() -> None:
         coupon_period_days=30,
         next_coupon_date=date.today() + timedelta(days=30),
     )
-    with portfolio_client("Trading Plan Live") as (client, pid):
+    horizon = (date.today() + timedelta(days=365)).isoformat()
+    with portfolio_client("Trading Plan Live", horizon_date=horizon) as (client, pid):
         snapshot = make_snapshot_with_bonds(50_000.0)
         with (
             patch.object(

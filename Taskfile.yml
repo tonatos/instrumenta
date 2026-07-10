@@ -1,6 +1,49 @@
 version: "3"
 
 tasks:
+  run:back:
+    desc: Run backend
+    deps: [sync:back]
+    cmds:
+      - uv run --directory backend uvicorn bond_monitor.main:app --reload --port 8000
+
+  run:front:
+    desc: Run frontend
+    deps: [sync:front]
+    dir: ./frontend
+    cmds:
+      - npm run dev
+
+  test:
+    desc: All tests (front / back)
+    deps: [test:back, test:front]
+
+  test:back:
+    desc: Test backend
+    deps: [sync:back]
+    dotenv: [.env]
+    cmds:
+      - uv run --directory backend pytest tests/unit
+
+  test:front:
+    desc: Test frontend
+    deps: [sync:back, sync:front]
+    dotenv: [.env]
+    dir: ./e2e/playwright
+    cmds:
+      - npm install && npx playwright test
+  
+  sync:back:
+    desc: Sync backend dependencies
+    cmds:
+      - uv sync --directory backend --extra dev --python 3.12
+  
+  sync:front:
+    desc: Sync frontend dependencies
+    dir: ./frontend
+    cmds:
+      - npm install
+
   deploy:sync:
     desc: Install pyinfra deploy dependencies
     cmds:

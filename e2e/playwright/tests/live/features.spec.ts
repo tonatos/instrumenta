@@ -86,7 +86,7 @@ test.describe("Карточка бумаги", () => {
     // Sheet should open with key sections
     await expect(page.getByText("Идентификаторы")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("Скоринг")).toBeVisible();
-    await expect(page.getByText("YTM-скор × 0.40")).toBeVisible();
+    await expect(page.getByText("YTM-скор × 0.45")).toBeVisible();
   });
 
   test("sheet показывает кнопку Т-Инвестиции если есть ISIN", async ({ page }) => {
@@ -124,7 +124,7 @@ test.describe("Карточка бумаги", () => {
       offer_date: null,
       call_date: "2026-09-15",
       effective_date: "2026-09-15",
-      days_to_maturity: 800,
+      days_to_maturity: 90,
       ytm: 14.0,
       ytm_net: 12.0,
       coupon_rate: 12.0,
@@ -146,17 +146,21 @@ test.describe("Карточка бумаги", () => {
       tinvest_enriched: true,
     };
 
-    await page.route("**/api/v1/bonds/?*", async (route) => {
+    await page.route("**/api/v1/bonds/**", async (route) => {
+      const url = route.request().url();
+      if (url.includes("/bonds/CALLTEST") && !url.includes("?")) {
+        await route.fulfill({ json: { bond, coupons: [] } });
+        return;
+      }
       await route.fulfill({
         json: { bonds: [bond], source: "mock", count: 1 },
       });
     });
-    await page.route("**/api/v1/bonds/CALLTEST", async (route) => {
-      await route.fulfill({ json: { bond, coupons: [] } });
-    });
 
     await page.goto("/");
-    await expect(page.getByText("1 из 1")).toBeVisible({ timeout: TIMEOUT });
+    await expect(page.getByRole("button", { name: "Облигация с коллом" })).toBeVisible({
+      timeout: TIMEOUT,
+    });
     await page.getByRole("button", { name: "Облигация с коллом" }).click();
 
     const sheet = page.getByRole("dialog");
@@ -200,17 +204,21 @@ test.describe("Карточка бумаги", () => {
       tinvest_enriched: true,
     };
 
-    await page.route("**/api/v1/bonds/?*", async (route) => {
+    await page.route("**/api/v1/bonds/**", async (route) => {
+      const url = route.request().url();
+      if (url.includes("/bonds/ISSUERTEST") && !url.includes("?")) {
+        await route.fulfill({ json: { bond, coupons: [] } });
+        return;
+      }
       await route.fulfill({
         json: { bonds: [bond], source: "mock", count: 1 },
       });
     });
-    await page.route("**/api/v1/bonds/ISSUERTEST", async (route) => {
-      await route.fulfill({ json: { bond, coupons: [] } });
-    });
 
     await page.goto("/");
-    await expect(page.getByText("1 из 1")).toBeVisible({ timeout: TIMEOUT });
+    await expect(page.getByRole("button", { name: "Газпром001" })).toBeVisible({
+      timeout: TIMEOUT,
+    });
     await page.getByRole("button", { name: "Газпром001" }).click();
 
     const sheet = page.getByRole("dialog");
@@ -263,33 +271,36 @@ test.describe("Избранное", () => {
 
 test.describe("Портфель", () => {
   test("создание нового портфеля", async ({ page }) => {
+    const portfolioName = `Тестовый портфель E2E ${Date.now()}`;
     await page.goto("/portfolio");
     await expect(page.getByRole("heading", { name: "Портфель" })).toBeVisible();
 
     await page.getByRole("button", { name: "Создать" }).click();
 
-    await page.getByPlaceholder("Мой портфель").fill("Тестовый портфель E2E");
+    await page.getByPlaceholder("Мой портфель").fill(portfolioName);
     await page.getByRole("button", { name: "Создать" }).last().click();
 
-    await expect(page.getByText("Тестовый портфель E2E")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(portfolioName).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test("автосостав и просмотр cashflow-таблицы", async ({ page }) => {
+    const portfolioName = `E2E Cashflow ${Date.now()}`;
     await page.goto("/portfolio");
 
     // Create or find a portfolio
     const createBtn = page.getByRole("button", { name: "Создать" }).first();
     await createBtn.click();
 
-    await page.getByPlaceholder("Мой портфель").fill("E2E Cashflow Test");
+    await page.getByPlaceholder("Мой портфель").fill(portfolioName);
     await page.getByRole("button", { name: "Создать" }).last().click();
-    await expect(page.getByText("E2E Cashflow Test")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(portfolioName).first()).toBeVisible({ timeout: 10_000 });
 
     // Click auto-compose
     await page.getByRole("button", { name: /Автосостав/ }).click();
 
     // Wait for plan to load
-    await expect(page.getByText("Cashflow")).toBeVisible({ timeout: TIMEOUT });
+    await expect(page.getByRole("tab", { name: "Cashflow" })).toBeVisible({ timeout: TIMEOUT });
+    await page.getByRole("tab", { name: "Cashflow" }).click();
     await expect(page.getByTestId("portfolio-value-chart")).toBeVisible({ timeout: TIMEOUT });
     await expect(page.getByText("Рост стоимости портфеля")).toBeVisible();
 
@@ -301,12 +312,13 @@ test.describe("Портфель", () => {
   });
 
   test("клик по позиции открывает карточку бумаги", async ({ page }) => {
+    const portfolioName = `E2E Position Detail ${Date.now()}`;
     await page.goto("/portfolio");
 
     await page.getByRole("button", { name: "Создать" }).first().click();
-    await page.getByPlaceholder("Мой портфель").fill("E2E Position Detail");
+    await page.getByPlaceholder("Мой портфель").fill(portfolioName);
     await page.getByRole("button", { name: "Создать" }).last().click();
-    await expect(page.getByText("E2E Position Detail")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(portfolioName).first()).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole("button", { name: /Автосостав/ }).click();
 
@@ -341,7 +353,9 @@ test.describe("Калькулятор", () => {
     await page.getByPlaceholder("Поиск по названию или SECID…").fill("о");
 
     // Should show filtered results
-    await expect(page.locator("[role=button]").filter({ hasText: /\d+.\d+%/ }).first()).toBeVisible({
+    await expect(
+      page.getByRole("button").filter({ hasText: /YTM/i }).first(),
+    ).toBeVisible({
       timeout: 5000,
     });
   });
@@ -355,17 +369,22 @@ test.describe("Калькулятор", () => {
 
     // Open combobox and pick first available bond
     await page.getByRole("button", { name: "Добавить бумагу…" }).click();
-    await page.getByPlaceholder("Поиск по названию или SECID…").fill(" ");
+    await page.getByPlaceholder("Поиск по названию или SECID…").fill("о");
 
-    const firstOption = page.locator("[role=button]").nth(1);
+    const firstOption = page.getByRole("button").filter({ hasText: /YTM/i }).first();
+    await expect(firstOption).toBeVisible({ timeout: 5000 });
     await firstOption.click();
+
+    await expect(page.getByRole("button", { name: "Рассчитать" })).toBeEnabled({
+      timeout: 5000,
+    });
 
     // Now calculate
     await page.getByRole("button", { name: "Рассчитать" }).click();
 
     // Should show results
     await expect(page.getByText("Детализация по бумагам")).toBeVisible({ timeout: TIMEOUT });
-    await expect(page.getByText("Вложено")).toBeVisible();
-    await expect(page.getByText("Прибыль")).toBeVisible();
+    await expect(page.getByText("Вложено").first()).toBeVisible();
+    await expect(page.getByText("Прибыль").first()).toBeVisible();
   });
 });

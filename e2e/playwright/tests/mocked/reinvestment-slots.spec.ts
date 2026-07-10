@@ -3,6 +3,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { mockConfig } from "./fixtures";
 
 const PORTFOLIO_ID = "reinvest-portfolio-1";
 const SOURCE_ISIN = "RU000ASRC01";
@@ -104,19 +105,7 @@ test.describe("Реинвестиции — замены в цепочке", () 
   test.beforeEach(async ({ page }) => {
     let confirmedIsin: string | null = null;
 
-    await page.route("**/api/v1/config/", async (route) => {
-      await route.fulfill({
-        json: {
-          key_rate: 16,
-          tax_rate: 13,
-          max_days: 1825,
-          min_volume_rub: 0,
-          tinkoff_configured: false,
-          sandbox_configured: false,
-          production_configured: false,
-        },
-      });
-    });
+    await mockConfig(page);
 
     await page.route("**/api/v1/bonds/**", async (route) => {
       await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });
@@ -130,11 +119,11 @@ test.describe("Реинвестиции — замены в цепочке", () 
       await route.continue();
     });
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/plan`, async (route) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/plan**`, async (route) => {
       await route.fulfill({ json: makePlan(confirmedIsin) });
     });
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/slots/override`, async (route) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/slots/override**`, async (route) => {
       const body = route.request().postDataJSON() as {
         source_position_isin: string;
         confirmed_isin: string | null;
@@ -168,7 +157,7 @@ test.describe("Реинвестиции — замены в цепочке", () 
       });
     });
 
-    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/slots/reset-all`, async (route) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/slots/reset-all**`, async (route) => {
       confirmedIsin = null;
       await route.fulfill({ json: simulationPortfolio });
     });

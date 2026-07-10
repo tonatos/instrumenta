@@ -6,7 +6,7 @@ test.describe("Bond Monitor webapp", () => {
     await expect(page.getByRole("heading", { name: "Скринер облигаций" })).toBeVisible();
     await expect(page.getByRole("navigation", { name: "Основная навигация" })).toBeVisible();
     await expect(page.getByText("Не удалось загрузить данные")).not.toBeVisible();
-    await expect(page.getByText(/\d+ бумаг ·/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/\d+ из \d+/)).toBeVisible({ timeout: 30_000 });
   });
 
   test("navigate to favorites", async ({ page }) => {
