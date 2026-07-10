@@ -9,6 +9,7 @@ services:
 
   notifier:
     image: ghcr.io/tonatos/bond-monitor-api:${IMAGE_TAG:-main}
+    ports: !reset []
     environment:
       LOG_LEVEL: INFO
       REDIS_URL: redis://redis:6379/0
