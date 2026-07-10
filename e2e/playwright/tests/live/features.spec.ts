@@ -6,6 +6,7 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { cleanupE2ePortfolios, createPortfolioViaApi } from "./api-helpers";
 
 const TIMEOUT = 30_000;
 
@@ -270,30 +271,42 @@ test.describe("Избранное", () => {
 // ─── Портфель ────────────────────────────────────────────────────────────────
 
 test.describe("Портфель", () => {
+  test.describe.configure({ mode: "serial" });
+
+  test.beforeAll(async ({ request }) => {
+    await cleanupE2ePortfolios(request);
+  });
+
+  test.afterAll(async ({ request }) => {
+    await cleanupE2ePortfolios(request);
+  });
+
   test("создание нового портфеля", async ({ page }) => {
     const portfolioName = `Тестовый портфель E2E ${Date.now()}`;
     await page.goto("/portfolio");
-    await expect(page.getByRole("heading", { name: "Портфель" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Портфель" })).toBeVisible({
+      timeout: TIMEOUT,
+    });
 
     await page.getByRole("button", { name: "Создать" }).click();
+    await expect(page.getByRole("dialog", { name: "Новый портфель" })).toBeVisible();
 
     await page.getByPlaceholder("Мой портфель").fill(portfolioName);
     await page.getByRole("button", { name: "Создать" }).last().click();
 
-    await expect(page.getByText(portfolioName).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page).toHaveURL(/\/portfolio\//, { timeout: TIMEOUT });
+    await expect(page.getByRole("heading", { name: portfolioName, level: 2 })).toBeVisible({
+      timeout: TIMEOUT,
+    });
   });
 
-  test("автосостав и просмотр cashflow-таблицы", async ({ page }) => {
+  test("автосостав и просмотр cashflow-таблицы", async ({ page, request }) => {
     const portfolioName = `E2E Cashflow ${Date.now()}`;
-    await page.goto("/portfolio");
-
-    // Create or find a portfolio
-    const createBtn = page.getByRole("button", { name: "Создать" }).first();
-    await createBtn.click();
-
-    await page.getByPlaceholder("Мой портфель").fill(portfolioName);
-    await page.getByRole("button", { name: "Создать" }).last().click();
-    await expect(page.getByText(portfolioName).first()).toBeVisible({ timeout: 10_000 });
+    const portfolio = await createPortfolioViaApi(request, portfolioName);
+    await page.goto(`/portfolio/${portfolio.id}`);
+    await expect(page.getByRole("heading", { name: portfolioName, level: 2 })).toBeVisible({
+      timeout: TIMEOUT,
+    });
 
     // Click auto-compose
     await page.getByRole("button", { name: /Автосостав/ }).click();
@@ -311,14 +324,13 @@ test.describe("Портфель", () => {
     });
   });
 
-  test("клик по позиции открывает карточку бумаги", async ({ page }) => {
+  test("клик по позиции открывает карточку бумаги", async ({ page, request }) => {
     const portfolioName = `E2E Position Detail ${Date.now()}`;
-    await page.goto("/portfolio");
-
-    await page.getByRole("button", { name: "Создать" }).first().click();
-    await page.getByPlaceholder("Мой портфель").fill(portfolioName);
-    await page.getByRole("button", { name: "Создать" }).last().click();
-    await expect(page.getByText(portfolioName).first()).toBeVisible({ timeout: 10_000 });
+    const portfolio = await createPortfolioViaApi(request, portfolioName);
+    await page.goto(`/portfolio/${portfolio.id}`);
+    await expect(page.getByRole("heading", { name: portfolioName, level: 2 })).toBeVisible({
+      timeout: TIMEOUT,
+    });
 
     await page.getByRole("button", { name: /Автосостав/ }).click();
 

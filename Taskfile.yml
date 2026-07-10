@@ -15,15 +15,17 @@ tasks:
       - npm run dev
 
   test:
-    desc: All tests (front / back)
-    deps: [test:back, test:front]
+    desc: All tests (back, then front)
+    cmds:
+      - task: test:back
+      - task: test:front
 
   test:back:
     desc: Test backend
     deps: [sync:back]
     dotenv: [.env]
     cmds:
-      - uv run --directory backend pytest tests/unit
+      - uv run --directory backend pytest tests/unit -q --disable-warnings
 
   test:front:
     desc: Test frontend
@@ -31,7 +33,9 @@ tasks:
     dotenv: [.env]
     dir: ./e2e/playwright
     cmds:
-      - npm install && npx playwright test
+      - npm install
+      - echo "E2E — поднимаем backend/frontend (если ещё не запущены) и гоняем Playwright…"
+      - npx playwright test --reporter=line
   
   sync:back:
     desc: Sync backend dependencies
