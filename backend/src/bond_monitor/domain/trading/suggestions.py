@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
-SuggestionKind = Literal["buy", "reinvest", "put_offer_reminder", "put_offer_watch", "sell"]
+SuggestionKind = Literal["buy", "reinvest", "reinvest_watch", "put_offer_reminder", "put_offer_watch", "sell"]
 
 
 @dataclass(frozen=True)

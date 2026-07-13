@@ -2,8 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from bond_monitor.domain.trading.models import AccountKind
 from bond_monitor.domain.shared.money import PriceUnitPct
+
+
+@dataclass(frozen=True)
+class DeploySessionPolicy:
+    """TTL и пороги устаревания зафиксированного плана закупки."""
+
+    ttl_hours: int = 24
+    price_drift_warn_pct: float = 1.5
+    price_drift_stale_pct: float = 5.0
 
 # Буфер к рыночной цене для пассивной лимитной покупки (last_price × (1 + buffer)).
 BUY_LIMIT_PRICE_BUFFER_SANDBOX: float = 0.005  # +0.5% — песочница

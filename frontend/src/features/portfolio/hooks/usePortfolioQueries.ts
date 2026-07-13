@@ -4,9 +4,20 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "@/api/client";
 import type { Bond, PortfolioPosition } from "@/api/types";
 import type { BondRiskProfile } from "@/features/bonds/bondScore";
-import { STALE } from "@/features/portfolio/hooks/queryConfig";
+import { STALE, tradingStateQueryKey } from "@/features/portfolio/hooks/queryConfig";
 import { useRateScenario } from "@/features/settings/RateScenarioProvider";
 import { portfolioPath } from "@/features/portfolio/utils";
+
+const TERMINAL_ORDER_STATUSES = new Set([
+  "EXECUTION_REPORT_STATUS_FILL",
+  "EXECUTION_REPORT_STATUS_CANCELLED",
+  "EXECUTION_REPORT_STATUS_REJECTED",
+]);
+
+function hasActiveOrders(advice: { active_orders: Array<{ status: string }> } | undefined) {
+  if (!advice) return false;
+  return advice.active_orders.some((o) => !TERMINAL_ORDER_STATUSES.has(o.status));
+}
 
 export function usePortfolioQueries() {
   const navigate = useNavigate();
@@ -93,13 +104,22 @@ export function usePortfolioQueries() {
   const {
     data: tradingState,
     isLoading: tradingStateLoading,
+    isFetching: tradingStateFetching,
+    isError: tradingStateError,
+    error: tradingStateErrorDetail,
+    dataUpdatedAt: tradingStateUpdatedAt,
     refetch: refetchTradingState,
   } = useQuery({
-    queryKey: ["trading-state", activeId, rateScenario],
+    queryKey: tradingStateQueryKey(activeId ?? "", rateScenario),
     queryFn: () => api.getTradingState(activeId!),
     enabled: !!activeId && portfolioReady && tradingEnabled,
     staleTime: STALE.tradingSync,
     refetchOnWindowFocus: false,
+    refetchInterval: (query) => {
+      if (!tradingEnabled) return false;
+      if (hasActiveOrders(query.state.data?.advice)) return 30_000;
+      return false;
+    },
   });
 
   const plan = isTrading ? tradingState?.plan : simulationPlan;
@@ -159,5 +179,10 @@ export function usePortfolioQueries() {
     isTrading,
     tradingEnabled,
     tradingAdvice: tradingState?.advice,
+    tradingStateFetching,
+    tradingStateError,
+    tradingStateErrorDetail,
+    tradingStateUpdatedAt,
+    rateScenario,
   };
 }

@@ -28,9 +28,9 @@ class TradingStateResult:
 
 
 class TradingStateUseCase:
-    def __init__(self, ctx: TradingContext) -> None:
+    def __init__(self, ctx: TradingContext, advise: AdviseUseCase) -> None:
         self._ctx = ctx
-        self._advise = AdviseUseCase(ctx)
+        self._advise = advise
 
     async def get_trading_state(
         self,

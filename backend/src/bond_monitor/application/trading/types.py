@@ -124,6 +124,45 @@ class PerformanceResponse:
 
 
 @dataclass
+class DeploySessionItemResponse:
+    id: str
+    kind: str
+    isin: str
+    name: str
+    lots: int
+    figi: str | None
+    suggested_price_pct: float
+    estimated_amount_rub: float
+    reason: str
+    status: str
+    source_isin: str | None = None
+    due_date: str | None = None
+    order_id: str | None = None
+    urgency: str = "normal"
+
+
+@dataclass
+class DeploySessionProgressResponse:
+    total: int
+    pending: int
+    placed: int
+    filled: int
+    skipped: int
+    stale: int
+
+
+@dataclass
+class DeploySessionResponse:
+    id: str
+    status: str
+    expires_at: str
+    cash_snapshot_rub: float
+    progress: DeploySessionProgressResponse
+    items: list[DeploySessionItemResponse]
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass
 class TradingAdviceResult:
     """Результат stateless advisory."""
 
@@ -138,3 +177,4 @@ class TradingAdviceResult:
     warnings: list[str] = field(default_factory=list)
     as_of: str = ""
     weighted_duration_years: float | None = None
+    deploy_session: DeploySessionResponse | None = None

@@ -9,3 +9,7 @@ export const STALE = {
   tradingSync: 30_000,
   accountOperations: 60_000,
 } as const;
+
+export function tradingStateQueryKey(portfolioId: string, rateScenario: string) {
+  return ["trading-state", portfolioId, rateScenario] as const;
+}

@@ -17,6 +17,7 @@ from bond_monitor.domain.trading.advisory import (
     holding_isins_from_snapshot,
     validate_attach_soft,
 )
+from bond_monitor.domain.trading.deploy_session import DeploySession
 from bond_monitor.domain.trading.ports import BrokerBondPosition
 from factories import make_account_snapshot, make_bond, make_portfolio
 

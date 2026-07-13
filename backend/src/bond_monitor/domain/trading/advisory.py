@@ -39,10 +39,17 @@ from bond_monitor.domain.trading.policies import (
 from bond_monitor.domain.trading.ports import BrokerActiveOrder, BrokerOperation, BrokerSnapshot
 from bond_monitor.domain.trading.yield_calc import ActualPerformance, summarize_actual_performance
 
+from bond_monitor.domain.trading.deploy_session import (
+    DeploySession,
+    apply_session_staleness,
+    is_session_active,
+    session_items_to_suggestions,
+    sync_session_with_orders,
+)
 from bond_monitor.domain.trading.suggestions import Suggestion, SuggestionKind
 
 _MIN_BUY_CASH_RUB = 5_000.0
-_REINVEST_LOOKAHEAD_DAYS = 14
+_REINVEST_WATCH_DAYS = 14
 
 
 @dataclass(frozen=True)
@@ -96,6 +103,7 @@ class TradingAdvice:
     warnings: list[str] = field(default_factory=list)
     as_of: str = ""
     weighted_duration_years: float | None = None
+    deploy_session: DeploySession | None = None
 
 
 def _universe_by_figi(universe: Sequence[BondRecord]) -> dict[str, BondRecord]:
@@ -315,7 +323,7 @@ def _holdings_deployed_value(
     return total
 
 
-def _buy_suggestions(
+def build_buy_suggestions(
     portfolio: Portfolio,
     holdings: list[HoldingView],
     universe: Sequence[BondRecord],
@@ -371,7 +379,7 @@ def _buy_suggestions(
     return suggestions
 
 
-def _reinvest_suggestions(
+def build_reinvest_suggestions(
     portfolio: Portfolio,
     positions: list[PortfolioPosition],
     universe: Sequence[BondRecord],
@@ -383,6 +391,61 @@ def _reinvest_suggestions(
     planning: PlanningPolicy,
     duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> list[Suggestion]:
+    """Actionable reinvest — только после наступления даты погашения/оферты."""
+    return _build_reinvest_suggestions_for_positions(
+        portfolio,
+        positions,
+        universe,
+        today=today,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+        policy=policy,
+        planning=planning,
+        duration_policy=duration_policy,
+        actionable_only=True,
+    )
+
+
+def build_reinvest_watch_suggestions(
+    portfolio: Portfolio,
+    positions: list[PortfolioPosition],
+    universe: Sequence[BondRecord],
+    *,
+    today: date,
+    key_rate: float,
+    tax_rate: float,
+    policy: BondSelectionPolicy,
+    planning: PlanningPolicy,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
+) -> list[Suggestion]:
+    """Информационные реинвестиции до даты погашения — без покупки."""
+    return _build_reinvest_suggestions_for_positions(
+        portfolio,
+        positions,
+        universe,
+        today=today,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+        policy=policy,
+        planning=planning,
+        duration_policy=duration_policy,
+        actionable_only=False,
+    )
+
+
+def _build_reinvest_suggestions_for_positions(
+    portfolio: Portfolio,
+    positions: list[PortfolioPosition],
+    universe: Sequence[BondRecord],
+    *,
+    today: date,
+    key_rate: float,
+    tax_rate: float,
+    policy: BondSelectionPolicy,
+    planning: PlanningPolicy,
+    duration_policy: DurationPolicy,
+    actionable_only: bool,
+) -> list[Suggestion]:
     suggestions: list[Suggestion] = []
     horizon = portfolio.horizon_date
     for position in positions:
@@ -390,8 +453,14 @@ def _reinvest_suggestions(
         if end is None:
             continue
         days_until = (end - today).days
-        if days_until < 0 or days_until > _REINVEST_LOOKAHEAD_DAYS:
+        if days_until > _REINVEST_WATCH_DAYS:
             continue
+        if actionable_only:
+            if days_until > 0:
+                continue
+        elif days_until <= 0:
+            continue
+
         expected_cash = position.face_value * position.bonds_count
         reinvest_date = end + timedelta(days=planning.reinvestment_gap_days)
         if reinvest_date > horizon:
@@ -421,21 +490,39 @@ def _reinvest_suggestions(
                 buy_limit_price_buffer(portfolio.account_kind),
             )
         )
-        urgency: Literal["normal", "soon", "critical"] = "soon" if days_until <= 7 else "normal"
+        if actionable_only:
+            urgency: Literal["normal", "soon", "critical"] = (
+                "critical" if days_until < 0 else "soon"
+            )
+            kind: SuggestionKind = "reinvest"
+            reason = (
+                f"Погашение {position.name} {end.strftime('%d.%m.%Y')} "
+                f"(≈{expected_cash:,.0f} ₽) — рекомендуем реинвестировать"
+            )
+            suggestion_id = stable_id(
+                portfolio.id, "reinvest", f"{position.isin}:{end.isoformat()}"
+            )
+        else:
+            urgency = "normal"
+            kind = "reinvest_watch"
+            reason = (
+                f"Погашение {position.name} {end.strftime('%d.%m.%Y')} "
+                f"(≈{expected_cash:,.0f} ₽) — подготовьте реинвестицию"
+            )
+            suggestion_id = stable_id(
+                portfolio.id, "reinvest-watch", f"{position.isin}:{end.isoformat()}"
+            )
         suggestions.append(
             Suggestion(
-                id=stable_id(portfolio.id, "reinvest", f"{position.isin}:{end.isoformat()}"),
-                kind="reinvest",
+                id=suggestion_id,
+                kind=kind,
                 isin=replacement.isin,
                 name=replacement.name,
-                lots=1,
+                lots=position.lots,
                 figi=replacement.figi,
                 suggested_price_pct=price_pct,
                 market_price_pct=market_price,
-                reason=(
-                    f"Погашение {position.name} {end.strftime('%d.%m.%Y')} "
-                    f"(≈{expected_cash:,.0f} ₽) — рекомендуем реинвестировать"
-                ),
+                reason=reason,
                 due_date=end,
                 source_isin=position.isin,
                 urgency=urgency,
@@ -474,6 +561,7 @@ def advise(
     planning_policy: PlanningPolicy = DEFAULT_PLANNING_POLICY,
     duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
     risk_policy: RiskMonitorPolicy = DEFAULT_RISK_MONITOR_POLICY,
+    active_session: DeploySession | None = None,
 ) -> TradingAdvice:
     """Собрать консультативный ответ из брокерского state и рынка."""
     as_of_dt = datetime.now(UTC)
@@ -513,18 +601,74 @@ def advise(
     )
 
     available = float(snapshot.available_money_rub)
-    buy_suggestions = _buy_suggestions(
-        portfolio,
-        holdings,
-        universe,
-        universe_by_isin,
-        available_cash=available,
-        today=today,
-        key_rate=key_rate,
-        tax_rate=tax_rate,
-        duration_policy=duration_policy,
-    )
-    reinvest_suggestions = _reinvest_suggestions(
+    session_for_advice: DeploySession | None = None
+    if active_session is not None and is_session_active(active_session, now=as_of_dt):
+        session_for_advice = sync_session_with_orders(active_session, active_orders)
+        session_for_advice = apply_session_staleness(
+            session_for_advice,
+            universe,
+            portfolio=portfolio,
+            now=as_of_dt,
+        )
+        if is_session_active(session_for_advice, now=as_of_dt):
+            buy_suggestions = session_items_to_suggestions(
+                session_for_advice,
+                universe,
+                kinds={"buy"},
+            )
+            reinvest_suggestions = session_items_to_suggestions(
+                session_for_advice,
+                universe,
+                kinds={"reinvest"},
+            )
+        else:
+            session_for_advice = None
+            buy_suggestions = build_buy_suggestions(
+                portfolio,
+                holdings,
+                universe,
+                universe_by_isin,
+                available_cash=available,
+                today=today,
+                key_rate=key_rate,
+                tax_rate=tax_rate,
+                duration_policy=duration_policy,
+            )
+            reinvest_suggestions = build_reinvest_suggestions(
+                portfolio,
+                positions,
+                universe,
+                today=today,
+                key_rate=key_rate,
+                tax_rate=tax_rate,
+                policy=selection_policy,
+                planning=planning_policy,
+                duration_policy=duration_policy,
+            )
+    else:
+        buy_suggestions = build_buy_suggestions(
+            portfolio,
+            holdings,
+            universe,
+            universe_by_isin,
+            available_cash=available,
+            today=today,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            duration_policy=duration_policy,
+        )
+        reinvest_suggestions = build_reinvest_suggestions(
+            portfolio,
+            positions,
+            universe,
+            today=today,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            policy=selection_policy,
+            planning=planning_policy,
+            duration_policy=duration_policy,
+        )
+    reinvest_watch_suggestions = build_reinvest_watch_suggestions(
         portfolio,
         positions,
         universe,
@@ -546,7 +690,12 @@ def advise(
             notification_policy=NotificationPolicy(include_put_offer_watch_in_alerts=True),
         )
     )
-    suggestions = buy_suggestions + reinvest_suggestions + alert_suggestions
+    suggestions = (
+        buy_suggestions
+        + reinvest_suggestions
+        + reinvest_watch_suggestions
+        + alert_suggestions
+    )
     warnings = collect_account_warnings(snapshot, universe_by_isin, holdings)
     weighted_dur = weighted_duration_by_market(
         holdings, universe_by_isin, duration_policy=duration_policy
@@ -566,6 +715,7 @@ def advise(
         weighted_duration_years=(
             round(weighted_dur, 2) if weighted_dur is not None else None
         ),
+        deploy_session=session_for_advice,
     )
 
 

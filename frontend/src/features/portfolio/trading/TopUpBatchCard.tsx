@@ -1,6 +1,7 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, PlusCircle } from "lucide-react";
 import { api } from "@/api/client";
+import { tradingStateQueryKey } from "@/features/portfolio/hooks/queryConfig";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { parseApiError } from "@/features/portfolio/trading/hooks/useOrderPreview";
@@ -8,15 +9,20 @@ import { useState } from "react";
 
 export function SandboxPayInPanel({
   portfolioId,
+  rateScenario,
   onSuccess,
   disabled,
+  deploySessionActive,
 }: {
   portfolioId: string;
+  rateScenario: string;
   onSuccess: () => void;
   disabled?: boolean;
+  deploySessionActive?: boolean;
 }) {
   const [amountRub, setAmountRub] = useState("50 000");
   const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
   const payInMutation = useMutation({
     mutationFn: async () => {
@@ -28,6 +34,9 @@ export function SandboxPayInPanel({
     },
     onSuccess: () => {
       setError(null);
+      void queryClient.invalidateQueries({
+        queryKey: tradingStateQueryKey(portfolioId, rateScenario),
+      });
       onSuccess();
     },
     onError: (err: Error) => {
@@ -42,9 +51,14 @@ export function SandboxPayInPanel({
         Песочница · добавить средства
       </p>
       <p className="text-xs text-muted-foreground">
-        Имитирует ввод средств на брокерский счёт в песочнице. После добавления нажмите
-        «Обновить счёт» — появятся рекомендации на покупку при наличии свободного кэша.
+        Имитирует ввод средств на брокерский счёт в песочнице. После добавления обновятся
+        рекомендации при наличии свободного кэша.
       </p>
+      {deploySessionActive && (
+        <p className="text-xs text-amber-900 dark:text-amber-100" data-testid="pay-in-refresh-hint">
+          Появился новый кэш — обновите план закупки, чтобы учесть его в фиксированном плане.
+        </p>
+      )}
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-[140px] flex-1 space-y-1">
           <label htmlFor={`sandbox-pay-in-${portfolioId}`} className="text-xs text-muted-foreground">

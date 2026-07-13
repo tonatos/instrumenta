@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
+from bond_monitor.application.trading.deploy_session_use_case import DeploySessionUseCase
 from bond_monitor.application.trading.context import TradingContext
+from bond_monitor.application.trading.deploy_session_mapper import deploy_session_to_response
 from bond_monitor.application.trading.types import (
     ActiveOrderResponse,
     HoldingResponse,
@@ -100,8 +102,13 @@ def _cashflow_to_dict(event) -> dict:
 
 
 class AdviseUseCase:
-    def __init__(self, ctx: TradingContext) -> None:
+    def __init__(
+        self,
+        ctx: TradingContext,
+        deploy_sessions: DeploySessionUseCase | None = None,
+    ) -> None:
         self._ctx = ctx
+        self._deploy_sessions = deploy_sessions
 
     async def get_advice(
         self,
@@ -157,6 +164,15 @@ class AdviseUseCase:
         broker_snapshot = broker_snapshot_from_infrastructure(snapshot)
         policy = duration_policy or duration_policy_for_portfolio(portfolio)
 
+        active_session = None
+        if self._deploy_sessions is not None:
+            active_session = await self._deploy_sessions.sync_active_session(
+                portfolio.id,
+                universe,
+                portfolio=portfolio,
+                active_orders=broker_active_orders_from_infrastructure(active_orders),
+            )
+
         advice = advise(
             portfolio,
             broker_snapshot,
@@ -167,7 +183,13 @@ class AdviseUseCase:
             tax_rate=tax_rate,
             today=today,
             duration_policy=policy,
+            active_session=active_session,
         )
+
+        deploy_session_response = None
+        if self._deploy_sessions is not None and advice.deploy_session is not None:
+            persisted = await self._deploy_sessions.save_session(advice.deploy_session)
+            deploy_session_response = deploy_session_to_response(persisted)
 
         performance = None
         if advice.performance is not None:
@@ -196,6 +218,7 @@ class AdviseUseCase:
             warnings=list(advice.warnings),
             as_of=advice.as_of,
             weighted_duration_years=advice.weighted_duration_years,
+            deploy_session=deploy_session_response,
         )
 
     async def get_performance(self, portfolio_id: str) -> dict | None:

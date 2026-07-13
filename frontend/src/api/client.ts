@@ -19,6 +19,7 @@ import type {
   SellQuoteResponse,
   TradingAdviceResponse,
   TradingStateResponse,
+  DeploySessionResponse,
   NotificationsListResponse,
 } from "./types";
 import { getAuthToken, notifyUnauthorized } from "@/features/auth/authStorage";
@@ -193,6 +194,25 @@ export const api = {
   getPlan: (id: string) => request<PlanResponse>(withRateScenario(`/portfolios/${id}/plan`)),
   getTradingState: (id: string) =>
     request<TradingStateResponse>(withRateScenario(`/portfolios/${id}/trading-state`)),
+  createDeploySession: (id: string) =>
+    request<DeploySessionResponse>(`/portfolios/${id}/deploy-sessions`, {
+      method: "POST",
+    }),
+  refreshDeploySession: (id: string, sessionId: string) =>
+    request<DeploySessionResponse>(
+      `/portfolios/${id}/deploy-sessions/${encodeURIComponent(sessionId)}/refresh`,
+      { method: "POST" },
+    ),
+  cancelDeploySession: (id: string, sessionId: string) =>
+    request<DeploySessionResponse>(
+      `/portfolios/${id}/deploy-sessions/${encodeURIComponent(sessionId)}`,
+      { method: "DELETE" },
+    ),
+  skipDeploySessionItem: (id: string, sessionId: string, itemId: string) =>
+    request<DeploySessionResponse>(
+      `/portfolios/${id}/deploy-sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(itemId)}/skip`,
+      { method: "POST" },
+    ),
   acknowledgeRiskAlert: (portfolioId: string, isin: string) =>
     request<void>(
       `/portfolios/${portfolioId}/risk-alerts/${encodeURIComponent(isin)}/acknowledge`,

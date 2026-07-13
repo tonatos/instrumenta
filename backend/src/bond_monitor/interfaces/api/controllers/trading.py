@@ -13,6 +13,12 @@ from litestar.status_codes import HTTP_200_OK, HTTP_201_CREATED, HTTP_204_NO_CON
 from bond_monitor.application.bonds.bond_service import BondService
 from bond_monitor.application.portfolio.portfolio_service import PortfolioService
 from bond_monitor.application.trading.trading_service import TradingService
+from bond_monitor.application.trading.deploy_session_use_case import (
+    DeploySessionConflictError,
+    DeploySessionEmptyError,
+    DeploySessionNotFoundError,
+)
+from bond_monitor.application.trading.deploy_session_mapper import deploy_session_to_response
 from bond_monitor.application.trading.types import TradingAdviceResult
 from bond_monitor.domain.portfolio.policies import duration_policy_for_portfolio
 from bond_monitor.domain.trading.models import AccountKind
@@ -40,6 +46,9 @@ from bond_monitor.interfaces.schemas.api import (
     SellPositionRequest,
     SellQuoteResponse,
     TradingAdviceResponse,
+    DeploySessionResponse,
+    DeploySessionProgressResponse,
+    DeploySessionItemResponse,
     PerformanceDataResponse,
     HoldingResponse,
     SuggestionResponse,
@@ -57,6 +66,18 @@ def advice_to_response(result: TradingAdviceResult) -> TradingAdviceResponse:
     performance = None
     if result.performance is not None:
         performance = PerformanceDataResponse(**asdict(result.performance))
+    deploy_session = None
+    if result.deploy_session is not None:
+        ds = result.deploy_session
+        deploy_session = DeploySessionResponse(
+            id=ds.id,
+            status=ds.status,
+            expires_at=ds.expires_at,
+            cash_snapshot_rub=ds.cash_snapshot_rub,
+            progress=DeploySessionProgressResponse(**asdict(ds.progress)),
+            items=[DeploySessionItemResponse(**asdict(item)) for item in ds.items],
+            warnings=ds.warnings,
+        )
     return TradingAdviceResponse(
         holdings=[HoldingResponse(**asdict(h)) for h in result.holdings],
         cashflow=result.cashflow,
@@ -69,6 +90,20 @@ def advice_to_response(result: TradingAdviceResult) -> TradingAdviceResponse:
         warnings=result.warnings,
         as_of=result.as_of,
         weighted_duration_years=result.weighted_duration_years,
+        deploy_session=deploy_session,
+    )
+
+
+def deploy_session_api_response(session) -> DeploySessionResponse:
+    mapped = deploy_session_to_response(session)
+    return DeploySessionResponse(
+        id=mapped.id,
+        status=mapped.status,
+        expires_at=mapped.expires_at,
+        cash_snapshot_rub=mapped.cash_snapshot_rub,
+        progress=DeploySessionProgressResponse(**asdict(mapped.progress)),
+        items=[DeploySessionItemResponse(**asdict(item)) for item in mapped.items],
+        warnings=mapped.warnings,
     )
 
 
@@ -284,6 +319,128 @@ class TradingController(Controller):
             plan=plan_to_response(result.plan),
             advice=advice_to_response(result.advice),
         )
+
+    @post("/portfolios/{portfolio_id:str}/deploy-sessions", status_code=HTTP_201_CREATED)
+    async def create_deploy_session(
+        self,
+        portfolio_id: str,
+        trading_service: TradingService,
+        bond_service: BondService,
+        settings: Settings,
+    ) -> DeploySessionResponse:
+        universe = bond_service.load_universe().bonds
+        try:
+            session = await trading_service.create_deploy_session(
+                portfolio_id,
+                universe,
+                key_rate=settings.key_rate,
+                tax_rate=settings.tax_rate_fraction,
+                today=date.today(),
+            )
+        except DeploySessionConflictError as exc:
+            raise ClientException(detail=str(exc), status_code=409) from exc
+        except DeploySessionEmptyError as exc:
+            raise ClientException(detail=str(exc), status_code=422) from exc
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        return deploy_session_api_response(session)
+
+    @get("/portfolios/{portfolio_id:str}/deploy-sessions/active")
+    async def get_active_deploy_session(
+        self,
+        portfolio_id: str,
+        trading_service: TradingService,
+    ) -> DeploySessionResponse:
+        try:
+            session = await trading_service.get_active_deploy_session(portfolio_id)
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        if session is None:
+            raise NotFoundException(detail="Active deploy session not found")
+        return deploy_session_api_response(session)
+
+    @post("/portfolios/{portfolio_id:str}/deploy-sessions/{session_id:str}/refresh")
+    async def refresh_deploy_session(
+        self,
+        portfolio_id: str,
+        session_id: str,
+        trading_service: TradingService,
+        bond_service: BondService,
+        settings: Settings,
+    ) -> DeploySessionResponse:
+        universe = bond_service.load_universe().bonds
+        try:
+            session = await trading_service.refresh_deploy_session(
+                portfolio_id,
+                session_id,
+                universe,
+                key_rate=settings.key_rate,
+                tax_rate=settings.tax_rate_fraction,
+                today=date.today(),
+            )
+        except DeploySessionNotFoundError as exc:
+            raise NotFoundException(detail=str(exc)) from exc
+        except DeploySessionEmptyError as exc:
+            raise ClientException(detail=str(exc), status_code=422) from exc
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        return deploy_session_api_response(session)
+
+    @delete(
+        "/portfolios/{portfolio_id:str}/deploy-sessions/{session_id:str}",
+        status_code=HTTP_200_OK,
+    )
+    async def cancel_deploy_session(
+        self,
+        portfolio_id: str,
+        session_id: str,
+        trading_service: TradingService,
+    ) -> DeploySessionResponse:
+        try:
+            session = await trading_service.cancel_deploy_session(portfolio_id, session_id)
+        except DeploySessionNotFoundError as exc:
+            raise NotFoundException(detail=str(exc)) from exc
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        return deploy_session_api_response(session)
+
+    @post(
+        "/portfolios/{portfolio_id:str}/deploy-sessions/{session_id:str}/items/{item_id:str}/skip",
+        status_code=HTTP_200_OK,
+    )
+    async def skip_deploy_session_item(
+        self,
+        portfolio_id: str,
+        session_id: str,
+        item_id: str,
+        trading_service: TradingService,
+    ) -> DeploySessionResponse:
+        try:
+            session = await trading_service.skip_deploy_session_item(
+                portfolio_id,
+                session_id,
+                item_id,
+            )
+        except DeploySessionNotFoundError as exc:
+            raise NotFoundException(detail=str(exc)) from exc
+        except ValueError as exc:
+            message = str(exc)
+            if message == "Portfolio not found":
+                raise NotFoundException(detail=message)
+            raise ClientException(detail=message)
+        return deploy_session_api_response(session)
 
     @post(
         "/portfolios/{portfolio_id:str}/risk-alerts/{isin:str}/acknowledge",

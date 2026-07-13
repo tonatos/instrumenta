@@ -64,6 +64,11 @@ export function PortfolioPage() {
     slots,
     isTrading,
     tradingAdvice,
+    tradingStateFetching,
+    tradingStateError,
+    tradingStateErrorDetail,
+    tradingStateUpdatedAt,
+    rateScenario,
   } = usePortfolioQueries();
 
   const {
@@ -358,10 +363,18 @@ export function PortfolioPage() {
             <NotificationsPanel portfolioId={activeId} />
           )}
 
-          {isTrading && (
+          {isTrading && active && (
             <TradingActionQueue
               portfolio={active}
               suggestionConfirmId={searchParams.get("suggestion_confirm")}
+              advice={tradingAdvice}
+              adviceLoading={planLoading}
+              adviceFetching={tradingStateFetching}
+              adviceError={tradingStateError}
+              adviceErrorDetail={tradingStateErrorDetail}
+              refetchAdvice={refetchPlan}
+              adviceUpdatedAt={tradingStateUpdatedAt}
+              rateScenario={rateScenario}
             />
           )}
 

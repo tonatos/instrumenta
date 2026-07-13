@@ -21,6 +21,7 @@ export const POSITION_STATUS_LABELS: Record<string, string> = {
 export const SUGGESTION_KIND_LABELS: Record<string, string> = {
   buy: "Покупка",
   reinvest: "Реинвестиция",
+  reinvest_watch: "Реинвестиция (ожидает)",
   put_offer_reminder: "Пут-оферта",
   put_offer_watch: "На контроле",
   sell: "Продажа",

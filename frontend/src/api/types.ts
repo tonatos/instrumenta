@@ -317,6 +317,50 @@ export interface TradingAdviceResponse {
   warnings: string[];
   as_of: string;
   weighted_duration_years: number | null;
+  deploy_session?: DeploySessionResponse | null;
+}
+
+export type DeploySessionItemStatus =
+  | "pending"
+  | "placed"
+  | "filled"
+  | "skipped"
+  | "stale";
+
+export interface DeploySessionProgress {
+  total: number;
+  pending: number;
+  placed: number;
+  filled: number;
+  skipped: number;
+  stale: number;
+}
+
+export interface DeploySessionItem {
+  id: string;
+  kind: "buy" | "reinvest";
+  isin: string;
+  name: string;
+  lots: number;
+  figi: string | null;
+  suggested_price_pct: number;
+  estimated_amount_rub: number;
+  reason: string;
+  status: DeploySessionItemStatus;
+  source_isin?: string | null;
+  due_date?: string | null;
+  order_id?: string | null;
+  urgency?: string;
+}
+
+export interface DeploySessionResponse {
+  id: string;
+  status: string;
+  expires_at: string;
+  cash_snapshot_rub: number;
+  progress: DeploySessionProgress;
+  items: DeploySessionItem[];
+  warnings: string[];
 }
 
 export interface TradingStateResponse {
@@ -363,6 +407,7 @@ export interface PerformanceData {
 export type SuggestionKind =
   | "buy"
   | "reinvest"
+  | "reinvest_watch"
   | "put_offer_reminder"
   | "put_offer_watch"
   | "sell";

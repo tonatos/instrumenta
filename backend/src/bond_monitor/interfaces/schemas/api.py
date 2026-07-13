@@ -301,6 +301,42 @@ class PerformanceDataResponse(BaseModel):
     as_of: str = ""
 
 
+class DeploySessionProgressResponse(BaseModel):
+    total: int
+    pending: int
+    placed: int
+    filled: int
+    skipped: int
+    stale: int
+
+
+class DeploySessionItemResponse(BaseModel):
+    id: str
+    kind: str
+    isin: str
+    name: str
+    lots: int
+    figi: str | None = None
+    suggested_price_pct: float
+    estimated_amount_rub: float
+    reason: str
+    status: str
+    source_isin: str | None = None
+    due_date: str | None = None
+    order_id: str | None = None
+    urgency: str = "normal"
+
+
+class DeploySessionResponse(BaseModel):
+    id: str
+    status: str
+    expires_at: str
+    cash_snapshot_rub: float
+    progress: DeploySessionProgressResponse
+    items: list[DeploySessionItemResponse] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
 class TradingAdviceResponse(BaseModel):
     holdings: list[HoldingResponse] = Field(default_factory=list)
     cashflow: list[dict[str, Any]] = Field(default_factory=list)
@@ -313,6 +349,7 @@ class TradingAdviceResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     as_of: str = ""
     weighted_duration_years: float | None = None
+    deploy_session: DeploySessionResponse | None = None
 
 
 class TradingStateResponse(BaseModel):

@@ -61,3 +61,19 @@ class UserNotificationRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     dismissed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DeploySessionRow(Base):
+    """Ephemeral frozen deploy plan for atomic buy/reinvest execution."""
+
+    __tablename__ = "deploy_sessions"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    portfolio_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    cash_snapshot_rub: Mapped[float] = mapped_column(Float, nullable=False)
+    items_json: Mapped[list] = mapped_column(JSON, nullable=False)
+    warnings_json: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

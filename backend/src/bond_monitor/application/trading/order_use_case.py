@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from bond_monitor.application.trading.deploy_session_use_case import DeploySessionUseCase
 from bond_monitor.application.trading.context import TradingContext
 from bond_monitor.application.trading.types import OrderPreviewResult, PlaceOrderResult
 from bond_monitor.domain.bonds.models import BondRecord
@@ -59,8 +60,13 @@ def _available_lots_for_sell(snapshot, figi: str | None) -> int:
 
 
 class OrderUseCase:
-    def __init__(self, ctx: TradingContext) -> None:
+    def __init__(
+        self,
+        ctx: TradingContext,
+        deploy_sessions: DeploySessionUseCase | None = None,
+    ) -> None:
         self._ctx = ctx
+        self._deploy_sessions = deploy_sessions
 
     async def preview_order(
         self,
@@ -272,6 +278,13 @@ class OrderUseCase:
             raise ValueError(str(exc)) from exc
         except TradingClientError as exc:
             raise ValueError(str(exc)) from exc
+
+        if self._deploy_sessions is not None:
+            await self._deploy_sessions.on_order_placed(
+                portfolio_id,
+                suggestion_id,
+                result.order_id,
+            )
 
         return PlaceOrderResult(
             order_id=result.order_id,

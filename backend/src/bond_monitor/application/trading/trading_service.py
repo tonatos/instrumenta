@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from bond_monitor.application.trading.deploy_session_use_case import DeploySessionUseCase
 from bond_monitor.application.trading.advise_use_case import AdviseUseCase
 from bond_monitor.application.trading.attach_use_case import AttachUseCase
 from bond_monitor.application.trading.context import TradingContext
@@ -12,7 +13,11 @@ from bond_monitor.application.trading.sandbox_use_case import SandboxUseCase
 from bond_monitor.application.trading.sell_position_use_case import SellPositionUseCase
 from bond_monitor.application.trading.risk_monitoring import acknowledge_trading_risk
 from bond_monitor.application.trading.trading_state_use_case import TradingStateUseCase
+from bond_monitor.domain.trading.deploy_session import DeploySession
 from bond_monitor.application.trading.types import (
+    DeploySessionResponse,
+    DeploySessionItemResponse,
+    DeploySessionProgressResponse,
     OrderPreviewResult,
     PlaceOrderResult,
     SellPositionPreviewResult,
@@ -26,6 +31,7 @@ from bond_monitor.domain.portfolio.models import Portfolio
 from bond_monitor.domain.portfolio.planner import PortfolioPlan
 from bond_monitor.domain.portfolio.policies import DurationPolicy
 from bond_monitor.domain.trading.models import AccountKind, OrderDirection
+from bond_monitor.infrastructure.persistence.deploy_session_repository import DeploySessionRepository
 from bond_monitor.infrastructure.persistence.repository import PortfolioRepository
 from bond_monitor.infrastructure.tinvest.snapshot_adapter import broker_snapshot_from_infrastructure
 from bond_monitor.infrastructure.tinvest.trading_client import OperationRecord
@@ -37,16 +43,18 @@ class TradingService:
     def __init__(
         self,
         repo: PortfolioRepository,
+        deploy_repo: DeploySessionRepository,
         *,
         sandbox_token: str,
         production_token: str,
     ) -> None:
         ctx = TradingContext(repo, sandbox_token=sandbox_token, production_token=production_token)
         self._ctx = ctx
+        self._deploy = DeploySessionUseCase(ctx, deploy_repo)
         self._attach = AttachUseCase(ctx)
-        self._advise = AdviseUseCase(ctx)
-        self._trading_state = TradingStateUseCase(ctx)
-        self._order = OrderUseCase(ctx)
+        self._advise = AdviseUseCase(ctx, self._deploy)
+        self._trading_state = TradingStateUseCase(ctx, self._advise)
+        self._order = OrderUseCase(ctx, self._deploy)
         self._sell = SellPositionUseCase(ctx)
         self._sandbox = SandboxUseCase(ctx)
 
@@ -267,6 +275,61 @@ class TradingService:
 
     async def get_account_operations_history(self, portfolio_id: str) -> list[OperationRecord]:
         return await self._advise.get_account_operations_history(portfolio_id)
+
+    async def create_deploy_session(
+        self,
+        portfolio_id: str,
+        universe: list[BondRecord],
+        *,
+        key_rate: float,
+        tax_rate: float,
+        today: date,
+    ) -> DeploySession:
+        return await self._deploy.create_session(
+            portfolio_id,
+            universe,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            today=today,
+        )
+
+    async def get_active_deploy_session(self, portfolio_id: str) -> DeploySession | None:
+        await self._ctx.get_trading_portfolio(portfolio_id)
+        return await self._deploy.get_active(portfolio_id)
+
+    async def refresh_deploy_session(
+        self,
+        portfolio_id: str,
+        session_id: str,
+        universe: list[BondRecord],
+        *,
+        key_rate: float,
+        tax_rate: float,
+        today: date,
+    ) -> DeploySession:
+        return await self._deploy.refresh_session(
+            portfolio_id,
+            session_id,
+            universe,
+            key_rate=key_rate,
+            tax_rate=tax_rate,
+            today=today,
+        )
+
+    async def cancel_deploy_session(
+        self,
+        portfolio_id: str,
+        session_id: str,
+    ) -> DeploySession:
+        return await self._deploy.cancel_session(portfolio_id, session_id)
+
+    async def skip_deploy_session_item(
+        self,
+        portfolio_id: str,
+        session_id: str,
+        item_id: str,
+    ) -> DeploySession:
+        return await self._deploy.skip_item(portfolio_id, session_id, item_id)
 
     async def acknowledge_risk_alert(
         self,

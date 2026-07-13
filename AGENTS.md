@@ -16,7 +16,7 @@ smart-lab ──► infrastructure/ratings/ ──┘
          domain/screening (scorer)
                     ▼
     domain/portfolio (planner, selection, cashflow, …)
-    domain/trading (advisory, ports, models)
+    domain/trading (advisory, deploy_session, ports, …)
     domain/notifications (collect_alerts, fingerprint)
                     ▼
          application/ (use cases)
@@ -46,7 +46,7 @@ smart-lab ──► infrastructure/ratings/ ──┘
 |---------|--------|----------------|
 | Bond Screening | `domain/bonds`, `domain/screening` | `infrastructure/moex`, `infrastructure/ratings`, `tinvest/read_client` |
 | Portfolio Planning | `domain/portfolio/` | — (pure) |
-| Trading | `domain/trading/` | `infrastructure/tinvest/trading_client` + `snapshot_adapter` |
+| Trading | `domain/trading/` | `infrastructure/tinvest/trading_client` + `snapshot_adapter`, `persistence/deploy_session_repository` |
 | Notifications | `domain/notifications/` | `infrastructure/notifications/` (Redis, ledger, Telegram) |
 | Persistence | Repository interfaces | `infrastructure/persistence` |
 
@@ -61,9 +61,75 @@ smart-lab ──► infrastructure/ratings/ ──┘
 | `sync_risk_baselines` | Да, при скане | Только через `acknowledge` endpoint |
 | Telegram push | **Только воркер** | Нет |
 | Публикация в шину | **Только воркер** | Consumer при старте → SQLite |
-| Trading queue (кнопки buy/sell) | Нет | `GET /advice` → `alerts_to_suggestions()` |
+| Trading queue (кнопки buy/sell) | Нет | `GET /trading-state` / `GET /advice` → suggestions; buy/reinvest — через **Deploy Session** |
 
 **DRY:** детекция — `domain/notifications/rules.py`; доставка — `application/notifications/deliver_use_case.py`; рендер suggestions — `domain/notifications/suggestions.py`.
+
+---
+
+## Скрининг и скоринг
+
+### Риск-профили (`RiskProfile`)
+
+Три профиля: `conservative`, `normal`, `aggressive` (`domain/portfolio/models.py`).
+
+| Профиль | Фильтр портфеля (`selection.risk_profile_filter`) | Веса YTM / риск / ликвидность |
+|---------|---------------------------------------------------|-------------------------------|
+| **conservative** | ≥ ruA, без `call_date`, без субординации / HIGH / безрейтинговых | 0.20 / 0.60 / 0.20 |
+| **normal** | ≥ ruA−, без субординации / HIGH / безрейтинговых | 0.30 / 0.50 / 0.20 |
+| **aggressive** | ≥ ruBB− (или без рейтинга) | 0.60 / 0.25 / 0.15 + boredom/junk penalties |
+
+**Fallback при подборе** (`selection._fallback_steps`): `conservative → normal → любая без дефолта`; `aggressive → normal → любая без дефолта`; `normal → любая без дефолта`.
+
+**Скринер не фильтрует universe по профилю** — селектор меняет только активный ключ в `profile_scores` (сортировка и колонка «Скор»). Фильтр по рейтингу применяется в `portfolio_universe_filter` при compose/reinvest.
+
+### Два контура скоринга (`domain/screening/scorer.py`)
+
+| Контур | Функция | Выборка YTM-шкалы | Дюрация |
+|--------|---------|-------------------|---------|
+| **Display** (скринер, API) | `score_bonds_all_profiles` | Полная universe (кэш screener/universe) | На чтении: `resolve_profile_scores` (без мутации `BondRecord`) |
+| **Selection** (compose/reinvest) | `score_bonds_for_profile` | Подмножество кандидатов | Внутри функции, сразу в `bond.score` |
+
+Компоненты (0–100): `ytm_score`, `risk_score`, `liquidity_score`. Базовые `profile_scores` (без дюрации) кэшируются в RAM после enrich; итоговый `score` и `profile_scores` в API = база + `duration_adjustment` (clamp 0–100).
+
+**Единая точка отдачи в API:** `bond_to_response` → `resolve_profile_scores` + `duration_adjustment_for_bond`. Таблица скринера и `GET /bonds/{secid}` с теми же `risk_profile` + `rate_scenario` дают одинаковый скор.
+
+### BondService (`application/bonds/bond_service.py`)
+
+```
+fetch MOEX → enrich (defaults, T-Invest, ratings, put offers)
+         → score_bonds_all_profiles  →  RAM cache (screener / universe)
+         → на чтении: clone_bond_record + sort_bonds_by_resolved_score / bond_to_response
+```
+
+| Метод | Поведение |
+|-------|-----------|
+| `load_screener_bonds` | Кэш screener; сортировка по resolved score активного профиля |
+| `load_universe` | Все бумаги без volume/maturity фильтра — для YTM-шкалы |
+| `load_by_secid` / `load_by_isins` | Сначала lookup в screener-кэше; вне окна — fetch + `_score_against_cached_universe` (шкала из universe) |
+| `_clone_bonds` / `clone_bond_record` | Иммутабельность кэша при resolve duration |
+
+Ликвидность и min-volume: `BondRecord.filter_volume_rub` = `prev_volume_rub` ?? `volume_rub` (вчерашний оборот MOEX предпочтительнее для фильтра и `liquidity_score`).
+
+### `domain/screening/scorer.py` — ключевые функции
+
+| Функция | Назначение |
+|---------|------------|
+| `score_bonds_all_profiles` | Базовые `profile_scores` для всех профилей (кэш) |
+| `score_bonds_for_profile` | Скоринг подмножества кандидатов в selection pipeline |
+| `resolve_profile_scores` | База + duration adjustment, без мутации bond |
+| `sort_bonds_by_resolved_score` | Сортировка скринера по активному профилю |
+| `bond_to_response` (serializers) | Единая отдача resolved scores в API |
+
+### Bonds API — query params
+
+| Параметр | Эндпоинты | Назначение |
+|----------|-----------|------------|
+| `risk_profile` | `GET /bonds/`, `/bonds/{secid}`, `/bonds/by-isins` | Активный профиль; `score` = `profile_scores[profile]` |
+| `rate_scenario` | те же | `hold` / `cut` / `hike` → `DurationPolicy` → корректировка дюрации |
+| `filter_by` | list | `effective` / `maturity` / `offer` — окно скринера |
+
+`BondResponse`: `profile_scores` (все 3, с дюрацией), `score`, `duration_adjustment`, компоненты `ytm_score` / `risk_score` / `liquidity_score`, `volume_rub` + `prev_volume_rub`.
 
 ---
 
@@ -76,7 +142,7 @@ smart-lab ──► infrastructure/ratings/ ──┘
 | `simulation/` | Event-sourced симулятор: `state.py`, `events.py`, `engine.run_simulation()` — очередь событий, lazy lifecycle |
 | `plan_builder.py` | Thin facade: `build_plan` → `run_simulation()`, read-model (слоты, XIRR, timeline) |
 | `planner.py` | Facade: `auto_compose`, `compose_buy_allocations`, `deploy_cash`, `build_plan` |
-| `selection.py` | Единый eligibility/ranking для compose и reinvest |
+| `selection.py` | Единый eligibility/ranking для compose и reinvest; `risk_profile_filter`, fallback-профили |
 | `position_factory.py` | `position_from_bond`, `position_end_date` |
 | `coupon_schedule.py` | Расписание купонов |
 | `cashflow.py` | `CashflowEvent`, merge helpers |
@@ -92,15 +158,54 @@ smart-lab ──► infrastructure/ratings/ ──┘
 
 | Модуль | Ответственность |
 |--------|-----------------|
-| `advisory.py` | Stateless `advise()`: holdings, suggestions, active orders, cashflow; buy — через `deploy_cash`; alert-suggestions через `collect_alerts()` |
+| `advisory.py` | Stateless `advise()`: holdings, suggestions, active orders, cashflow; buy — через `deploy_cash`; reinvest — `build_reinvest_suggestions` (actionable) + `build_reinvest_watch_suggestions` (информация); alert-suggestions через `collect_alerts()`; при `active_session` — buy/reinvest из frozen session |
+| `deploy_session.py` | **Deploy Session** — краткоживущий снимок buy+reinvest: `build_deploy_session_plan`, `apply_session_staleness`, `sync_session_with_orders`, `session_items_to_suggestions`, lifecycle (`complete_session_if_no_pending`) |
 | `holdings.py` | `HoldingView` — read-model позиции на счёте |
 | `suggestions.py` | `Suggestion`, `SuggestionKind` — read-model рекомендаций |
 | `models.py` | `AccountKind`, `FrozenForecast`, advisory DTO |
 | `ports.py` | `BrokerSnapshot`, `BrokerOperation` — порты без SDK |
+| `policies.py` | `DeploySessionPolicy` (TTL, price drift), буферы лимитных цен buy/sell |
 | `ids.py` | `stable_id()` для детерминированных ключей заявок |
 | `yield_calc.py` | XIRR из операций брокера |
 
 Факт позиций на счёте — только из брокерского снапшота (`advice.holdings`), не из shadow-полей плана.
+
+### SuggestionKind и секции UI
+
+| Kind | Секция UI | Исполняемость |
+|------|-----------|---------------|
+| `buy`, `reinvest` | «Покупки» / «План закупки» | Только после **фиксации Deploy Session** (или внутри активной сессии) |
+| `reinvest_watch` | «На контроле» | Информация до даты погашения источника (до 14 дней) |
+| `put_offer_watch` | «На контроле» | Информация |
+| `put_offer_reminder`, `sell` (risk) | «Срочно» | Live — без deploy session |
+
+**Реинвестиция:** actionable `reinvest` — только когда `days_until <= 0` (кэш от погашения уже доступен); `reinvest_watch` — за 14 дней до погашения, без кнопки покупки.
+
+---
+
+## Deploy Session
+
+Краткоживущая серверная «корзина» для атомарного исполнения buy+reinvest. Sell / put-offer / risk остаются **live** (вне сессии).
+
+```
+POST /deploy-sessions  →  build_deploy_session_plan()  →  SQLite deploy_sessions
+         │
+         ▼
+advise(active_session=…)  →  buy/reinvest из session_items_to_suggestions
+         │                  reinvest_watch + alerts — live
+         ▼
+place order (suggestion_id)  →  mark_item_placed  →  complete_session_if_no_pending
+```
+
+| Аспект | Поведение |
+|--------|-----------|
+| Persistence | `infrastructure/persistence/deploy_session_repository.py`, таблица `deploy_sessions` |
+| TTL | `DeploySessionPolicy.ttl_hours` (24ч по умолчанию) |
+| Конфликт | 409 при создании, если есть active session с pending items; lazy-complete если все placed/skipped |
+| Staleness | `apply_session_staleness`: price drift, недоступная бумага, **преждевременный** reinvest (`due_date > today`), **просроченный** reinvest (`due_date < today`) |
+| Frontend gate | `buyRequiresFrozenPlan` — кнопка «Подтвердить покупку» disabled без `deploy_session`; skip — только внутри сессии |
+
+**Application:** `deploy_session_use_case.py` (create / refresh / cancel / skip / sync_active_session); хук в `order_use_case.py` при place.
 
 ---
 
@@ -128,14 +233,16 @@ smart-lab ──► infrastructure/ratings/ ──┘
 
 ```
 application/trading/
-├── trading_service.py      # тонкий DI-facade
-├── advise_use_case.py      # GET /advice (без MOEX refresh — это делает notifier)
-├── risk_monitoring.py      # acknowledge baseline (не proactive scan)
+├── trading_service.py          # тонкий DI-facade
+├── trading_state_use_case.py   # GET /trading-state: plan + advice в одном broker round-trip
+├── advise_use_case.py          # GET /advice (без MOEX refresh — это делает notifier)
+├── deploy_session_use_case.py  # lifecycle frozen buy/reinvest плана
+├── risk_monitoring.py          # acknowledge baseline (не proactive scan)
 ├── attach_use_case.py
-├── order_use_case.py       # preview / place / cancel
+├── order_use_case.py           # preview / place / cancel (+ deploy session hooks)
 ├── sell_position_use_case.py
 ├── sandbox_use_case.py
-├── broker.py               # единая точка I/O к T-Invest
+├── broker.py                   # единая точка I/O к T-Invest
 └── context.py
 ```
 
@@ -182,12 +289,24 @@ notifier/
 | Группа | Эндпоинты |
 |--------|-----------|
 | Config | `GET /config/` |
-| Bonds | `GET /bonds/`, `GET /bonds/{secid}`, `POST /bonds/refresh` |
+| Bonds | `GET /bonds/?risk_profile=&rate_scenario=`, `GET /bonds/by-isins`, `GET /bonds/{secid}`, `POST /bonds/refresh` |
 | Favorites | `GET/PUT/DELETE /favorites/{isin}` |
 | Portfolios | CRUD `/portfolios/`, `POST .../auto-compose`, `GET .../plan` |
 | Calculator | `POST /calculator/portfolio` |
-| Trading | attach, `GET /advice`, orders preview/place/cancel, sandbox, risk acknowledge, … |
+| Trading | attach, `GET /advice`, **`GET /trading-state`**, **`POST/GET/DELETE /deploy-sessions`**, orders preview/place/cancel, sandbox, risk acknowledge, … |
 | Notifications | `GET /portfolios/{id}/notifications`, `POST /notifications/{id}/read`, `POST /notifications/{id}/dismiss` |
+
+**Trading-state:** `GET /portfolios/{id}/trading-state` — `{ plan, advice }`; `advice.deploy_session` — активная сессия (если есть). Фронтенд использует этот эндпоинт как единый источник для очереди действий и плана.
+
+**Deploy sessions:**
+
+| Метод | Путь | Назначение |
+|-------|------|------------|
+| POST | `/portfolios/{id}/deploy-sessions` | Зафиксировать план (201; 409 при pending session) |
+| GET | `/portfolios/{id}/deploy-sessions/active` | Активная сессия |
+| POST | `.../deploy-sessions/{sid}/refresh` | Пересобрать план |
+| DELETE | `.../deploy-sessions/{sid}` | Отменить план |
+| POST | `.../items/{item_id}/skip` | Пропустить позицию в плане |
 
 `PortfolioResponse` включает `invested_capital_rub`, `positions_count`, `closed_positions_count` и типизированный `data: PortfolioDataResponse`.
 
@@ -201,14 +320,24 @@ DI: `Provide(get_db_session)`, `Provide(provide_bond_service)`, `Provide(provide
 
 | Путь | Назначение |
 |------|------------|
+| `features/screener/ScreenerPage.tsx` | Таблица облигаций, селектор риск-профиля, объём (вчера крупно / сегодня мелко) |
+| `features/screener/BondDetailSheet.tsx` | Деталка: компоненты скора + три карточки профилей (без дублирования «Итого») |
+| `features/screener/screenerRiskProfile.ts` | `localStorage` активного профиля скринера |
+| `features/bonds/bondScore.ts` | `bondScoreForProfile`, `PROFILE_SCORE_WEIGHTS` (зеркало backend) |
 | `features/portfolio/PortfolioPage.tsx` | Оркестрация страницы |
 | `features/portfolio/components/` | Form, PositionsTab, ForecastMetrics, … |
-| `features/portfolio/trading/` | TradingActionQueue, `useTradingAdvice`, ConfirmOrderDialog, … |
+| `features/portfolio/hooks/usePortfolioQueries.ts` | Единый **`trading-state`** query (`tradingStateQueryKey`) для plan + advice |
+| `features/portfolio/hooks/queryConfig.ts` | `STALE`, `tradingStateQueryKey` |
+| `features/portfolio/trading/` | TradingActionQueue, `useDeploySession`, `useTradingAdvice`, ConfirmOrderDialog, OperationGroups, … |
 | `features/portfolio/NotificationsPanel.tsx` | In-app уведомления из `GET /notifications` |
 | `features/portfolio/labels.ts` | Единые label maps (не дублировать в компонентах) |
 | `api/types.ts` | Ручное зеркало Pydantic DTO |
 
-**Правило:** бизнес-логика только на backend. Frontend использует `invested_capital_rub`, `positions_count`, `GET /advice` для факта на счёте; pricing заявок — через `/orders/preview`.
+**Trading UI:** `OperationGroups.groupSuggestions()` — «Срочно» / «На контроле» (`put_offer_watch`, `reinvest_watch`) / «Покупки» (`buy`, `reinvest`). Mutations deploy session invalidate только `trading-state` query key.
+
+**Скринер:** `risk_profile` и `rate_scenario` пробрасываются в `GET /bonds/` и `GET /bonds/{secid}`; сортировка по `bond.score` активного профиля. Портфель: `GET /bonds/by-isins?risk_profile=<portfolio.risk_profile>` для скора в позициях.
+
+**Правило:** бизнес-логика только на backend. Frontend использует `invested_capital_rub`, `positions_count`, `GET /trading-state` для факта на счёте и очереди; pricing заявок — через `/orders/preview`.
 
 ---
 
@@ -229,10 +358,14 @@ backend/tests/
 e2e/playwright/tests/
 ├── fixtures.ts           # mockConfig, makeTradingPortfolio, …
 ├── live/                 # smoke, features (нужен API)
-└── mocked/               # wizard, queue, positions, notifications, …
+└── mocked/               # wizard, queue, positions, notifications, deploy-session, …
 ```
 
 **Не копируй** `_portfolio_client`, `_bond`, `_snapshot` в тестах — используй `factories.py` и `conftest.py`.
+
+Покрытие deploy session: `test_deploy_session.py`, `test_reinvest_suggestions.py`, `test_deploy_session_repository.py`, `e2e/.../deploy-session.spec.ts`.
+
+Покрытие скоринга: `test_scorer.py`, `test_bond_selection.py`, `test_api_bonds_risk_profile.py`, `test_api_bonds_score_consistency.py`, `test_screener_score_idempotency.py`, `e2e/.../screener-risk-profile.spec.ts`.
 
 ### Команды
 
@@ -295,9 +428,13 @@ class PlanningPolicy:
 | Задача | Куда |
 |--------|------|
 | Новый источник данных | `infrastructure/<source>/` + enrich в `BondService` |
+| Новый риск-профиль / веса скора | `RiskProfile` + `_PROFILE_WEIGHTS` в `scorer.py` + `risk_profile_filter` + `bondScore.ts` + API query param |
+| Консистентность score list vs detail | Не пересчитывать изолированно: lookup из screener cache или `_score_against_cached_universe`; отдача через `bond_to_response` |
 | Новый API endpoint | `interfaces/api/controllers/` + schema |
 | Новая страница UI | `frontend/src/features/<name>/` + route в `App.tsx` |
 | Новая политика планирования | `domain/portfolio/policies.py` |
-| Новая торговая рекомендация | `AlertRule` в `domain/notifications/rules.py` + `alerts_to_suggestions()` |
+| Новая торговая рекомендация (alert-driven) | `AlertRule` в `domain/notifications/rules.py` + `alerts_to_suggestions()` |
+| Новый `SuggestionKind` (advisory) | `domain/trading/suggestions.py` + `advisory.py` + `labels.ts` + `OperationGroups` + `api/types.ts` |
+| Deploy session / frozen plan | `domain/trading/deploy_session.py` + `deploy_session_use_case.py` + invalidate `trading-state` на фронте |
 | Новый тип уведомления (push/UI) | `AlertRule` + `deliver_use_case.py` (если нужен новый канал) |
 | Брокерский тип в domain | `domain/trading/ports.py` + adapter в infrastructure |

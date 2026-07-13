@@ -4,7 +4,7 @@ import {
   ClipboardCopy,
   XCircle,
 } from "lucide-react";
-import type { ActiveOrder, Suggestion } from "@/api/types";
+import type { ActiveOrder, DeploySessionItemStatus, Suggestion } from "@/api/types";
 import { formatOrderStatus, SUGGESTION_KIND_LABELS } from "@/features/portfolio/labels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,9 @@ export function groupSuggestions(suggestions: Suggestion[]) {
       ((s.urgency === "critical" || s.urgency === "soon") &&
         s.kind !== "put_offer_watch"),
   );
-  const watch = suggestions.filter((s) => s.kind === "put_offer_watch");
+  const watch = suggestions.filter(
+    (s) => s.kind === "put_offer_watch" || s.kind === "reinvest_watch",
+  );
   const buys = suggestions.filter(
     (s) => (s.kind === "buy" || s.kind === "reinvest") && !urgent.includes(s),
   );
@@ -30,12 +32,23 @@ export function groupSuggestions(suggestions: Suggestion[]) {
   return { urgent, watch, buys, sells };
 }
 
+const SESSION_STATUS_LABELS: Record<DeploySessionItemStatus, string> = {
+  pending: "ожидает",
+  placed: "заявка",
+  filled: "выполнено",
+  skipped: "пропущено",
+  stale: "устарело",
+};
+
 export function SuggestionCard({
   suggestion,
   isProduction,
   onConfirm,
   onAcknowledgeRisk,
   onOpenDetail,
+  onSkip,
+  sessionStatus,
+  buyRequiresFrozenPlan,
   isPending,
 }: {
   suggestion: Suggestion;
@@ -43,10 +56,17 @@ export function SuggestionCard({
   onConfirm: (s: Suggestion) => void;
   onAcknowledgeRisk?: (s: Suggestion) => void;
   onOpenDetail?: () => void;
+  onSkip?: (s: Suggestion) => void;
+  sessionStatus?: DeploySessionItemStatus;
+  buyRequiresFrozenPlan?: boolean;
   isPending: boolean;
 }) {
   const [copied, setCopied] = useState(false);
   const direction = suggestionDirection(suggestion.kind);
+  const buyBlocked =
+    buyRequiresFrozenPlan &&
+    direction === "BUY" &&
+    (suggestion.kind === "buy" || suggestion.kind === "reinvest");
   const borderClass =
     suggestion.urgency === "critical"
       ? "border-red-400/50"
@@ -85,6 +105,11 @@ export function SuggestionCard({
         <Badge variant="outline" className="text-xs">
           {KIND_LABELS[suggestion.kind] ?? suggestion.kind}
         </Badge>
+        {sessionStatus && (
+          <Badge variant="secondary" className="text-xs">
+            {SESSION_STATUS_LABELS[sessionStatus]}
+          </Badge>
+        )}
       </div>
       <p className="text-sm text-muted-foreground">{suggestion.reason}</p>
       {suggestion.due_date && (
@@ -110,15 +135,32 @@ export function SuggestionCard({
             </Button>
           </>
         )}
-        {direction && (
+        {direction && sessionStatus !== "filled" && sessionStatus !== "skipped" && sessionStatus !== "stale" && (
           <Button
             type="button"
             size="sm"
             onClick={() => onConfirm(suggestion)}
-            disabled={isPending}
+            disabled={isPending || sessionStatus === "placed" || buyBlocked}
+            data-testid={
+              direction === "BUY" ? `confirm-buy-${suggestion.id}` : undefined
+            }
           >
             {direction === "BUY" ? "Подтвердить покупку" : "Подтвердить продажу"}
             {isProduction && " (боевой)"}
+          </Button>
+        )}
+        {buyBlocked && (
+          <p className="text-xs text-muted-foreground">Сначала зафиксируйте план закупки</p>
+        )}
+        {onSkip && sessionStatus === "pending" && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => onSkip(suggestion)}
+            disabled={isPending}
+          >
+            Пропустить
           </Button>
         )}
         {suggestion.risk_acknowledgeable && onAcknowledgeRisk && (
