@@ -310,8 +310,12 @@ type mockBondService struct {
 	bonds []bonds.BondRecord
 }
 
-func (m mockBondService) LoadScreenerBonds(context.Context, string, portfolio.RiskProfile, string) (application.BondLoadResult, error) {
-	return application.BondLoadResult{Bonds: m.bonds, Source: "golden-mock"}, nil
+func (m mockBondService) ListBonds(_ context.Context, query bonds.BondListQuery, _ portfolio.RiskProfile, _ string) (application.BondListLoadResult, error) {
+	filtered := bonds.FilterBondList(m.bonds, query)
+	page, total := bonds.PaginateBondList(filtered, query)
+	return application.BondListLoadResult{
+		Bonds: page, Total: total, Page: query.Page, PageSize: query.PageSize, Source: "golden-mock",
+	}, nil
 }
 func (m mockBondService) LoadUniverse(context.Context) (application.BondLoadResult, error) {
 	return application.BondLoadResult{Bonds: m.bonds, Source: "golden-mock"}, nil

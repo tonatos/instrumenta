@@ -1,13 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createColumnHelper,
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  getSortedRowModel,
   useReactTable,
-  type FilterFn,
   type VisibilityState,
   type SortingState,
 } from "@tanstack/react-table";
@@ -28,6 +25,8 @@ import {
   subscribeScreenerRiskProfile,
   type ScreenerRiskProfile,
 } from "@/features/screener/screenerRiskProfile";
+import { buildScreenerQueryParams } from "@/features/screener/screenerQuery";
+import { useDebouncedValue } from "@/features/screener/useDebouncedValue";
 import { RISK_LABELS as PROFILE_RISK_LABELS } from "@/features/portfolio/labels";
 import { useRateScenario } from "@/features/settings/RateScenarioProvider";
 import { Badge } from "@/components/ui/badge";
@@ -65,17 +64,6 @@ const RISK_LEVELS = [
 
 const STORAGE_KEY = "screener_column_visibility";
 
-const bondSearchFilter: FilterFn<Bond> = (row, _columnId, filterValue) => {
-  const q = String(filterValue).trim().toLowerCase();
-  if (!q) return true;
-  const bond = row.original;
-  return (
-    bond.name.toLowerCase().includes(q) ||
-    bond.secid.toLowerCase().includes(q) ||
-    bond.isin.toLowerCase().includes(q)
-  );
-};
-
 function loadColumnVisibility(): VisibilityState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -90,7 +78,9 @@ function loadColumnVisibility(): VisibilityState {
 
 export function ScreenerPage() {
   const [sorting, setSorting] = useState<SortingState>([{ id: "score", desc: true }]);
-  const [globalFilter, setGlobalFilter] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const searchQuery = useDebouncedValue(searchInput, 300);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [selectedSecid, setSelectedSecid] = useState<string | null>(null);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     loadColumnVisibility,
@@ -125,10 +115,78 @@ export function ScreenerPage() {
     }
   }, [config]);
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ["bonds", filterBy, rateScenario, riskProfile],
-    queryFn: () => api.getBonds(filterBy, riskProfile),
+  const debouncedMaxDays = useDebouncedValue(maxDays, 300);
+  const debouncedMinVolume = useDebouncedValue(minVolume, 300);
+  const debouncedMinYtm = useDebouncedValue(minYtm, 300);
+  const debouncedMaxLotPrice = useDebouncedValue(maxLotPrice, 300);
+
+  const queryParams = useMemo(
+    () =>
+      buildScreenerQueryParams({
+        filterBy,
+        maxDays: debouncedMaxDays,
+        minVolume: debouncedMinVolume,
+        minYtm: debouncedMinYtm,
+        maxLotPrice: debouncedMaxLotPrice,
+        couponTypes,
+        riskLevels,
+        hideDefault,
+        hideSubordinated,
+        search: searchQuery,
+        sorting,
+        riskProfile,
+      }),
+    [
+      filterBy,
+      debouncedMaxDays,
+      debouncedMinVolume,
+      debouncedMinYtm,
+      debouncedMaxLotPrice,
+      couponTypes,
+      riskLevels,
+      hideDefault,
+      hideSubordinated,
+      searchQuery,
+      sorting,
+      riskProfile,
+    ],
+  );
+
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: ["bonds", queryParams, rateScenario],
+    queryFn: ({ pageParam }) => api.getBonds({ ...queryParams, page: pageParam }, riskProfile),
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.page * last.page_size < last.total ? last.page + 1 : undefined,
   });
+
+  const bonds = useMemo(() => data?.pages.flatMap((page) => page.bonds) ?? [], [data]);
+  const total = data?.pages[0]?.total ?? 0;
+  const source = data?.pages[0]?.source ?? "";
+
+  useEffect(() => {
+    const node = loadMoreRef.current;
+    if (!node || !hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          void fetchNextPage();
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, bonds.length]);
 
   const toggleFavorite = useMutation({
     mutationFn: async (bond: Bond) => {
@@ -141,48 +199,6 @@ export function ScreenerPage() {
     },
   });
 
-  const filteredBonds = useMemo(() => {
-    if (!data?.bonds) return [];
-    return data.bonds.filter((b) => {
-      if (maxDays !== "" && (b.days_to_maturity == null || b.days_to_maturity > maxDays)) {
-        return false;
-      }
-      if (minVolume !== "") {
-        const filterVol = b.prev_volume_rub ?? b.volume_rub;
-        if (filterVol == null || filterVol < minVolume) {
-          return false;
-        }
-      }
-      if (minYtm !== "" && (b.ytm_net == null || b.ytm_net < minYtm)) {
-        return false;
-      }
-      if (maxLotPrice && maxLotPrice > 0) {
-        const lotPrice =
-          b.last_price != null ? (b.last_price / 100) * b.face_value * b.lot_size : null;
-        if (lotPrice != null && lotPrice > maxLotPrice) return false;
-      }
-      if (couponTypes.length > 0 && !couponTypes.includes(b.coupon_type)) {
-        return false;
-      }
-      if (riskLevels.length > 0 && !riskLevels.includes(b.risk_level)) {
-        return false;
-      }
-      if (hideSubordinated && b.warnings.some((w) => w.toLowerCase().includes("субординир"))) {
-        return false;
-      }
-      if (
-        hideDefault &&
-        b.warnings.some(
-          (w) =>
-            w.toLowerCase().includes("дефолт") || w.toLowerCase().includes("технический дефолт"),
-        )
-      ) {
-        return false;
-      }
-      return true;
-    });
-  }, [data?.bonds, maxDays, minVolume, minYtm, maxLotPrice, couponTypes, riskLevels, hideSubordinated, hideDefault]);
-
   const resetFilters = useCallback(() => {
     setFilterBy("effective");
     setMaxDays(config?.max_days ?? "");
@@ -193,7 +209,7 @@ export function ScreenerPage() {
     setRiskLevels([]);
     setHideSubordinated(false);
     setHideDefault(true);
-    setGlobalFilter("");
+    setSearchInput("");
   }, [config]);
 
   const handleColumnVisibility = useCallback((state: VisibilityState) => {
@@ -227,6 +243,7 @@ export function ScreenerPage() {
       columnHelper.accessor("name", {
         header: "Название",
         enableHiding: false,
+        enableSorting: true,
         cell: (info) => (
           <button
             type="button"
@@ -242,11 +259,13 @@ export function ScreenerPage() {
       }),
       columnHelper.accessor("days_to_maturity", {
         header: "Дней",
+        enableSorting: true,
         cell: (i) => i.getValue() ?? "—",
       }),
       columnHelper.accessor("duration_years", {
         id: "duration_years",
         header: "Дюрация",
+        enableSorting: false,
         cell: (i) => {
           const v = i.getValue();
           return v != null ? `${v.toFixed(1)} г` : "—";
@@ -254,11 +273,13 @@ export function ScreenerPage() {
       }),
       columnHelper.accessor("ytm_net", {
         header: "YTM нетто",
+        enableSorting: true,
         cell: (i) => formatPct(i.getValue()),
       }),
       columnHelper.accessor("ytm", {
         id: "ytm",
         header: "YTM брутто",
+        enableSorting: false,
         cell: (i) => formatPct(i.getValue()),
       }),
       columnHelper.accessor("coupon_rate", {
@@ -309,6 +330,7 @@ export function ScreenerPage() {
       }),
       columnHelper.accessor("score", {
         header: "Скор",
+        enableSorting: true,
         cell: (i) => (
           <Badge variant={i.getValue() != null && i.getValue()! >= 60 ? "default" : "secondary"}>
             {i.getValue()?.toFixed(0) ?? "—"}
@@ -318,6 +340,7 @@ export function ScreenerPage() {
       columnHelper.accessor((b) => b.prev_volume_rub ?? b.volume_rub, {
         id: "volume_rub",
         header: "Объём",
+        enableSorting: true,
         cell: ({ row }) => {
           const bond = row.original;
           const yesterday = bond.prev_volume_rub;
@@ -345,11 +368,10 @@ export function ScreenerPage() {
   );
 
   const table = useReactTable({
-    data: filteredBonds,
+    data: bonds,
     columns,
-    state: { sorting, globalFilter, columnVisibility },
+    state: { sorting, columnVisibility },
     onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
     onColumnVisibilityChange: (updater) => {
       const next =
         typeof updater === "function"
@@ -358,15 +380,29 @@ export function ScreenerPage() {
       handleColumnVisibility(next);
     },
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    globalFilterFn: bondSearchFilter,
+    manualSorting: true,
   });
 
-  const exportCsv = () => {
-    if (!filteredBonds.length) return;
+  const exportCsv = async () => {
+    const exportParams = buildScreenerQueryParams({
+      filterBy,
+      maxDays,
+      minVolume,
+      minYtm,
+      maxLotPrice,
+      couponTypes,
+      riskLevels,
+      hideDefault,
+      hideSubordinated,
+      search: searchQuery,
+      sorting,
+      riskProfile,
+      exportAll: true,
+    });
+    const exported = await api.getBonds(exportParams, riskProfile);
+    if (!exported.bonds.length) return;
     const header = ["secid", "isin", "name", "ytm_net", "score", "rating", "days", "coupon_type", "risk_level"];
-    const rows = filteredBonds.map((b) =>
+    const rows = exported.bonds.map((b) =>
       [b.secid, b.isin, b.name, b.ytm_net, b.score, b.credit_rating, b.days_to_maturity, b.coupon_type, b.risk_level].join(","),
     );
     const blob = new Blob([[header.join(","), ...rows].join("\n")], { type: "text/csv" });
@@ -390,9 +426,9 @@ export function ScreenerPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Скринер облигаций</h1>
           <p className="text-sm text-muted-foreground">
-            {data
-              ? `${table.getFilteredRowModel().rows.length} из ${data.count} · ${data.source}`
-              : "Загрузка…"}
+            {isLoading
+              ? "Загрузка…"
+              : `${bonds.length} из ${total}${source ? ` · ${source}` : ""}`}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -426,8 +462,8 @@ export function ScreenerPage() {
               <Input
                 className="pl-9"
                 placeholder="Поиск по названию, SECID или ISIN…"
-                value={globalFilter}
-                onChange={(e) => setGlobalFilter(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
               />
             </div>
           </div>
@@ -685,7 +721,7 @@ export function ScreenerPage() {
       {/* Table toolbar */}
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted-foreground">
-          {isLoading ? "Загрузка…" : `${table.getFilteredRowModel().rows.length} бумаг`}
+          {isLoading ? "Загрузка…" : `${bonds.length} из ${total} бумаг`}
         </p>
         <PopoverRoot>
           <PopoverTrigger asChild>
@@ -734,7 +770,10 @@ export function ScreenerPage() {
                     {hg.headers.map((header) => (
                       <th
                         key={header.id}
-                        className="cursor-pointer select-none whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider"
+                        className={cn(
+                          "whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider",
+                          header.column.getCanSort() && "cursor-pointer select-none",
+                        )}
                         onClick={header.column.getToggleSortingHandler()}
                       >
                         {flexRender(header.column.columnDef.header, header.getContext())}
@@ -764,6 +803,15 @@ export function ScreenerPage() {
               <p className="p-8 text-center text-sm text-muted-foreground">
                 Нет бумаг по заданным фильтрам
               </p>
+            )}
+            {hasNextPage && (
+              <div ref={loadMoreRef} data-testid="screener-load-more" className="flex justify-center p-4">
+                {isFetchingNextPage ? (
+                  <span className="text-sm text-muted-foreground">Загрузка…</span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Прокрутите для подгрузки</span>
+                )}
+              </div>
             )}
           </div>
         )}

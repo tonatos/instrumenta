@@ -3,7 +3,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { mockConfig } from "./fixtures";
+import { bondsListResponse, mockConfig } from "./fixtures";
 
 function makeBond(
   overrides: Partial<{
@@ -21,7 +21,7 @@ function makeBond(
     offer_date: null,
     call_date: null,
     effective_date: "2028-03-15",
-    days_to_maturity: 600,
+    days_to_maturity: 90,
     ytm: 14.5,
     ytm_net: 12.6,
     coupon_rate: 7.1,
@@ -64,12 +64,25 @@ test.describe("Скринер — поиск", () => {
   test.beforeEach(async ({ page }) => {
     await mockConfig(page);
     await page.route("**/api/v1/bonds/**", async (route) => {
+      const url = new URL(route.request().url());
+      const q = (url.searchParams.get("q") ?? "").toLowerCase();
+      let filtered = bonds;
+      if (q) {
+        filtered = bonds.filter(
+          (b) =>
+            b.name.toLowerCase().includes(q) ||
+            b.secid.toLowerCase().includes(q) ||
+            b.isin.toLowerCase().includes(q),
+        );
+      }
+      const pageNum = Number(url.searchParams.get("page") ?? "1");
+      const pageSize = Number(url.searchParams.get("page_size") ?? "50");
       await route.fulfill({
-        json: { bonds, source: "mock", count: bonds.length },
+        json: bondsListResponse(filtered, { total: filtered.length, page: pageNum, page_size: pageSize }),
       });
     });
     await page.route("**/api/v1/favorites/**", async (route) => {
-      await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });
+      await route.fulfill({ json: bondsListResponse([]) });
     });
     await page.route("**/api/v1/portfolios/", async (route) => {
       await route.fulfill({ json: [] });
@@ -78,19 +91,19 @@ test.describe("Скринер — поиск", () => {
 
   test("поиск по ISIN оставляет только совпадающую бумагу", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("2 из 2")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("2 из 2 · mock")).toBeVisible({ timeout: 15_000 });
 
     const searchInput = page.getByPlaceholder("Поиск по названию, SECID или ISIN…");
     await searchInput.fill("RU000A106VN0");
 
-    await expect(page.getByRole("button", { name: "ОФЗ 26238" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "ОФЗ 26238" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("button", { name: "Другая облигация" })).not.toBeVisible();
-    await expect(page.getByText("1 бумаг")).toBeVisible();
+    await expect(page.getByText("1 из 1 · mock")).toBeVisible();
   });
 
   test("в таблице показывается дюрация бумаги", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("2 из 2")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("2 из 2 · mock")).toBeVisible({ timeout: 15_000 });
 
     await expect(
       page.getByRole("columnheader", { name: "Дюрация" }),

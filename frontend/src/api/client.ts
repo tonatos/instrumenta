@@ -3,6 +3,7 @@ import type {
   AccountOperationsResponse,
   AccountPreview,
   Bond,
+  BondListParams,
   BondsListResponse,
   BrokerAccount,
   CalculatorResponse,
@@ -91,6 +92,27 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+function buildBondsQuery(params: BondListParams = {}): string {
+  const q = new URLSearchParams();
+  if (params.filter_by) q.set("filter_by", params.filter_by);
+  if (params.max_days != null) q.set("max_days", String(params.max_days));
+  if (params.min_volume_rub != null) q.set("min_volume_rub", String(params.min_volume_rub));
+  if (params.min_ytm_net != null) q.set("min_ytm_net", String(params.min_ytm_net));
+  if (params.max_lot_price_rub != null) q.set("max_lot_price_rub", String(params.max_lot_price_rub));
+  if (params.coupon_types?.length) q.set("coupon_types", params.coupon_types.join(","));
+  if (params.risk_levels?.length) q.set("risk_levels", params.risk_levels.join(","));
+  if (params.hide_default) q.set("hide_default", "true");
+  if (params.hide_subordinated) q.set("hide_subordinated", "true");
+  if (params.q?.trim()) q.set("q", params.q.trim());
+  if (params.sort_by) q.set("sort_by", params.sort_by);
+  if (params.sort_desc != null) q.set("sort_desc", params.sort_desc ? "true" : "false");
+  if (params.page != null) q.set("page", String(params.page));
+  if (params.page_size != null) q.set("page_size", String(params.page_size));
+  if (params.export) q.set("export", "true");
+  const qs = q.toString();
+  return qs ? `?${qs}` : "";
+}
+
 export const api = {
   getConfig: () => request<ConfigResponse>("/config/"),
 
@@ -100,10 +122,12 @@ export const api = {
     }),
   logout: () => request<{ status: string }>("/auth/logout", { method: "POST" }),
 
-  getBonds: (filterBy = "effective", riskProfile: BondRiskProfile = "normal") =>
-    request<BondsListResponse>(
-      withRiskProfile(withRateScenario(`/bonds/?filter_by=${filterBy}`), riskProfile),
-    ),
+  getBonds: (params: BondListParams = {}, riskProfile: BondRiskProfile = "normal") => {
+    const path = `/bonds/${buildBondsQuery(params)}`;
+    return request<BondsListResponse>(
+      withRiskProfile(withRateScenario(path), (params.risk_profile as BondRiskProfile) ?? riskProfile),
+    );
+  },
   getBondsByIsins: (isins: string[], riskProfile: BondRiskProfile = "normal") =>
     request<BondsListResponse>(
       withRiskProfile(

@@ -61,7 +61,7 @@ export function TradingActionQueue({
 
   const { data: bondsData } = useQuery({
     queryKey: ["bonds"],
-    queryFn: () => api.getBonds(),
+    queryFn: () => api.getBonds({ export: true }),
     staleTime: STALE.bonds,
     refetchOnWindowFocus: false,
   });

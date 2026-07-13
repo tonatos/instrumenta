@@ -21,7 +21,7 @@ export function CalculatorPage() {
 
   const { data: bonds, isLoading: bondsLoading } = useQuery({
     queryKey: ["bonds"],
-    queryFn: () => api.getBonds(),
+    queryFn: () => api.getBonds({ export: true }),
   });
 
   const bondOptions: ComboboxOption[] = (bonds?.bonds ?? []).map((b) => ({

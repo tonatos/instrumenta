@@ -52,6 +52,28 @@ export interface BondsListResponse {
   bonds: Bond[];
   source: string;
   count: number;
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface BondListParams {
+  filter_by?: "effective" | "maturity";
+  max_days?: number;
+  min_volume_rub?: number;
+  min_ytm_net?: number;
+  max_lot_price_rub?: number;
+  coupon_types?: string[];
+  risk_levels?: number[];
+  hide_default?: boolean;
+  hide_subordinated?: boolean;
+  q?: string;
+  sort_by?: string;
+  sort_desc?: boolean;
+  page?: number;
+  page_size?: number;
+  export?: boolean;
+  risk_profile?: string;
 }
 
 export interface ConfigResponse {

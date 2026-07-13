@@ -15,9 +15,18 @@ type BondLoadResult struct {
 	Source string
 }
 
+// BondListLoadResult is a paginated screener response.
+type BondListLoadResult struct {
+	Bonds    []bonds.BondRecord
+	Total    int
+	Page     int
+	PageSize int
+	Source   string
+}
+
 // BondService loads and scores bonds.
 type BondService interface {
-	LoadScreenerBonds(ctx context.Context, filterBy string, riskProfile portfolio.RiskProfile, rateScenario string) (BondLoadResult, error)
+	ListBonds(ctx context.Context, query bonds.BondListQuery, riskProfile portfolio.RiskProfile, rateScenario string) (BondListLoadResult, error)
 	LoadUniverse(ctx context.Context) (BondLoadResult, error)
 	LoadBySecid(ctx context.Context, secid string, riskProfile portfolio.RiskProfile, rateScenario string) (*bonds.BondRecord, error)
 	LoadByISINs(ctx context.Context, isins []string, riskProfile portfolio.RiskProfile, rateScenario string) ([]bonds.BondRecord, error)

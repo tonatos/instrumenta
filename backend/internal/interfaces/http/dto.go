@@ -67,9 +67,12 @@ type BondResponse struct {
 }
 
 type BondsListResponse struct {
-	Bonds  []BondResponse `json:"bonds"`
-	Source string         `json:"source"`
-	Count  int            `json:"count"`
+	Bonds    []BondResponse `json:"bonds"`
+	Source   string         `json:"source"`
+	Count    int            `json:"count"`
+	Total    int            `json:"total"`
+	Page     int            `json:"page"`
+	PageSize int            `json:"page_size"`
 }
 
 type CreatePortfolioRequest struct {

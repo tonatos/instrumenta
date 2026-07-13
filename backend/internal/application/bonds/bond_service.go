@@ -18,47 +18,47 @@ type LoadResult struct {
 
 // Service is the application service for bond data loading and enrichment.
 type Service struct {
-	keyRate      float64
-	taxRate      float64
-	token        string
-	maxDays      int
-	minVolumeRub float64
-	moex         bonds.MOEXClient
-	ratings      bonds.RatingsLoader
-	enricher     bonds.Enricher
+	keyRate  float64
+	taxRate  float64
+	token    string
+	moex     bonds.MOEXClient
+	ratings  bonds.RatingsLoader
+	enricher bonds.Enricher
+	defaults *moex.DefaultsLoader
 }
 
 // NewService creates a BondService with default infrastructure adapters.
-func NewService(keyRate, taxRate float64, tinkoffToken string, maxDays int, minVolumeRub float64) *Service {
+func NewService(keyRate, taxRate float64, tinkoffToken string) *Service {
 	return &Service{
-		keyRate: keyRate, taxRate: taxRate, token: tinkoffToken, maxDays: maxDays, minVolumeRub: minVolumeRub,
+		keyRate: keyRate, taxRate: taxRate, token: tinkoffToken,
 		moex: moex.NewClient(), ratings: ratings.NewLoader(),
 		enricher: tinvest.NewReadClient(tinkoffToken),
+		defaults: moex.NewDefaultsLoader(),
 	}
 }
 
 // NewServiceWithDeps creates a BondService with injected ports (for tests).
-func NewServiceWithDeps(keyRate, taxRate float64, maxDays int, minVolumeRub float64, moexClient bonds.MOEXClient, ratingsLoader bonds.RatingsLoader, enricher bonds.Enricher) *Service {
-	return &Service{
-		keyRate: keyRate, taxRate: taxRate, maxDays: maxDays, minVolumeRub: minVolumeRub,
-		moex: moexClient, ratings: ratingsLoader, enricher: enricher,
+func NewServiceWithDeps(
+	keyRate, taxRate float64,
+	moexClient bonds.MOEXClient,
+	ratingsLoader bonds.RatingsLoader,
+	enricher bonds.Enricher,
+	defaults *moex.DefaultsLoader,
+) *Service {
+	if defaults == nil {
+		defaults = moex.NewDefaultsLoader()
 	}
-}
-
-func (s *Service) screenerCacheKey(filterBy string) infraBonds.CacheKey {
-	return infraBonds.CacheKey{
-		KeyRate: s.keyRate, TaxRate: s.taxRate,
-		TokenFingerprint: infraBonds.TokenFingerprint(s.token),
-		Kind: infraBonds.CacheKindScreener, FilterBy: filterBy,
-		MaxDays: s.maxDays, MinVolumeRub: s.minVolumeRub,
+	return &Service{
+		keyRate: keyRate, taxRate: taxRate,
+		moex: moexClient, ratings: ratingsLoader, enricher: enricher, defaults: defaults,
 	}
 }
 
 func (s *Service) universeCacheKey() infraBonds.CacheKey {
 	return infraBonds.CacheKey{
-		KeyRate: s.keyRate, TaxRate: s.taxRate,
+		KeyRate:          s.keyRate,
+		TaxRate:          s.taxRate,
 		TokenFingerprint: infraBonds.TokenFingerprint(s.token),
-		Kind: infraBonds.CacheKindUniverse,
 	}
 }
 
@@ -68,29 +68,12 @@ func (s *Service) enrichAndScore(bs []bonds.BondRecord) ([]bonds.BondRecord, str
 	if s.token != "" {
 		source += " + T-Invest API"
 	}
+	bs = s.defaults.Apply(bs)
 	r, _ := s.ratings.LoadRatings()
 	auto, _ := s.ratings.LoadAutoRatings()
 	bs = s.ratings.ApplyRatings(bs, r, auto)
 	bs = screening.ScoreBondsAllProfiles(bs, s.keyRate, s.taxRate)
 	return bs, source
-}
-
-func (s *Service) LoadScreenerBonds(filterBy string, policy portfolio.DurationPolicy, riskProfile portfolio.RiskProfile) LoadResult {
-	key := s.screenerCacheKey(filterBy)
-	if cached, source, ok := infraBonds.Get(key); ok {
-		bs := cloneList(cached)
-		bs = screening.SortBondsByResolvedScore(bs, toScreeningProfile(riskProfile), toScreeningDurationPolicy(policy))
-		return LoadResult{Bonds: bs, Source: source}
-	}
-	bs, err := s.moex.FetchAllBonds(s.maxDays, s.minVolumeRub, filterBy)
-	if err != nil {
-		return LoadResult{}
-	}
-	bs, source := s.enrichAndScore(bs)
-	infraBonds.Put(key, bs, source)
-	bs = cloneList(bs)
-	bs = screening.SortBondsByResolvedScore(bs, toScreeningProfile(riskProfile), toScreeningDurationPolicy(policy))
-	return LoadResult{Bonds: bs, Source: source}
 }
 
 func (s *Service) LoadUniverse() LoadResult {
@@ -107,17 +90,52 @@ func (s *Service) LoadUniverse() LoadResult {
 	return LoadResult{Bonds: cloneList(bs), Source: source}
 }
 
-func (s *Service) LoadByISINs(isins []string, filterBy string, policy portfolio.DurationPolicy, riskProfile portfolio.RiskProfile) []bonds.BondRecord {
+// ListBonds filters, sorts, and paginates the enriched universe.
+func (s *Service) ListBonds(
+	query bonds.BondListQuery,
+	policy portfolio.DurationPolicy,
+	riskProfile portfolio.RiskProfile,
+) bonds.BondListResult {
+	query = bonds.NormalizeBondListQuery(query)
+	universe := s.LoadUniverse()
+	filtered := bonds.FilterBondList(cloneList(universe.Bonds), query)
+	screenPolicy := toScreeningDurationPolicy(policy)
+	profile := toScreeningProfile(riskProfile)
+	if query.SortBy == "score" {
+		filtered = screening.SortBondsByResolvedScore(filtered, profile, screenPolicy)
+		if query.SortDesc {
+			filtered = reverseBondList(filtered)
+		}
+	} else {
+		filtered = bonds.SortBondList(filtered, query)
+	}
+	page, total := bonds.PaginateBondList(filtered, query)
+	return bonds.BondListResult{
+		Bonds: page, Total: total,
+		Page: query.Page, PageSize: query.PageSize,
+		Source: universe.Source,
+	}
+}
+
+func reverseBondList(list []bonds.BondRecord) []bonds.BondRecord {
+	out := make([]bonds.BondRecord, len(list))
+	for i, b := range list {
+		out[len(list)-1-i] = b
+	}
+	return out
+}
+
+func (s *Service) LoadByISINs(isins []string, policy portfolio.DurationPolicy, riskProfile portfolio.RiskProfile) []bonds.BondRecord {
 	if len(isins) == 0 {
 		return nil
 	}
-	var found []bonds.BondRecord
-	var missing map[string]struct{}
-	screener := s.LoadScreenerBonds(filterBy, policy, riskProfile)
-	byISIN := make(map[string]bonds.BondRecord, len(screener.Bonds))
-	for _, b := range screener.Bonds {
+	universe := s.LoadUniverse()
+	byISIN := make(map[string]bonds.BondRecord, len(universe.Bonds))
+	for _, b := range universe.Bonds {
 		byISIN[b.ISIN] = b
 	}
+	var found []bonds.BondRecord
+	var missing map[string]struct{}
 	for _, isin := range isins {
 		if b, ok := byISIN[isin]; ok {
 			found = append(found, infraBonds.CloneBondRecord(b))
@@ -133,11 +151,13 @@ func (s *Service) LoadByISINs(isins []string, filterBy string, policy portfolio.
 		scored := s.scoreAgainstCachedUniverse(fetched)
 		found = append(found, scored...)
 	}
+	_ = policy
+	_ = riskProfile
 	return found
 }
 
-func (s *Service) LoadBySecid(secid, filterBy string, policy portfolio.DurationPolicy, riskProfile portfolio.RiskProfile) *bonds.BondRecord {
-	for _, b := range s.LoadScreenerBonds(filterBy, policy, riskProfile).Bonds {
+func (s *Service) LoadBySecid(secid string, policy portfolio.DurationPolicy, riskProfile portfolio.RiskProfile) *bonds.BondRecord {
+	for _, b := range s.LoadUniverse().Bonds {
 		if b.Secid == secid {
 			cp := infraBonds.CloneBondRecord(b)
 			s.enricher.EnrichBondDetail(&cp)
@@ -154,6 +174,8 @@ func (s *Service) LoadBySecid(secid, filterBy string, policy portfolio.DurationP
 	}
 	cp := scored[0]
 	s.enricher.EnrichBondDetail(&cp)
+	_ = policy
+	_ = riskProfile
 	return &cp
 }
 

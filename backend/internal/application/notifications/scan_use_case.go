@@ -87,7 +87,7 @@ func (s *ScanUseCase) scanPortfolio(ctx context.Context, p domainPortfolio.Portf
 	for isin := range holdingISINs {
 		isinList = append(isinList, isin)
 	}
-	universe := s.bondSvc.LoadByISINs(isinList, "effective", domainPortfolio.DurationPolicyForPortfolio(p, domainPortfolio.RateScenarioHold), p.RiskProfile)
+	universe := s.bondSvc.LoadByISINs(isinList, domainPortfolio.DurationPolicyForPortfolio(p, domainPortfolio.RateScenarioHold), p.RiskProfile)
 	universeByISIN := make(map[string]bonds.BondRecord, len(universe))
 	for _, bond := range universe {
 		universeByISIN[bond.ISIN] = bond

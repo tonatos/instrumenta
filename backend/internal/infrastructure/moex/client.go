@@ -47,34 +47,6 @@ func NewClient() *Client {
 	}
 }
 
-func (c *Client) FetchAllBonds(maxDays int, minVolumeRub float64, filterBy string) ([]bonds.BondRecord, error) {
-	today := time.Now()
-	cutoff := today.AddDate(0, 0, maxDays)
-	bundle, err := c.loadOrFetchBundle()
-	if err != nil {
-		return nil, err
-	}
-	var result []bonds.BondRecord
-	for isin, raw := range bundle.Bonds {
-		bond := buildBondRecord(isin, raw, today, prevVolumePtr(bundle.PrevVolumes[isin]))
-		if bond == nil {
-			continue
-		}
-		if filterBy == "maturity" {
-			if bond.MaturityDate == nil || bond.MaturityDate.After(cutoff) {
-				continue
-			}
-		} else if bond.EffectiveDate == nil || bond.EffectiveDate.After(cutoff) {
-			continue
-		}
-		if bond.FilterVolumeRub() < minVolumeRub {
-			continue
-		}
-		result = append(result, *bond)
-	}
-	return result, nil
-}
-
 func (c *Client) FetchAllBondsUnfiltered() ([]bonds.BondRecord, error) {
 	today := time.Now()
 	bundle, err := c.loadOrFetchBundle()

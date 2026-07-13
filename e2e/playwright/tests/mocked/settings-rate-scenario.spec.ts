@@ -3,7 +3,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { mockConfig } from "./fixtures";
+import { bondsListResponse, mockConfig } from "./fixtures";
 
 function makeBond(
   overrides: Partial<{
@@ -84,7 +84,7 @@ test.describe("Настройки — сценарий дюрации", () => {
           ? [...bonds].sort((a, b) => b.duration_years - a.duration_years)
           : [...bonds].sort((a, b) => b.score - a.score);
       await route.fulfill({
-        json: { bonds: sorted, source: `mock:${scenario}`, count: sorted.length },
+        json: bondsListResponse(sorted, { total: sorted.length, page: 1, page_size: 50, source: `mock:${scenario}` }),
       });
     });
     await page.route("**/api/v1/favorites/**", async (route) => {
@@ -104,7 +104,7 @@ test.describe("Настройки — сценарий дюрации", () => {
     await page.getByRole("button", { name: "Настройки" }).click();
     await page.getByLabel("Сценарий по ключевой ставке").selectOption("cut");
 
-    await expect(page.getByText("2 бумаг")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("2 из 2 · mock:cut")).toBeVisible({ timeout: 15_000 });
     const firstRow = page.locator("tbody tr").first();
     await expect(firstRow).toContainText("Длинная", { timeout: 15_000 });
   });

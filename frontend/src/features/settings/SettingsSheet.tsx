@@ -77,11 +77,19 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
                 <dd>{data.tax_rate}%</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">Макс. срок</dt>
+                <dt className="text-muted-foreground">
+                  <Tooltip content="Начальное значение фильтра «Макс. срок» в скринере. Фильтрация выполняется на сервере при каждом запросе.">
+                    <span className="cursor-help underline decoration-dotted underline-offset-2">Макс. срок</span>
+                  </Tooltip>
+                </dt>
                 <dd>{data.max_days} дн.</dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-muted-foreground">Мин. объём</dt>
+                <dt className="text-muted-foreground">
+                  <Tooltip content="Начальное значение фильтра «Мин. объём» в скринере. Фильтрация выполняется на сервере при каждом запросе.">
+                    <span className="cursor-help underline decoration-dotted underline-offset-2">Мин. объём</span>
+                  </Tooltip>
+                </dt>
                 <dd>{formatRub(data.min_volume_rub)}</dd>
               </div>
               <div className="flex justify-between">

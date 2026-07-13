@@ -3,7 +3,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { mockConfig } from "./fixtures";
+import { mockConfig, bondsListResponse } from "./fixtures";
 
 function makeBond(
   overrides: Partial<{
@@ -28,7 +28,7 @@ function makeBond(
     offer_date: null,
     call_date: null,
     effective_date: "2028-03-15",
-    days_to_maturity: 600,
+    days_to_maturity: 90,
     ytm: 14.5,
     ytm_net: 12.6,
     coupon_rate: 7.1,
@@ -108,12 +108,19 @@ test.describe("Скринер — риск-профиль", () => {
           score: bond.profile_scores[profile] ?? bond.score,
         }))
         .sort((a, b) => b.score - a.score);
+      const pageNum = Number(url.searchParams.get("page") ?? "1");
+      const pageSize = Number(url.searchParams.get("page_size") ?? "50");
       await route.fulfill({
-        json: { bonds: ranked, source: `mock:${profile}`, count: ranked.length },
+        json: bondsListResponse(ranked, {
+          source: `mock:${profile}`,
+          total: ranked.length,
+          page: pageNum,
+          page_size: pageSize,
+        }),
       });
     });
     await page.route("**/api/v1/favorites/**", async (route) => {
-      await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });
+      await route.fulfill({ json: bondsListResponse([]) });
     });
     await page.route("**/api/v1/portfolios/", async (route) => {
       await route.fulfill({ json: [] });

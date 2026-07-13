@@ -14,7 +14,6 @@ import (
 	appnotifications "github.com/tonatos/bond-monitor/backend/internal/application/notifications"
 	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
 	apptrading "github.com/tonatos/bond-monitor/backend/internal/application/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/notifications"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
@@ -66,18 +65,12 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 		settings.KeyRate,
 		settings.TaxRateFraction(),
 		settings.TinkoffToken,
-		settings.MaxDays,
-		settings.MinVolumeRub,
 	)
 	if logger != nil {
 		logger.Info("warming bond universe cache")
 	}
 	universe := bondInner.LoadUniverse()
-	screener := bondInner.LoadScreenerBonds("effective", portfolio.DefaultDurationPolicy, portfolio.RiskProfileNormal)
-	logger.Info("bond cache ready",
-		"universe", len(universe.Bonds),
-		"screener", len(screener.Bonds),
-	)
+	logger.Info("bond cache ready", "universe", len(universe.Bonds))
 	portfolioInner := appportfolio.NewService(portfolioRepo)
 	tradingInner := apptrading.NewService(
 		portfolioRepo,
@@ -135,8 +128,6 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 		settings.KeyRate,
 		settings.TaxRateFraction(),
 		settings.TinkoffToken,
-		settings.MaxDays,
-		settings.MinVolumeRub,
 	)
 
 	ledger := notifications.NewLedgerRepository(settings.NotifierLedgerPath)

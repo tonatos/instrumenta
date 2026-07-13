@@ -1,0 +1,6 @@
+{
+  "_version": "2026-07",
+  "_source": "MOEX / NSD default registry (manual update)",
+  "_note": "isin_flags: has_default = полный дефолт, has_technical_default = тех.дефолт",
+  "isin_flags": {}
+}

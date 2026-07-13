@@ -182,8 +182,6 @@ func resolveHoldingISIN(ctx context.Context, settings config.Settings, portfolio
 		settings.KeyRate,
 		settings.TaxRateFraction(),
 		settings.TinkoffToken,
-		settings.MaxDays,
-		settings.MinVolumeRub,
 	)
 
 	p, err := tradingCtx.GetTradingPortfolio(ctx, portfolioID)

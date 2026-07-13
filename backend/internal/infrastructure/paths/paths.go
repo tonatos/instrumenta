@@ -46,3 +46,8 @@ func CacheDir() string {
 func RatingsJSONPath() string {
 	return filepath.Join(repoRoot(), "data", "ratings.json")
 }
+
+// DefaultsJSONPath returns path to vendored defaults.json.
+func DefaultsJSONPath() string {
+	return filepath.Join(repoRoot(), "data", "defaults.json")
+}

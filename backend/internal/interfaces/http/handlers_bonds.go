@@ -11,14 +11,11 @@ import (
 
 func (h *Handler) ListBonds(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	filterBy := r.URL.Query().Get("filter_by")
-	if filterBy == "" {
-		filterBy = "effective"
-	}
+	query := ParseBondListQuery(r)
 	riskProfile := ParseRiskProfile(r.URL.Query().Get("risk_profile"))
 	durationPolicy := ResolveDurationPolicy(r.URL.Query().Get("rate_scenario"))
 
-	result, err := h.deps.Bonds.LoadScreenerBonds(ctx, filterBy, riskProfile, string(durationPolicy.RateScenario))
+	result, err := h.deps.Bonds.ListBonds(ctx, query, riskProfile, string(durationPolicy.RateScenario))
 	if err != nil {
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return
@@ -37,9 +34,12 @@ func (h *Handler) ListBonds(w http.ResponseWriter, r *http.Request) {
 		bondsOut = append(bondsOut, BondToResponse(b, riskProfile, durationPolicy, &scale))
 	}
 	WriteJSON(w, http.StatusOK, BondsListResponse{
-		Bonds:  bondsOut,
-		Source: result.Source,
-		Count:  len(bondsOut),
+		Bonds:    bondsOut,
+		Source:   result.Source,
+		Count:    len(bondsOut),
+		Total:    result.Total,
+		Page:     result.Page,
+		PageSize: result.PageSize,
 	})
 }
 
@@ -70,6 +70,9 @@ func (h *Handler) BondsByISINs(w http.ResponseWriter, r *http.Request) {
 		Bonds:  bondsOut,
 		Source: "isins",
 		Count:  len(bondsOut),
+		Total:  len(bondsOut),
+		Page:   1,
+		PageSize: len(bondsOut),
 	})
 }
 
@@ -100,9 +103,9 @@ func (h *Handler) GetBond(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	screener, _ := h.deps.Bonds.LoadScreenerBonds(ctx, "effective", riskProfile, string(durationPolicy.RateScenario))
+	universe, _ := h.deps.Bonds.LoadUniverse(ctx)
 	screeningPolicy := screeningPolicyFromPortfolio(durationPolicy)
-	scale := screening.DurationScaleYears(screener.Bonds, screeningPolicy)
+	scale := screening.DurationScaleYears(universe.Bonds, screeningPolicy)
 	var coupons []map[string]any
 	if bond.FIGI != "" {
 		coupons, _ = h.deps.Bonds.GetCouponSchedule(ctx, bond.FIGI)
@@ -146,9 +149,12 @@ func (h *Handler) ListFavorites(w http.ResponseWriter, r *http.Request) {
 		bondsOut = append(bondsOut, BondToResponse(bondsLoaded[i], portfolio.RiskProfileNormal, portfolio.DefaultDurationPolicy, nil))
 	}
 	WriteJSON(w, http.StatusOK, BondsListResponse{
-		Bonds:  bondsOut,
-		Source: "favorites",
-		Count:  len(bondsOut),
+		Bonds:    bondsOut,
+		Source:   "favorites",
+		Count:    len(bondsOut),
+		Total:    len(bondsOut),
+		Page:     1,
+		PageSize: len(bondsOut),
 	})
 }
 

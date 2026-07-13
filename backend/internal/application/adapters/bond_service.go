@@ -19,11 +19,14 @@ func NewBondService(inner *appbonds.Service) *BondService {
 	return &BondService{inner: inner}
 }
 
-func (s *BondService) LoadScreenerBonds(ctx context.Context, filterBy string, riskProfile portfolio.RiskProfile, rateScenario string) (application.BondLoadResult, error) {
+func (s *BondService) ListBonds(ctx context.Context, query bonds.BondListQuery, riskProfile portfolio.RiskProfile, rateScenario string) (application.BondListLoadResult, error) {
 	_ = ctx
 	policy := portfolio.ResolveDurationPolicy(portfolio.RateScenario(rateScenario), nil, nil)
-	result := s.inner.LoadScreenerBonds(filterBy, policy, riskProfile)
-	return application.BondLoadResult{Bonds: result.Bonds, Source: result.Source}, nil
+	result := s.inner.ListBonds(query, policy, riskProfile)
+	return application.BondListLoadResult{
+		Bonds: result.Bonds, Total: result.Total,
+		Page: result.Page, PageSize: result.PageSize, Source: result.Source,
+	}, nil
 }
 
 func (s *BondService) LoadUniverse(ctx context.Context) (application.BondLoadResult, error) {
@@ -35,13 +38,13 @@ func (s *BondService) LoadUniverse(ctx context.Context) (application.BondLoadRes
 func (s *BondService) LoadBySecid(ctx context.Context, secid string, riskProfile portfolio.RiskProfile, rateScenario string) (*bonds.BondRecord, error) {
 	_ = ctx
 	policy := portfolio.ResolveDurationPolicy(portfolio.RateScenario(rateScenario), nil, nil)
-	return s.inner.LoadBySecid(secid, "effective", policy, riskProfile), nil
+	return s.inner.LoadBySecid(secid, policy, riskProfile), nil
 }
 
 func (s *BondService) LoadByISINs(ctx context.Context, isins []string, riskProfile portfolio.RiskProfile, rateScenario string) ([]bonds.BondRecord, error) {
 	_ = ctx
 	policy := portfolio.ResolveDurationPolicy(portfolio.RateScenario(rateScenario), nil, nil)
-	return s.inner.LoadByISINs(isins, "effective", policy, riskProfile), nil
+	return s.inner.LoadByISINs(isins, policy, riskProfile), nil
 }
 
 func (s *BondService) GetCouponSchedule(ctx context.Context, figi string) ([]map[string]any, error) {

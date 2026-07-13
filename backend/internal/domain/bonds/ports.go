@@ -4,7 +4,6 @@ import "time"
 
 // MOEXClient fetches bond market data from MOEX ISS.
 type MOEXClient interface {
-	FetchAllBonds(maxDays int, minVolumeRub float64, filterBy string) ([]BondRecord, error)
 	FetchAllBondsUnfiltered() ([]BondRecord, error)
 	FetchBondBySecid(secid string) (*BondRecord, error)
 	FetchBondsByISINs(isins map[string]struct{}) ([]BondRecord, error)

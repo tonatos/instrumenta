@@ -6,31 +6,21 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	domainBonds "github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
 )
 
-type CacheKind string
-
-const (
-	CacheKindUniverse CacheKind = "universe"
-	CacheKindScreener CacheKind = "screener"
-	defaultTTL        = 120 * time.Second
-)
+const defaultTTL = 120 * time.Second
 
 // CacheKey identifies an enriched bond universe cache entry.
 type CacheKey struct {
-	KeyRate         float64
-	TaxRate         float64
+	KeyRate          float64
+	TaxRate          float64
 	TokenFingerprint string
-	Kind            CacheKind
-	FilterBy        string
-	MaxDays         int
-	MinVolumeRub    float64
 }
 
 type cacheEntry struct {
-	bonds   []bonds.BondRecord
-	source  string
+	bonds    []domainBonds.BondRecord
+	source   string
 	cachedAt time.Time
 }
 
@@ -55,7 +45,7 @@ func TokenFingerprint(token string) string {
 }
 
 // Get returns cached bonds if fresh.
-func Get(key CacheKey) ([]bonds.BondRecord, string, bool) {
+func Get(key CacheKey) ([]domainBonds.BondRecord, string, bool) {
 	cacheMu.RLock()
 	entry, ok := cache[key]
 	cacheMu.RUnlock()
@@ -66,7 +56,7 @@ func Get(key CacheKey) ([]bonds.BondRecord, string, bool) {
 }
 
 // Put stores bonds in cache.
-func Put(key CacheKey, bs []bonds.BondRecord, source string) {
+func Put(key CacheKey, bs []domainBonds.BondRecord, source string) {
 	cacheMu.Lock()
 	cache[key] = cacheEntry{bonds: cloneBonds(bs), source: source, cachedAt: time.Now()}
 	cacheMu.Unlock()
@@ -80,7 +70,7 @@ func InvalidateAll() {
 }
 
 // CloneBondRecord returns a copy safe for duration scoring.
-func CloneBondRecord(b bonds.BondRecord) bonds.BondRecord {
+func CloneBondRecord(b domainBonds.BondRecord) domainBonds.BondRecord {
 	cp := b
 	if b.ProfileScores != nil {
 		cp.ProfileScores = make(map[string]float64, len(b.ProfileScores))
@@ -91,8 +81,8 @@ func CloneBondRecord(b bonds.BondRecord) bonds.BondRecord {
 	return cp
 }
 
-func cloneBonds(bs []bonds.BondRecord) []bonds.BondRecord {
-	out := make([]bonds.BondRecord, len(bs))
+func cloneBonds(bs []domainBonds.BondRecord) []domainBonds.BondRecord {
+	out := make([]domainBonds.BondRecord, len(bs))
 	for i, b := range bs {
 		out[i] = CloneBondRecord(b)
 	}

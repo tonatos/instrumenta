@@ -80,7 +80,7 @@ export function usePortfolioQueries() {
 
   const { data: bonds } = useQuery({
     queryKey: ["bonds", rateScenario, portfolioRiskProfile],
-    queryFn: () => api.getBonds("effective", portfolioRiskProfile),
+    queryFn: () => api.getBonds({ export: true }, portfolioRiskProfile),
     staleTime: STALE.bonds,
     refetchOnWindowFocus: false,
     enabled: portfolioReady,

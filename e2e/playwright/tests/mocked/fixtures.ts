@@ -7,14 +7,32 @@ import type { Page } from "@playwright/test";
 export const MOCK_CONFIG = {
   key_rate: 16,
   tax_rate: 13,
-  max_days: 1825,
-  min_volume_rub: 0,
+  max_days: 120,
+  min_volume_rub: 500_000,
   tinkoff_configured: true,
   sandbox_configured: true,
   production_configured: false,
   auth_enabled: false,
   telegram_oidc_configured: false,
 };
+
+export function bondsListResponse(
+  bonds: unknown[],
+  overrides: Record<string, unknown> = {},
+) {
+  const total = (overrides.total as number | undefined) ?? bonds.length;
+  const page = (overrides.page as number | undefined) ?? 1;
+  const pageSize = (overrides.page_size as number | undefined) ?? 50;
+  return {
+    bonds,
+    source: "mock",
+    count: bonds.length,
+    total,
+    page,
+    page_size: pageSize,
+    ...overrides,
+  };
+}
 
 export async function seedAuth(page: Page, token = "mock-e2e-token"): Promise<void> {
   await page.addInitScript((authToken) => {
@@ -30,7 +48,7 @@ export async function mockConfig(page: Page): Promise<void> {
 
 export async function mockBondsEmpty(page: Page): Promise<void> {
   await page.route("**/api/v1/bonds/**", async (route) => {
-    await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });
+    await route.fulfill({ json: bondsListResponse([]) });
   });
 }
 
