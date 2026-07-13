@@ -7,8 +7,24 @@ import (
 )
 
 func repoRoot() string {
+	if v := os.Getenv("BOND_MONITOR_REPO_ROOT"); v != "" {
+		return v
+	}
 	if root := os.Getenv("BOND_MONITOR_ROOT"); root != "" {
 		return root
+	}
+	if wd, err := os.Getwd(); err == nil {
+		dir := wd
+		for {
+			if _, err := os.Stat(filepath.Join(dir, "backend", "go.mod")); err == nil {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
 	}
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
