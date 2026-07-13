@@ -19,6 +19,7 @@ from bond_monitor.domain.portfolio.policies import (
 from bond_monitor.domain.screening.scorer import score_bonds_for_profile
 from bond_monitor.domain.shared.formatting import format_date
 
+_CONSERVATIVE_MIN_RATING_ORDINAL: int = RATING_ORDER["ruA"]
 _NORMAL_MIN_RATING_ORDINAL: int = RATING_ORDER["ruA-"]
 _AGGRESSIVE_MIN_RATING_ORDINAL: int = RATING_ORDER["ruBB-"]
 
@@ -96,7 +97,18 @@ def risk_profile_filter(
             RATING_ORDER.get(bond.credit_rating) if bond.credit_rating else None
         )
 
-        if profile == RiskProfile.NORMAL:
+        if profile == RiskProfile.CONSERVATIVE:
+            if bond.subordinated_flag:
+                continue
+            if bond.risk_level == RiskLevel.HIGH:
+                continue
+            if rating_ordinal is None:
+                continue
+            if rating_ordinal < _CONSERVATIVE_MIN_RATING_ORDINAL:
+                continue
+            if bond.call_date is not None:
+                continue
+        elif profile == RiskProfile.NORMAL:
             if bond.subordinated_flag:
                 continue
             if bond.risk_level == RiskLevel.HIGH:
@@ -130,13 +142,17 @@ from bond_monitor.domain.portfolio.put_offer import put_offer_buy_blocked
 def _fallback_steps(profile: RiskProfile) -> tuple[RiskProfile | None, ...]:
     if profile == RiskProfile.AGGRESSIVE:
         return (RiskProfile.AGGRESSIVE, RiskProfile.NORMAL, None)
+    if profile == RiskProfile.CONSERVATIVE:
+        return (RiskProfile.CONSERVATIVE, RiskProfile.NORMAL, None)
     return (RiskProfile.NORMAL, None)
 
 
 def _profiles_tried_label(profile: RiskProfile) -> str:
     if profile == RiskProfile.NORMAL:
         return f"«{profile.value}» и любую без дефолта"
-    return f"«{profile.value}», «{RiskProfile.NORMAL.value}» и любую без дефолта"
+    return (
+        f"«{profile.value}», «{RiskProfile.NORMAL.value}» и любую без дефолта"
+    )
 
 
 def _min_maturity_date(ctx: BondSelectionContext, policy: BondSelectionPolicy) -> date:
@@ -261,7 +277,7 @@ def _fallback_note(
         profiles_tried = (
             f"профиль «{ctx.profile.value}»"
             if ctx.profile == RiskProfile.NORMAL
-            else f"профили «{ctx.profile.value}» и «{RiskProfile.NORMAL.value}»"
+            else _profiles_tried_label(ctx.profile)
         )
         return (
             f"{profiles_tried} не дали кандидатов в окне; "

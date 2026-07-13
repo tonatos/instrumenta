@@ -11,10 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bond_monitor.application.bonds.bond_service import BondService
 from bond_monitor.domain.portfolio.policies import resolve_duration_policy
 from bond_monitor.infrastructure.persistence.favorites_repository import FavoritesRepository
-from bond_monitor.interfaces.api.duration_params import parse_rate_scenario
+from bond_monitor.interfaces.api.duration_params import parse_rate_scenario, parse_risk_profile
 from bond_monitor.interfaces.config import Settings
 from bond_monitor.interfaces.schemas.api import BondsListResponse
 from bond_monitor.interfaces.schemas.serializers import bond_to_response
+from bond_monitor.domain.screening.scorer import _duration_scale_years
 
 
 def provide_bond_service(settings: Settings) -> BondService:
@@ -45,19 +46,30 @@ class BondsController(Controller):
         favorites_repo: FavoritesRepository,
         filter_by: str = "effective",
         rate_scenario: str | None = None,
+        risk_profile: str | None = None,
     ) -> BondsListResponse:
         duration_policy = resolve_duration_policy(
             rate_scenario=parse_rate_scenario(rate_scenario),
         )
+        active_profile = parse_risk_profile(risk_profile)
         result = bond_service.load_screener_bonds(
             filter_by=filter_by,
             duration_policy=duration_policy,
+            risk_profile=active_profile,
         )
         favorite_isins = set(await favorites_repo.list_isins())
+        duration_scale = _duration_scale_years(result.bonds, duration_policy)
         bonds = []
         for b in result.bonds:
             b.is_favorite = b.isin in favorite_isins
-            bonds.append(bond_to_response(b))
+            bonds.append(
+                bond_to_response(
+                    b,
+                    active_profile=active_profile,
+                    duration_policy=duration_policy,
+                    duration_scale=duration_scale,
+                )
+            )
         return BondsListResponse(bonds=bonds, source=result.source, count=len(bonds))
 
     @get("/by-isins")
@@ -66,14 +78,33 @@ class BondsController(Controller):
         bond_service: BondService,
         favorites_repo: FavoritesRepository,
         isins: str = "",
+        rate_scenario: str | None = None,
+        risk_profile: str | None = None,
     ) -> BondsListResponse:
         isin_list = [part.strip() for part in isins.split(",") if part.strip()]
-        bonds = bond_service.load_by_isins(isin_list)
+        duration_policy = resolve_duration_policy(
+            rate_scenario=parse_rate_scenario(rate_scenario),
+        )
+        active_profile = parse_risk_profile(risk_profile)
+        bonds = bond_service.load_by_isins(
+            isin_list,
+            risk_profile=active_profile,
+            duration_policy=duration_policy,
+        )
         favorite_isins = set(await favorites_repo.list_isins())
+        duration_scale = _duration_scale_years(bonds, duration_policy)
         for bond in bonds:
             bond.is_favorite = bond.isin in favorite_isins
         return BondsListResponse(
-            bonds=[bond_to_response(b) for b in bonds],
+            bonds=[
+                bond_to_response(
+                    b,
+                    active_profile=active_profile,
+                    duration_policy=duration_policy,
+                    duration_scale=duration_scale,
+                )
+                for b in bonds
+            ],
             source="isins",
             count=len(bonds),
         )
@@ -84,17 +115,44 @@ class BondsController(Controller):
         secid: str,
         bond_service: BondService,
         favorites_repo: FavoritesRepository,
+        rate_scenario: str | None = None,
+        risk_profile: str | None = None,
     ) -> dict:
-        bond = bond_service.load_by_secid(secid)
+        duration_policy = resolve_duration_policy(
+            rate_scenario=parse_rate_scenario(rate_scenario),
+        )
+        active_profile = parse_risk_profile(risk_profile)
+        bond = bond_service.load_by_secid(
+            secid,
+            duration_policy=duration_policy,
+            risk_profile=active_profile,
+        )
         if bond is None and secid:
-            loaded = bond_service.load_by_isins([secid])
+            loaded = bond_service.load_by_isins(
+                [secid],
+                duration_policy=duration_policy,
+                risk_profile=active_profile,
+            )
             bond = loaded[0] if loaded else None
         if bond is None:
             raise NotFoundException(detail=f"Bond {secid} not found")
         favorite_isins = set(await favorites_repo.list_isins())
         bond.is_favorite = bond.isin in favorite_isins
+        screener = bond_service.load_screener_bonds(
+            duration_policy=duration_policy,
+            risk_profile=active_profile,
+        )
+        duration_scale = _duration_scale_years(screener.bonds, duration_policy)
         coupons = bond_service.get_coupon_schedule(bond.figi) if bond.figi else []
-        return {"bond": bond_to_response(bond), "coupons": coupons}
+        return {
+            "bond": bond_to_response(
+                bond,
+                active_profile=active_profile,
+                duration_policy=duration_policy,
+                duration_scale=duration_scale,
+            ),
+            "coupons": coupons,
+        }
 
     @post("/refresh")
     async def refresh_bonds(self) -> dict[str, str]:

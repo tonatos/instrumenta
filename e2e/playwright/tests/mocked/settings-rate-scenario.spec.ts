@@ -37,6 +37,7 @@ function makeBond(
     credit_rating: "AAA",
     risk_level: 1,
     score: 72,
+    profile_scores: { conservative: 72, normal: 72, aggressive: 72 },
     ytm_score: 80,
     risk_score: 90,
     liquidity_score: 70,

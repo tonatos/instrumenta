@@ -8,9 +8,15 @@ from bond_monitor.domain.bonds.models import BondRecord
 from bond_monitor.domain.bonds.offers import bond_offer_view
 from bond_monitor.domain.portfolio.invested_capital import invested_capital_rub
 from bond_monitor.domain.portfolio.cashflow import cashflow_rows_with_balance
-from bond_monitor.domain.portfolio.models import Portfolio
+from bond_monitor.domain.portfolio.models import Portfolio, RiskProfile
 from bond_monitor.domain.portfolio.planner import PortfolioPlan
+from bond_monitor.domain.portfolio.policies import DEFAULT_DURATION_POLICY, DurationPolicy
 from bond_monitor.domain.portfolio.position_status import open_positions, position_to_api_dict
+from bond_monitor.domain.screening.scorer import (
+    _duration_scale_years,
+    duration_adjustment_for_bond,
+    resolve_profile_scores,
+)
 from bond_monitor.domain.shared.money import bond_clean_price_pct_from_rub
 from bond_monitor.domain.trading.operation_labels import (
     operation_state_label,
@@ -26,9 +32,32 @@ from bond_monitor.interfaces.schemas.api import (
 )
 
 
-def bond_to_response(bond: BondRecord, *, today: date | None = None) -> BondResponse:
+def bond_to_response(
+    bond: BondRecord,
+    *,
+    today: date | None = None,
+    active_profile: RiskProfile = RiskProfile.NORMAL,
+    duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
+    duration_scale: float | None = None,
+) -> BondResponse:
     ref_date = today or date.today()
     view = bond_offer_view(bond, ref_date)
+    scale = (
+        duration_scale
+        if duration_scale is not None
+        else _duration_scale_years([bond], duration_policy)
+    )
+    resolved_scores = resolve_profile_scores(
+        bond,
+        duration_policy,
+        duration_scale=scale,
+    )
+    active_score = resolved_scores.get(active_profile.value, bond.score)
+    duration_adj = duration_adjustment_for_bond(
+        bond,
+        duration_policy,
+        duration_scale=scale,
+    )
     return BondResponse(
         secid=bond.secid,
         isin=bond.isin,
@@ -56,7 +85,9 @@ def bond_to_response(bond: BondRecord, *, today: date | None = None) -> BondResp
         prev_volume_rub=bond.prev_volume_rub,
         credit_rating=bond.credit_rating,
         risk_level=int(bond.risk_level),
-        score=bond.score,
+        score=active_score,
+        profile_scores=resolved_scores,
+        duration_adjustment=duration_adj if duration_adj != 0.0 else None,
         ytm_score=bond.ytm_score,
         risk_score=bond.risk_score,
         liquidity_score=bond.liquidity_score,

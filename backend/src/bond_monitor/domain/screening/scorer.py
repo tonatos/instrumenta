@@ -292,29 +292,48 @@ def calc_aggressive_junk_penalty(
     return frac * _AGGRESSIVE_JUNK_PENALTY_MAX
 
 
-def score_bonds(
+# Profile-specific weight presets. Conservative and normal share weights;
+# aggressive shifts toward YTM with boredom/junk penalties.
+_PROFILE_WEIGHTS: dict[RiskProfile, tuple[float, float, float]] = {
+    RiskProfile.CONSERVATIVE: (0.20, 0.60, 0.20),
+    RiskProfile.NORMAL: (0.30, 0.50, 0.20),
+    RiskProfile.AGGRESSIVE: (0.60, 0.25, 0.15),
+}
+
+
+def _composite_for_profile(
+    bond: BondRecord,
+    profile: RiskProfile,
+    *,
+    risk_free_net: float,
+    after_tax_multiplier: float,
+) -> float:
+    """Weighted composite score for a single profile (components must be set)."""
+    weight_ytm, weight_risk, weight_liq = _PROFILE_WEIGHTS[profile]
+    score = (
+        (bond.ytm_score or 0.0) * weight_ytm
+        + (bond.risk_score or 0.0) * weight_risk
+        + (bond.liquidity_score or 0.0) * weight_liq
+    )
+    if profile == RiskProfile.AGGRESSIVE:
+        scoring_ytm = _scoring_ytm_net(bond, risk_free_net, after_tax_multiplier)
+        boredom_ytm = scoring_ytm if scoring_ytm is not None else bond.ytm_net
+        score = max(
+            0.0,
+            score
+            - calc_aggressive_boredom_penalty(boredom_ytm, risk_free_net)
+            - calc_aggressive_junk_penalty(bond, boredom_ytm, risk_free_net),
+        )
+    return score
+
+
+def _prepare_bond_score_components(
     bonds: Sequence[BondRecord],
-    key_rate: float = KEY_RATE_DEFAULT,
-    tax_rate: float = TAX_RATE_DEFAULT,
-) -> list[BondRecord]:
-    """
-    Compute composite scores for all bonds and return them sorted best-first.
-
-    Side effect: populates ``bond.ytm_net = bond.ytm * (1 - tax_rate)`` for every
-    bond before scoring. The screener and calculator rely on this being driven
-    by the same ``tax_rate`` as the scoring itself.
-
-    Score = YTM_score×0.45 + Risk_score×0.35 + Liquidity_score×0.20
-
-    The YTM scale is anchored at the 95th percentile of ytm_net in the supplied
-    universe (not the maximum), which keeps distressed/buggy outliers from
-    collapsing the scale; bonds above the percentile clip at 100. Risk and
-    liquidity scales use absolute volume anchors — scores depend on the
-    bond's own trading volume, not the universe maximum.
-    """
-    if not bonds:
-        return []
-
+    *,
+    key_rate: float,
+    tax_rate: float,
+) -> tuple[float, float, float]:
+    """Populate ytm_net and component scores; return (risk_free_net, after_tax, max_spread)."""
     after_tax_multiplier = 1.0 - tax_rate
     risk_free_net = key_rate * after_tax_multiplier
 
@@ -331,42 +350,58 @@ def score_bonds(
         scale_ytm_net = risk_free_net
     max_spread = max(scale_ytm_net - risk_free_net, 0.0)
 
-    result: list[BondRecord] = []
     for bond in bonds:
         scoring_ytm = _scoring_ytm_net(bond, risk_free_net, after_tax_multiplier)
         bond.ytm_score = calc_ytm_score(scoring_ytm, risk_free_net, max_spread)
         bond.risk_score = _final_risk_score(bond, risk_free_net, after_tax_multiplier)
         bond.liquidity_score = calc_liquidity_score(bond.filter_volume_rub)
-        bond.score = bond.ytm_score * 0.45 + bond.risk_score * 0.35 + bond.liquidity_score * 0.20
+
+    return risk_free_net, after_tax_multiplier, max_spread
+
+
+def score_bonds_all_profiles(
+    bonds: Sequence[BondRecord],
+    key_rate: float = KEY_RATE_DEFAULT,
+    tax_rate: float = TAX_RATE_DEFAULT,
+) -> list[BondRecord]:
+    """
+    Compute profile-aware composite scores for all bonds and return sorted best-first.
+
+    Side effect: populates ``ytm_net``, component scores and ``profile_scores`` for
+    conservative / normal / aggressive. ``bond.score`` defaults to the normal profile.
+    """
+    if not bonds:
+        return []
+
+    mutable = list(bonds)
+    risk_free_net, after_tax_multiplier, _ = _prepare_bond_score_components(
+        mutable,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+    )
+
+    result: list[BondRecord] = []
+    for bond in mutable:
+        bond.profile_scores = {
+            profile.value: _composite_for_profile(
+                bond,
+                profile,
+                risk_free_net=risk_free_net,
+                after_tax_multiplier=after_tax_multiplier,
+            )
+            for profile in RiskProfile
+        }
+        bond.score = bond.profile_scores[RiskProfile.NORMAL.value]
         result.append(bond)
 
     result.sort(key=lambda b: b.score or 0.0, reverse=True)
     logger.info(
-        "Scored %d bonds (key_rate=%.2f%%, tax_rate=%.1f%%)",
+        "Scored %d bonds for all profiles (key_rate=%.2f%%, tax_rate=%.1f%%)",
         len(result),
         key_rate,
         tax_rate * 100,
     )
     return result
-
-
-# Profile-specific weight presets for the portfolio module. The screener and
-# the calculator stay on the default 40/40/20 mix; only ``score_bonds_for_profile``
-# uses these. Keeping them here (rather than in ``core.portfolio_planner``)
-# keeps every scoring weight in a single place.
-# Веса (ytm, risk, liquidity) для скоринга под риск-профиль портфеля.
-# Сумма должна быть 1.0; отклонение допустимо, но интерпретация скора
-# (0..100) тогда теряет смысл.
-#
-# ``NORMAL`` — приоритет качеству эмитента (риск × 0.50); YTM весит меньше
-# (× 0.30), потому что в этом профиле мы заведомо отсекаем низкие рейтинги.
-#
-# ``AGGRESSIVE`` — приоритет доходности (YTM × 0.60); risk × 0.25 и
-# boredom-penalty не дают AAA/AA с низким спредом обгонять VDO.
-_PROFILE_WEIGHTS: dict[RiskProfile, tuple[float, float, float]] = {
-    RiskProfile.NORMAL: (0.30, 0.50, 0.20),
-    RiskProfile.AGGRESSIVE: (0.60, 0.25, 0.15),
-}
 
 
 def calc_duration_adjustment(
@@ -424,21 +459,20 @@ def _duration_scale_years(
     return max(duration_values) if duration_values else 0.0
 
 
-def _apply_duration_score_adjustments(
+def _duration_adjustment_total(
     bond: BondRecord,
     *,
     duration_scale: float,
     duration_policy: DurationPolicy,
-) -> None:
+) -> float:
     weight = duration_policy.duration_score_weight
     sensitive_duration = rate_sensitive_duration(bond, duration_policy)
-    bond.score = (bond.score or 0.0) + calc_duration_adjustment(
+    return calc_duration_adjustment(
         sensitive_duration,
         scale_years=duration_scale,
         scenario=duration_policy.rate_scenario,
         weight=weight,
-    )
-    bond.score += calc_target_duration_adjustment(
+    ) + calc_target_duration_adjustment(
         sensitive_duration,
         target_years=duration_policy.target_duration_years,
         scale_years=duration_scale,
@@ -446,24 +480,111 @@ def _apply_duration_score_adjustments(
     )
 
 
+def duration_adjustment_for_bond(
+    bond: BondRecord,
+    duration_policy: DurationPolicy,
+    *,
+    duration_scale: float,
+) -> float:
+    """Duration bonus/penalty for one bond (0 when policy is neutral)."""
+    return _duration_adjustment_total(
+        bond,
+        duration_scale=duration_scale,
+        duration_policy=duration_policy,
+    )
+
+
+def resolve_profile_scores(
+    bond: BondRecord,
+    duration_policy: DurationPolicy,
+    *,
+    duration_scale: float,
+) -> dict[str, float]:
+    """Apply duration adjustment to base profile scores without mutating the bond."""
+    base = bond.profile_scores or {}
+    if not base:
+        return {}
+    adjustment = duration_adjustment_for_bond(
+        bond,
+        duration_policy,
+        duration_scale=duration_scale,
+    )
+    if adjustment == 0.0:
+        return dict(base)
+    return {
+        key: min(100.0, max(0.0, value + adjustment))
+        for key, value in base.items()
+    }
+
+
+def resolved_active_score(
+    bond: BondRecord,
+    profile: RiskProfile,
+    duration_policy: DurationPolicy,
+    *,
+    duration_scale: float,
+) -> float | None:
+    scores = resolve_profile_scores(
+        bond,
+        duration_policy,
+        duration_scale=duration_scale,
+    )
+    if scores:
+        return scores.get(profile.value)
+    return bond.score
+
+
+def sort_bonds_by_resolved_score(
+    bonds: Sequence[BondRecord],
+    profile: RiskProfile,
+    duration_policy: DurationPolicy,
+) -> list[BondRecord]:
+    """Sort bonds by profile-aware score including duration (no mutation)."""
+    duration_scale = _duration_scale_years(bonds, duration_policy)
+    return sorted(
+        bonds,
+        key=lambda b: resolved_active_score(
+            b,
+            profile,
+            duration_policy,
+            duration_scale=duration_scale,
+        )
+        or 0.0,
+        reverse=True,
+    )
+
+
 def apply_duration_scoring(
     bonds: Sequence[BondRecord],
     duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
+    *,
+    active_profile: RiskProfile = RiskProfile.NORMAL,
 ) -> list[BondRecord]:
-    """Пересчитать duration-компоненту score и пересортировать (для скринера)."""
+    """Return bonds with resolved profile scores and active score (no input mutation)."""
+    from dataclasses import replace
+
     if (
         duration_policy.rate_scenario == RateScenario.HOLD
         and duration_policy.duration_score_weight <= 0
         and duration_policy.target_duration_years is None
     ):
         return list(bonds)
+
     duration_scale = _duration_scale_years(bonds, duration_policy)
-    result = list(bonds)
-    for bond in result:
-        _apply_duration_score_adjustments(
+    result: list[BondRecord] = []
+    for bond in bonds:
+        resolved = resolve_profile_scores(
             bond,
+            duration_policy,
             duration_scale=duration_scale,
-            duration_policy=duration_policy,
+        )
+        active = resolved.get(active_profile.value, bond.score)
+        result.append(
+            replace(
+                bond,
+                profile_scores=resolved,
+                score=active,
+            ),
         )
     result.sort(key=lambda b: b.score or 0.0, reverse=True)
     return result
@@ -477,66 +598,38 @@ def score_bonds_for_profile(
     tax_rate: float = TAX_RATE_DEFAULT,
     duration_policy: DurationPolicy = DEFAULT_DURATION_POLICY,
 ) -> list[BondRecord]:
-    """Аналог :func:`score_bonds`, но с весами под выбранный риск-профиль.
-
-    * ``NORMAL`` — упор на качество (риск-скор × 0.50 при доходности × 0.30):
-      выбираются более надёжные бумаги, даже если их YTM ниже.
-    * ``AGGRESSIVE`` — упор на доходность (YTM × 0.60, риск × 0.25):
-      VDO с умеренно высоким YTM предпочтительнее IG с низким спредом;
-      boredom-penalty и дистресс-штраф удерживают junk внизу.
-
-    Шкала YTM строится по 95-му перцентилю; ликвидность — по абсолютным
-    якорям объёма (см. ``calc_liquidity_score``).
-    """
+    """Score bonds for a single profile on the supplied subset (selection pipeline)."""
     if not bonds:
         return []
 
-    after_tax_multiplier = 1.0 - tax_rate
-    risk_free_net = key_rate * after_tax_multiplier
-    weight_ytm, weight_risk, weight_liq = _PROFILE_WEIGHTS[profile]
-
-    for bond in bonds:
-        bond.ytm_net = bond.ytm * after_tax_multiplier if bond.ytm is not None else None
-
-    ytm_values: list[float] = [
-        net
-        for b in bonds
-        if (net := _scoring_ytm_net(b, risk_free_net, after_tax_multiplier)) is not None
-    ]
-    scale_ytm_net = _ytm_scale_reference(ytm_values)
-    if scale_ytm_net is None:
-        scale_ytm_net = risk_free_net
-    max_spread = max(scale_ytm_net - risk_free_net, 0.0)
-
-    duration_scale = _duration_scale_years(bonds, duration_policy)
+    mutable = list(bonds)
+    risk_free_net, after_tax_multiplier, _ = _prepare_bond_score_components(
+        mutable,
+        key_rate=key_rate,
+        tax_rate=tax_rate,
+    )
+    duration_scale = _duration_scale_years(mutable, duration_policy)
 
     result: list[BondRecord] = []
-    for bond in bonds:
-        scoring_ytm = _scoring_ytm_net(bond, risk_free_net, after_tax_multiplier)
-        bond.ytm_score = calc_ytm_score(scoring_ytm, risk_free_net, max_spread)
-        bond.risk_score = _final_risk_score(bond, risk_free_net, after_tax_multiplier)
-        bond.liquidity_score = calc_liquidity_score(bond.filter_volume_rub)
-        bond.score = (
-            bond.ytm_score * weight_ytm
-            + bond.risk_score * weight_risk
-            + bond.liquidity_score * weight_liq
-        )
-        if profile == RiskProfile.AGGRESSIVE:
-            boredom_ytm = scoring_ytm if scoring_ytm is not None else bond.ytm_net
-            bond.score = max(
-                0.0,
-                bond.score
-                - calc_aggressive_boredom_penalty(boredom_ytm, risk_free_net)
-                - calc_aggressive_junk_penalty(bond, boredom_ytm, risk_free_net),
-            )
-        _apply_duration_score_adjustments(
+    for bond in mutable:
+        base_score = _composite_for_profile(
             bond,
-            duration_scale=duration_scale,
-            duration_policy=duration_policy,
+            profile,
+            risk_free_net=risk_free_net,
+            after_tax_multiplier=after_tax_multiplier,
         )
+        bond.profile_scores = {profile.value: base_score}
+        resolved = resolve_profile_scores(
+            bond,
+            duration_policy,
+            duration_scale=duration_scale,
+        )
+        bond.score = resolved.get(profile.value, base_score)
+        bond.profile_scores = resolved
         result.append(bond)
 
     result.sort(key=lambda b: b.score or 0.0, reverse=True)
+    weight_ytm, weight_risk, weight_liq = _PROFILE_WEIGHTS[profile]
     logger.info(
         "Profile-scored %d bonds (profile=%s, weights=%.2f/%.2f/%.2f)",
         len(result),

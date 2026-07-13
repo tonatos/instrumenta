@@ -14,7 +14,12 @@ def setup_function() -> None:
 
 
 def test_put_and_get_returns_cloned_bonds() -> None:
-    bond = BondRecord(secid="A", isin="RU000A", name="Test")
+    bond = BondRecord(
+        secid="A",
+        isin="RU000A",
+        name="Test",
+        profile_scores={"normal": 55.0},
+    )
     key = cache.BondCacheKey(
         key_rate=14.5,
         tax_rate=0.13,
@@ -31,6 +36,10 @@ def test_put_and_get_returns_cloned_bonds() -> None:
     loaded_bonds[0].is_favorite = True
     again, _ = cache.get(key) or ([], "")
     assert again[0].is_favorite is False
+
+    loaded_bonds[0].profile_scores["normal"] = 99.0
+    again, _ = cache.get(key) or ([], "")
+    assert again[0].profile_scores["normal"] == 55.0
 
 
 def test_get_expires_after_ttl(monkeypatch) -> None:

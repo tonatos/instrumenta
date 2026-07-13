@@ -8,6 +8,7 @@ from litestar.testing import TestClient
 
 from bond_monitor.application.bonds.bond_service import BondService
 from bond_monitor.domain.bonds.models import BondRecord
+from bond_monitor.domain.portfolio.models import RiskProfile
 from bond_monitor.main import create_app
 
 
@@ -38,4 +39,7 @@ def test_get_bond_falls_back_to_isin_lookup() -> None:
 
     assert response.status_code == 200, response.text
     assert response.json()["bond"]["isin"] == "RU000A105XJ1"
-    load_by_isins.assert_called_once_with(["RU000A105XJ1"])
+    load_by_isins.assert_called_once()
+    assert load_by_isins.call_args.args[0] == ["RU000A105XJ1"]
+    assert load_by_isins.call_args.kwargs["risk_profile"] == RiskProfile.NORMAL
+    assert load_by_isins.call_args.kwargs["duration_policy"] is not None

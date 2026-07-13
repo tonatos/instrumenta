@@ -241,6 +241,66 @@ def test_eligible_bonds_unified_for_compose_and_reinvest() -> None:
     assert [b.isin for b in eligible] == ["RU000A7"]
 
 
+def test_conservative_profile_filter_is_stricter_than_normal() -> None:
+    a_minus = _bond(
+        isin="RU000A1",
+        name="A minus",
+        maturity=date(2027, 6, 1),
+        rating="ruA-",
+    )
+    a_rated = _bond(
+        isin="RU000A2",
+        name="A rated",
+        maturity=date(2027, 6, 1),
+        rating="ruA",
+    )
+    callable_bond = _bond(
+        isin="RU000A3",
+        name="Callable",
+        maturity=date(2027, 6, 1),
+        rating="ruA",
+    )
+    callable_bond.call_date = date(2026, 12, 1)
+    ctx = _ctx(profile=RiskProfile.CONSERVATIVE)
+    conservative_eligible = {
+        b.isin
+        for b in eligible_bonds(
+            [a_minus, a_rated, callable_bond],
+            ctx,
+            profile_step=RiskProfile.CONSERVATIVE,
+        )
+    }
+    normal_eligible = {
+        b.isin
+        for b in eligible_bonds(
+            [a_minus, a_rated, callable_bond],
+            ctx,
+            profile_step=RiskProfile.NORMAL,
+        )
+    }
+    assert conservative_eligible == {"RU000A2"}
+    assert normal_eligible == {"RU000A1", "RU000A2", "RU000A3"}
+
+
+def test_fallback_chain_picks_normal_when_conservative_empty() -> None:
+    a_minus = _bond(
+        isin="RU000A1",
+        name="A minus",
+        maturity=date(2027, 6, 1),
+        rating="ruA-",
+    )
+    ctx = _ctx(profile=RiskProfile.CONSERVATIVE)
+    result = select_ranked_bonds(
+        [a_minus],
+        ctx,
+        key_rate=16.0,
+        tax_rate=0.13,
+    )
+    assert result.bonds[0].isin == "RU000A1"
+    assert result.effective_profile_filter == RiskProfile.NORMAL
+    assert "NORMAL-профиль" in result.fallback_note
+
+
 def test_maturity_index_limits_window_scan() -> None:
     in_window = _bond(isin="RU000A9", name="In", maturity=date(2027, 6, 1))
     out_window = _bond(isin="RU000A10", name="Out", maturity=date(2035, 1, 1))

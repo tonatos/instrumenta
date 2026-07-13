@@ -12,13 +12,9 @@ def test_load_by_secid_enriches_issuer_metadata_when_token_present(monkeypatch) 
     detail_calls: list[BondRecord] = []
 
     monkeypatch.setattr(
-        "bond_monitor.application.bonds.bond_service.fetch_bond_by_secid",
-        lambda secid: bond if secid == "TEST" else None,
-    )
-    monkeypatch.setattr(
         BondService,
-        "_enrich_and_score",
-        lambda self, bonds: (bonds, "MOEX ISS API"),
+        "_lookup_screener_bond",
+        lambda self, **kwargs: bond if kwargs.get("secid") == "TEST" else None,
     )
 
     def fake_enrich_detail(target: BondRecord, token: str) -> None:
@@ -34,8 +30,8 @@ def test_load_by_secid_enriches_issuer_metadata_when_token_present(monkeypatch) 
     service = BondService(key_rate=14.5, tax_rate=0.13, tinkoff_token="read-token")
     loaded = service.load_by_secid("TEST")
 
-    assert loaded is bond
-    assert detail_calls == [bond]
+    assert loaded is not None
+    assert detail_calls == [loaded]
     assert loaded.issuer_name == "ПАО Газпром"
     assert loaded.description == "Корпоративная облигация"
 
@@ -44,13 +40,9 @@ def test_load_by_secid_skips_issuer_metadata_without_token(monkeypatch) -> None:
     bond = BondRecord(secid="TEST", isin="RU000ATEST", name="Газпром001", asset_uid="asset-1")
 
     monkeypatch.setattr(
-        "bond_monitor.application.bonds.bond_service.fetch_bond_by_secid",
-        lambda secid: bond,
-    )
-    monkeypatch.setattr(
         BondService,
-        "_enrich_and_score",
-        lambda self, bonds: (bonds, "MOEX ISS API"),
+        "_lookup_screener_bond",
+        lambda self, **kwargs: bond if kwargs.get("secid") == "TEST" else None,
     )
 
     def fail_enrich_detail(*_args, **_kwargs) -> None:
@@ -64,7 +56,7 @@ def test_load_by_secid_skips_issuer_metadata_without_token(monkeypatch) -> None:
     service = BondService(key_rate=14.5, tax_rate=0.13, tinkoff_token="")
     loaded = service.load_by_secid("TEST")
 
-    assert loaded is bond
+    assert loaded is not None
     assert loaded.issuer_name == ""
 
 

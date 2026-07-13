@@ -76,5 +76,13 @@ def invalidate_all() -> None:
         _cache.clear()
 
 
+def clone_bond_record(bond: BondRecord) -> BondRecord:
+    """Return a copy safe for duration scoring (profile_scores not shared)."""
+    cloned = copy.copy(bond)
+    if bond.profile_scores:
+        cloned.profile_scores = dict(bond.profile_scores)
+    return cloned
+
+
 def _clone_bonds(bonds: list[BondRecord]) -> list[BondRecord]:
-    return [copy.copy(bond) for bond in bonds]
+    return [clone_bond_record(bond) for bond in bonds]

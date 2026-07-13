@@ -22,6 +22,13 @@ import {
 import { api } from "@/api/client";
 import type { Bond } from "@/api/types";
 import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
+import {
+  getScreenerRiskProfile,
+  setScreenerRiskProfile,
+  subscribeScreenerRiskProfile,
+  type ScreenerRiskProfile,
+} from "@/features/screener/screenerRiskProfile";
+import { RISK_LABELS as PROFILE_RISK_LABELS } from "@/features/portfolio/labels";
 import { useRateScenario } from "@/features/settings/RateScenarioProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -90,6 +97,9 @@ export function ScreenerPage() {
   );
   const queryClient = useQueryClient();
   const { rateScenario } = useRateScenario();
+  const [riskProfile, setRiskProfile] = useState<ScreenerRiskProfile>(getScreenerRiskProfile);
+
+  useEffect(() => subscribeScreenerRiskProfile(() => setRiskProfile(getScreenerRiskProfile())), []);
 
   const { data: config } = useQuery({
     queryKey: ["config"],
@@ -116,8 +126,8 @@ export function ScreenerPage() {
   }, [config]);
 
   const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ["bonds", filterBy, rateScenario],
-    queryFn: () => api.getBonds(filterBy),
+    queryKey: ["bonds", filterBy, rateScenario, riskProfile],
+    queryFn: () => api.getBonds(filterBy, riskProfile),
   });
 
   const toggleFavorite = useMutation({
@@ -305,9 +315,26 @@ export function ScreenerPage() {
           </Badge>
         ),
       }),
-      columnHelper.accessor("volume_rub", {
+      columnHelper.accessor((b) => b.prev_volume_rub ?? b.volume_rub, {
+        id: "volume_rub",
         header: "Объём",
-        cell: (i) => formatRub(i.getValue()),
+        cell: ({ row }) => {
+          const bond = row.original;
+          const yesterday = bond.prev_volume_rub;
+          const today = bond.volume_rub;
+          const main = yesterday ?? today;
+          if (main == null) return "—";
+          return (
+            <div className="flex flex-col items-end leading-tight">
+              <span>{formatRub(main)}</span>
+              {yesterday != null && today != null && (
+                <span className="text-[10px] font-normal text-muted-foreground">
+                  {formatRub(today)}
+                </span>
+              )}
+            </div>
+          );
+        },
       }),
       columnHelper.accessor("maturity_date", {
         header: "Погашение",
@@ -405,6 +432,36 @@ export function ScreenerPage() {
             </div>
           </div>
 
+          {/* Risk profile */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              Риск-профиль
+              <Tooltip content="Скор и ранжирование рассчитываются под выбранную стратегию: консервативный, нормальный или агрессивный.">
+                <button type="button" className="opacity-60 hover:opacity-100">
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              </Tooltip>
+            </div>
+            <select
+              aria-label="Риск-профиль"
+              className="flex h-8 w-full rounded-md border border-border bg-card px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+              value={riskProfile}
+              onChange={(e) => {
+                const value = e.target.value as ScreenerRiskProfile;
+                setScreenerRiskProfile(value);
+                setRiskProfile(value);
+              }}
+            >
+              {(Object.keys(PROFILE_RISK_LABELS) as ScreenerRiskProfile[]).map((profile) => (
+                <option key={profile} value={profile}>
+                  {PROFILE_RISK_LABELS[profile]}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* filterBy */}
           <div className="space-y-1.5">
             <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
@@ -462,7 +519,7 @@ export function ScreenerPage() {
           <div className="space-y-1.5">
             <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               Мин. объём торгов, ₽/день
-              <Tooltip content="Минимальный объём торгов за предыдущую сессию. Отсеивает неликвидные бумаги. В таблице показывается объём за сегодня.">
+              <Tooltip content="Минимальный объём торгов за предыдущую сессию — по нему же фильтруется скринер. В таблице крупно показан вчерашний объём, мелко — сегодняшний.">
                 <button type="button" className="opacity-60 hover:opacity-100">
                   <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
@@ -712,7 +769,11 @@ export function ScreenerPage() {
         )}
       </div>
 
-      <BondDetailSheet secid={selectedSecid} onClose={() => setSelectedSecid(null)} />
+      <BondDetailSheet
+        secid={selectedSecid}
+        riskProfile={riskProfile}
+        onClose={() => setSelectedSecid(null)}
+      />
     </div>
   );
 }

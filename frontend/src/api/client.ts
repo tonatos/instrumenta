@@ -23,6 +23,7 @@ import type {
 } from "./types";
 import { getAuthToken, notifyUnauthorized } from "@/features/auth/authStorage";
 import { getRateScenario } from "@/features/settings/durationPreferences";
+import type { BondRiskProfile } from "@/features/bonds/bondScore";
 
 const BASE = "/api/v1";
 
@@ -30,6 +31,12 @@ function withRateScenario(path: string): string {
   const scenario = getRateScenario();
   const separator = path.includes("?") ? "&" : "?";
   return `${path}${separator}rate_scenario=${encodeURIComponent(scenario)}`;
+}
+
+function withRiskProfile(path: string, riskProfile?: BondRiskProfile): string {
+  if (!riskProfile) return path;
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}risk_profile=${encodeURIComponent(riskProfile)}`;
 }
 
 export class ApiError extends Error {
@@ -92,14 +99,23 @@ export const api = {
     }),
   logout: () => request<{ status: string }>("/auth/logout", { method: "POST" }),
 
-  getBonds: (filterBy = "effective") =>
-    request<BondsListResponse>(withRateScenario(`/bonds/?filter_by=${filterBy}`)),
-  getBondsByIsins: (isins: string[]) =>
+  getBonds: (filterBy = "effective", riskProfile: BondRiskProfile = "normal") =>
     request<BondsListResponse>(
-      `/bonds/by-isins?isins=${encodeURIComponent(isins.join(","))}`,
+      withRiskProfile(withRateScenario(`/bonds/?filter_by=${filterBy}`), riskProfile),
     ),
-  getBond: (secid: string) =>
-    request<{ bond: Bond; coupons: unknown[] }>(`/bonds/${secid}`),
+  getBondsByIsins: (isins: string[], riskProfile: BondRiskProfile = "normal") =>
+    request<BondsListResponse>(
+      withRiskProfile(
+        withRateScenario(
+          `/bonds/by-isins?isins=${encodeURIComponent(isins.join(","))}`,
+        ),
+        riskProfile,
+      ),
+    ),
+  getBond: (secid: string, riskProfile: BondRiskProfile = "normal") =>
+    request<{ bond: Bond; coupons: unknown[] }>(
+      withRiskProfile(withRateScenario(`/bonds/${secid}`), riskProfile),
+    ),
   refreshBonds: () => request<{ status: string }>("/bonds/refresh", { method: "POST" }),
   refreshRatings: () => request<{ count: number }>("/ratings/refresh", { method: "POST" }),
 

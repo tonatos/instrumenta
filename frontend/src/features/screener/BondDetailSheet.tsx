@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ExternalLink, HelpCircle, Star, AlertTriangle } from "lucide-react";
 import { api } from "@/api/client";
 import type { Bond } from "@/api/types";
-import { OFFER_WINDOW_STATUS_LABELS } from "@/features/portfolio/labels";
+import {
+  PROFILE_SCORE_WEIGHTS,
+  type BondRiskProfile,
+} from "@/features/bonds/bondScore";
+import { OFFER_WINDOW_STATUS_LABELS, RISK_LABELS } from "@/features/portfolio/labels";
+import { useRateScenario } from "@/features/settings/RateScenarioProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -14,9 +19,10 @@ import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
 interface Props {
   secid: string | null;
   onClose: () => void;
+  riskProfile?: BondRiskProfile;
 }
 
-const RISK_LABELS: Record<number, { label: string; className: string }> = {
+const RISK_LEVEL_LABELS: Record<number, { label: string; className: string }> = {
   0: { label: "Неизвестен", className: "bg-muted text-muted-foreground" },
   1: { label: "Низкий", className: "bg-green-500/15 text-green-700 dark:text-green-400" },
   2: { label: "Умеренный", className: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
@@ -54,6 +60,12 @@ function InfoRow({
   );
 }
 
+const PROFILE_KEYS: BondRiskProfile[] = ["conservative", "normal", "aggressive"];
+
+function formatWeight(value: number): string {
+  return value.toFixed(2).replace(/\.?0+$/, "");
+}
+
 function ScoreBar({ value, max = 100 }: { value: number | null; max?: number }) {
   if (value == null) return <span className="text-muted-foreground">—</span>;
   const pct = Math.min(100, (value / max) * 100);
@@ -69,12 +81,82 @@ function ScoreBar({ value, max = 100 }: { value: number | null; max?: number }) 
   );
 }
 
-export function BondDetailSheet({ secid, onClose }: Props) {
+function ComponentCard({
+  label,
+  value,
+  tooltip,
+}: {
+  label: string;
+  value: number | null;
+  tooltip?: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-muted/30 p-3">
+      <div className="mb-2 flex items-center gap-1 text-xs text-muted-foreground">
+        <span>{label}</span>
+        {tooltip && (
+          <Tooltip content={<span className="leading-relaxed">{tooltip}</span>} side="top">
+            <HelpCircle className="h-3 w-3 cursor-help opacity-60" />
+          </Tooltip>
+        )}
+      </div>
+      <ScoreBar value={value} />
+    </div>
+  );
+}
+
+function ProfileScoreCard({
+  profile,
+  score,
+  isActive,
+}: {
+  profile: BondRiskProfile;
+  score: number | null;
+  isActive: boolean;
+}) {
+  const weights = PROFILE_SCORE_WEIGHTS[profile];
+  return (
+    <div
+      className={cn(
+        "flex flex-col rounded-lg border p-3 transition-colors",
+        isActive
+          ? "border-primary bg-primary/5 shadow-sm"
+          : "border-border/60 bg-background",
+      )}
+    >
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted-foreground">
+          {RISK_LABELS[profile]}
+        </span>
+        {isActive && (
+          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-normal">
+            Выбран
+          </Badge>
+        )}
+      </div>
+      <div className="mb-2 text-2xl font-semibold tabular-nums">
+        {score != null ? score.toFixed(0) : "—"}
+      </div>
+      <ScoreBar value={score} />
+      <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+        {formatWeight(weights.ytm)}×YTM + {formatWeight(weights.risk)}×Риск +{" "}
+        {formatWeight(weights.liquidity)}×Ликв.
+      </p>
+    </div>
+  );
+}
+
+export function BondDetailSheet({
+  secid,
+  onClose,
+  riskProfile = "normal",
+}: Props) {
   const queryClient = useQueryClient();
+  const rateScenario = useRateScenario();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["bond", secid],
-    queryFn: () => api.getBond(secid!),
+    queryKey: ["bond", secid, riskProfile, rateScenario],
+    queryFn: () => api.getBond(secid!, riskProfile),
     enabled: !!secid,
   });
 
@@ -95,7 +177,7 @@ export function BondDetailSheet({ secid, onClose }: Props) {
     bond?.last_price != null
       ? (bond.last_price / 100) * bond.face_value * bond.lot_size
       : null;
-  const riskInfo = RISK_LABELS[bond?.risk_level ?? 0];
+  const riskInfo = RISK_LEVEL_LABELS[bond?.risk_level ?? 0];
   const issuerTitle = bond?.issuer_name || bond?.name || "";
   const instrumentSubtitle =
     bond?.instrument_full_name && bond.instrument_full_name !== issuerTitle
@@ -320,37 +402,66 @@ export function BondDetailSheet({ secid, onClose }: Props) {
             <Separator />
 
             {/* Скоринг */}
-            <section>
-              <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Скоринг
+            <section className="space-y-4">
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Скоринг
+                </h3>
                 <Tooltip
-                  content="Комплексная оценка привлекательности облигации от 0 до 100. Формула: YTM-скор × 0.45 + Риск-скор × 0.35 + Ликвидность-скор × 0.20"
+                  content="Комплексная оценка 0–100: взвешенная сумма компонентов плюс корректировка дюрации под сценарий по ставке. Скор в таблице совпадает с выбранным профилем."
                   side="right"
                 >
                   <HelpCircle className="h-3.5 w-3.5 cursor-help opacity-60" />
                 </Tooltip>
-              </h3>
-              <dl className="divide-y divide-border/50">
-                <InfoRow
-                  label="Итого"
-                  value={<ScoreBar value={bond.score} />}
-                />
-                <InfoRow
-                  label="YTM-скор × 0.45"
-                  value={<ScoreBar value={bond.ytm_score} />}
-                  tooltip="Насколько YTM нетто превышает безрисковую ставку (КС ЦБ). Нормируется по 95-му перцентилю выборки."
-                />
-                <InfoRow
-                  label="Риск-скор × 0.35"
-                  value={<ScoreBar value={bond.risk_score} />}
-                  tooltip="Оценка риска: уровень риска, рейтинг, штрафы за амортизацию / плавающий купон / субординацию / колл."
-                />
-                <InfoRow
-                  label="Ликвидность × 0.20"
-                  value={<ScoreBar value={bond.liquidity_score} />}
-                  tooltip="Логарифмическая шкала по объёму торгов в рублях за день."
-                />
-              </dl>
+              </div>
+
+              <div>
+                <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Составляющие
+                </h4>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <ComponentCard
+                    label="YTM"
+                    value={bond.ytm_score}
+                    tooltip="Насколько YTM нетто превышает безрисковую ставку (КС ЦБ). Нормируется по 95-му перцентилю выборки."
+                  />
+                  <ComponentCard
+                    label="Риск"
+                    value={bond.risk_score}
+                    tooltip="Оценка риска: уровень риска, рейтинг, штрафы за амортизацию / плавающий купон / субординацию / колл."
+                  />
+                  <ComponentCard
+                    label="Ликвидность"
+                    value={bond.liquidity_score}
+                    tooltip="Логарифмическая шкала по объёму торгов в рублях за день."
+                  />
+                </div>
+                {bond.duration_adjustment != null && bond.duration_adjustment !== 0 && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Корректировка дюрации:{" "}
+                    <span className="font-medium text-foreground">
+                      {bond.duration_adjustment > 0 ? "+" : ""}
+                      {bond.duration_adjustment.toFixed(1)} п.п.
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <h4 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Итог по стратегиям
+                </h4>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  {PROFILE_KEYS.map((profile) => (
+                    <ProfileScoreCard
+                      key={profile}
+                      profile={profile}
+                      score={bond.profile_scores?.[profile] ?? null}
+                      isActive={profile === riskProfile}
+                    />
+                  ))}
+                </div>
+              </div>
             </section>
 
             {/* Предупреждения */}

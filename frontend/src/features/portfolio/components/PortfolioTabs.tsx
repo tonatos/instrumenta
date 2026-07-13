@@ -109,6 +109,7 @@ export function PortfolioTabs({
           isTrading={isTrading}
           accountKind={active.account_kind}
           bonds={bondsList}
+          riskProfile={(active.risk_profile ?? "normal") as "conservative" | "normal" | "aggressive"}
           closedPositionsCount={active.closed_positions_count ?? 0}
           tradingAdvice={tradingAdvice}
         />

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, X } from "lucide-react";
 import { api } from "@/api/client";
 import type { Bond, PortfolioPosition, PutOfferDecision, TradingAdviceResponse } from "@/api/types";
+import { bondScoreForProfile, type BondRiskProfile } from "@/features/bonds/bondScore";
 import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
 import {
   OFFER_WINDOW_STATUS_LABELS,
@@ -31,6 +32,7 @@ export function PositionsTab({
   isTrading,
   accountKind: _accountKind,
   bonds,
+  riskProfile = "normal",
   closedPositionsCount: _closedPositionsCount,
   tradingAdvice,
   adviceLoading = false,
@@ -40,6 +42,7 @@ export function PositionsTab({
   isTrading: boolean;
   accountKind: string | null;
   bonds: Bond[];
+  riskProfile?: BondRiskProfile;
   closedPositionsCount: number;
   tradingAdvice?: TradingAdviceResponse;
   adviceLoading?: boolean;
@@ -160,6 +163,7 @@ export function PositionsTab({
               {visiblePositions.map((pos) => {
                 const status = pos.status ?? "active";
                 const bond = bondsByIsin.get(pos.isin);
+                const profileScore = bond ? bondScoreForProfile(bond, riskProfile) : null;
                 const detailId = bond?.secid ?? pos.isin;
                 const manualSell = pos.figi ? activeSellByFigi.get(pos.figi) : undefined;
                 const sellBlocked = manualSell != null;
@@ -227,11 +231,11 @@ export function PositionsTab({
                   >
                     <Badge
                       variant={
-                        bond?.score != null && bond.score >= 60 ? "default" : "secondary"
+                        profileScore != null && profileScore >= 60 ? "default" : "secondary"
                       }
                       className="font-mono text-[10px] font-normal"
                     >
-                      {bond?.score != null ? Math.round(bond.score) : "—"}
+                      {profileScore != null ? Math.round(profileScore) : "—"}
                     </Badge>
                   </td>
                   <td className="px-3 py-2 text-right font-medium">
@@ -380,7 +384,11 @@ export function PositionsTab({
         </div>
       )}
 
-      <BondDetailSheet secid={detailSecid} onClose={() => setDetailSecid(null)} />
+      <BondDetailSheet
+        secid={detailSecid}
+        riskProfile={riskProfile}
+        onClose={() => setDetailSecid(null)}
+      />
 
       <SellPositionDialog
         position={sellPosition}

@@ -60,6 +60,8 @@ class BondResponse(BaseModel):
     credit_rating: str | None = None
     risk_level: int = 0
     score: float | None = None
+    profile_scores: dict[str, float] = Field(default_factory=dict)
+    duration_adjustment: float | None = None
     ytm_score: float | None = None
     risk_score: float | None = None
     liquidity_score: float | None = None

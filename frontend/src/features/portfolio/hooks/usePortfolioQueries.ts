@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api } from "@/api/client";
 import type { Bond, PortfolioPosition } from "@/api/types";
+import type { BondRiskProfile } from "@/features/bonds/bondScore";
 import { STALE } from "@/features/portfolio/hooks/queryConfig";
 import { useRateScenario } from "@/features/settings/RateScenarioProvider";
 import { portfolioPath } from "@/features/portfolio/utils";
@@ -62,14 +63,17 @@ export function usePortfolioQueries() {
     staleTime: STALE.config,
   });
 
-  const { data: bonds } = useQuery({
-    queryKey: ["bonds", rateScenario],
-    queryFn: () => api.getBonds(),
-    staleTime: STALE.bonds,
-    refetchOnWindowFocus: false,
-  });
+  const portfolioRiskProfile = (active?.risk_profile ?? "normal") as BondRiskProfile;
 
   const portfolioReady = Boolean(active);
+
+  const { data: bonds } = useQuery({
+    queryKey: ["bonds", rateScenario, portfolioRiskProfile],
+    queryFn: () => api.getBonds("effective", portfolioRiskProfile),
+    staleTime: STALE.bonds,
+    refetchOnWindowFocus: false,
+    enabled: portfolioReady,
+  });
 
   const positions: PortfolioPosition[] =
     (active?.data?.positions as PortfolioPosition[]) ?? [];
@@ -119,9 +123,9 @@ export function usePortfolioQueries() {
   }, [bonds?.bonds, positionIsins]);
 
   const { data: positionBonds } = useQuery({
-    queryKey: ["bonds-by-isins", missingPositionIsins],
-    queryFn: () => api.getBondsByIsins(missingPositionIsins),
-    enabled: missingPositionIsins.length > 0,
+    queryKey: ["bonds-by-isins", missingPositionIsins, portfolioRiskProfile],
+    queryFn: () => api.getBondsByIsins(missingPositionIsins, portfolioRiskProfile),
+    enabled: missingPositionIsins.length > 0 && portfolioReady,
     staleTime: STALE.bonds,
     refetchOnWindowFocus: false,
   });

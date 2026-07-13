@@ -40,11 +40,13 @@ class RiskProfile(StrEnum):
     скоринговой модели в :func:`core.scorer.score_bonds_for_profile`.
     """
 
+    CONSERVATIVE = "conservative"
     NORMAL = "normal"
     AGGRESSIVE = "aggressive"
 
 
 RISK_PROFILE_LABELS: dict[RiskProfile, str] = {
+    RiskProfile.CONSERVATIVE: "Консервативный",
     RiskProfile.NORMAL: "Нормальный",
     RiskProfile.AGGRESSIVE: "Агрессивный",
 }

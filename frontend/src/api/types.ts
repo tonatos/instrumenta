@@ -33,6 +33,8 @@ export interface Bond {
   credit_rating: string | null;
   risk_level: number;
   score: number | null;
+  profile_scores?: Record<string, number>;
+  duration_adjustment?: number | null;
   ytm_score: number | null;
   risk_score: number | null;
   liquidity_score: number | null;

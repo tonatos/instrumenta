@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 
 from bond_monitor.domain.bonds.models import BondRecord
-from bond_monitor.domain.portfolio.policies import DEFAULT_DURATION_POLICY, DurationPolicy, RateScenario
-from bond_monitor.domain.screening.scorer import apply_duration_scoring, score_bonds
+from bond_monitor.domain.portfolio.models import RiskProfile
+from bond_monitor.domain.portfolio.policies import DEFAULT_DURATION_POLICY, DurationPolicy
+from bond_monitor.domain.screening.scorer import (
+    score_bonds_all_profiles,
+    sort_bonds_by_resolved_score,
+)
 from bond_monitor.infrastructure.bonds.universe_cache import (
     BondCacheKey,
+    clone_bond_record,
     get as get_cached_bonds,
     invalidate_all as invalidate_bond_cache,
     put as put_cached_bonds,
@@ -90,14 +95,35 @@ class BondService:
         ratings = load_ratings()
         auto_ratings = load_auto_ratings()
         bonds = apply_ratings(bonds, ratings, auto_ratings=auto_ratings)
-        bonds = score_bonds(bonds, key_rate=self._key_rate, tax_rate=self._tax_rate)
+        bonds = score_bonds_all_profiles(bonds, key_rate=self._key_rate, tax_rate=self._tax_rate)
         return bonds, source
+
+    def _score_against_cached_universe(self, bonds: list[BondRecord]) -> list[BondRecord]:
+        """Score bonds using YTM scale from the cached full universe."""
+        universe_result = self.load_universe()
+        by_secid = {b.secid: b for b in universe_result.bonds}
+        by_isin = {b.isin: b for b in universe_result.bonds}
+        merged = list(universe_result.bonds)
+        for bond in bonds:
+            if bond.secid not in by_secid and bond.isin not in by_isin:
+                merged.append(bond)
+        scored_all = score_bonds_all_profiles(
+            merged,
+            key_rate=self._key_rate,
+            tax_rate=self._tax_rate,
+        )
+        scored_map = {b.secid: b for b in scored_all}
+        return [scored_map[bond.secid] for bond in bonds if bond.secid in scored_map]
+
+    def _clone_bonds(self, bonds: list[BondRecord]) -> list[BondRecord]:
+        return [clone_bond_record(b) for b in bonds]
 
     def load_screener_bonds(
         self,
         *,
         filter_by: str = "effective",
         duration_policy: DurationPolicy | None = None,
+        risk_profile: RiskProfile = RiskProfile.NORMAL,
     ) -> BondLoadResult:
         cache_key = self._cache_key("screener", filter_by=filter_by)
         cached = get_cached_bonds(cache_key)
@@ -113,15 +139,8 @@ class BondService:
             put_cached_bonds(cache_key, bonds, source)
 
         policy = duration_policy or DEFAULT_DURATION_POLICY
-        if (
-            policy.rate_scenario != RateScenario.HOLD
-            or policy.duration_score_weight > 0
-            or policy.target_duration_years is not None
-        ):
-            bonds = apply_duration_scoring(
-                [replace(b) for b in bonds],
-                policy,
-            )
+        bonds = self._clone_bonds(bonds)
+        bonds = sort_bonds_by_resolved_score(bonds, risk_profile, policy)
         return BondLoadResult(bonds=bonds, source=source)
 
     def load_universe(self) -> BondLoadResult:
@@ -129,27 +148,93 @@ class BondService:
         cached = get_cached_bonds(cache_key)
         if cached is not None:
             bonds, source = cached
-            return BondLoadResult(bonds=bonds, source=source)
+            return BondLoadResult(bonds=self._clone_bonds(bonds), source=source)
 
         bonds = fetch_all_bonds_unfiltered()
         bonds, source = self._enrich_and_score(bonds)
         put_cached_bonds(cache_key, bonds, source)
-        return BondLoadResult(bonds=bonds, source=source)
+        return BondLoadResult(bonds=self._clone_bonds(bonds), source=source)
 
-    def load_by_isins(self, isins: list[str]) -> list[BondRecord]:
+    def _lookup_screener_bond(
+        self,
+        *,
+        secid: str | None = None,
+        isin: str | None = None,
+        filter_by: str = "effective",
+        duration_policy: DurationPolicy | None = None,
+        risk_profile: RiskProfile = RiskProfile.NORMAL,
+    ) -> BondRecord | None:
+        result = self.load_screener_bonds(
+            filter_by=filter_by,
+            duration_policy=duration_policy,
+            risk_profile=risk_profile,
+        )
+        for bond in result.bonds:
+            if secid is not None and bond.secid == secid:
+                return bond
+            if isin is not None and bond.isin == isin:
+                return bond
+        return None
+
+    def load_by_isins(
+        self,
+        isins: list[str],
+        *,
+        filter_by: str = "effective",
+        duration_policy: DurationPolicy | None = None,
+        risk_profile: RiskProfile = RiskProfile.NORMAL,
+    ) -> list[BondRecord]:
         if not isins:
             return []
-        bonds = fetch_bonds_by_isins(set(isins))
-        bonds, _ = self._enrich_and_score(bonds)
-        return bonds
+        policy = duration_policy or DEFAULT_DURATION_POLICY
+        found: list[BondRecord] = []
+        missing: list[str] = []
+        for isin in isins:
+            bond = self._lookup_screener_bond(
+                isin=isin,
+                filter_by=filter_by,
+                duration_policy=policy,
+                risk_profile=risk_profile,
+            )
+            if bond is not None:
+                found.append(clone_bond_record(bond))
+            else:
+                missing.append(isin)
+        if missing:
+            fetched = fetch_bonds_by_isins(set(missing))
+            scored = self._score_against_cached_universe(fetched)
+            found.extend(scored)
+        return found
 
-    def load_by_secid(self, secid: str) -> BondRecord | None:
+    def load_by_secid(
+        self,
+        secid: str,
+        *,
+        filter_by: str = "effective",
+        duration_policy: DurationPolicy | None = None,
+        risk_profile: RiskProfile = RiskProfile.NORMAL,
+    ) -> BondRecord | None:
+        policy = duration_policy or DEFAULT_DURATION_POLICY
+        bond = self._lookup_screener_bond(
+            secid=secid,
+            filter_by=filter_by,
+            duration_policy=policy,
+            risk_profile=risk_profile,
+        )
+        if bond is not None:
+            result = clone_bond_record(bond)
+            if self._token:
+                enrich_bond_detail_metadata(result, self._token)
+            return result
+
         bond = fetch_bond_by_secid(secid)
         if bond is None:
             return None
-        bonds, _ = self._enrich_and_score([bond])
-        result = bonds[0] if bonds else None
-        if result is not None and self._token:
+        scored = self._score_against_cached_universe([bond])
+        if not scored:
+            return None
+        result = scored[0]
+        if self._token:
             enrich_bond_detail_metadata(result, self._token)
         return result
 

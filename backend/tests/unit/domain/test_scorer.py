@@ -8,11 +8,12 @@ from bond_monitor.domain.bonds.models import BondRecord, CouponType, RiskLevel
 from bond_monitor.domain.portfolio.models import RiskProfile
 from bond_monitor.domain.screening.scorer import (
     _scoring_ytm_net,
+    apply_duration_scoring,
     calc_distress_penalty,
     calc_liquidity_score,
     calc_risk_score,
     calc_ytm_score,
-    score_bonds,
+    score_bonds_all_profiles,
     score_bonds_for_profile,
 )
 
@@ -23,7 +24,7 @@ def test_calc_ytm_score_higher_for_better_ytm() -> None:
     assert high > low
 
 
-def test_score_bonds_fills_ytm_net() -> None:
+def test_score_bonds_all_profiles_fills_ytm_net_and_profile_scores() -> None:
     bonds = [
         BondRecord(
             secid="TEST",
@@ -35,9 +36,52 @@ def test_score_bonds_fills_ytm_net() -> None:
             maturity_date=date(2026, 12, 1),
         )
     ]
-    scored = score_bonds(bonds, key_rate=14.5, tax_rate=0.13)
-    assert scored[0].ytm_net is not None
-    assert scored[0].score is not None
+    scored = score_bonds_all_profiles(bonds, key_rate=14.5, tax_rate=0.13)
+    bond = scored[0]
+    assert bond.ytm_net is not None
+    assert bond.score is not None
+    assert set(bond.profile_scores) == {"conservative", "normal", "aggressive"}
+    assert bond.score == bond.profile_scores["normal"]
+
+
+def test_conservative_score_lower_than_normal_for_high_ytm_moderate_risk() -> None:
+    bond = _make_bond(
+        secid="VDO",
+        ytm=28.0,
+        credit_rating="ruBBB",
+        risk_level=RiskLevel.MODERATE,
+    )
+    scored = score_bonds_all_profiles([bond], key_rate=14.5, tax_rate=0.13)
+    profile_scores = scored[0].profile_scores
+    assert profile_scores["conservative"] < profile_scores["normal"]
+
+
+def test_duration_adjustment_applies_to_all_profile_scores() -> None:
+    from bond_monitor.domain.portfolio.policies import DurationPolicy, RateScenario
+
+    bond = _make_bond(secid="LONG", ytm=22.0, credit_rating="ruA", risk_level=RiskLevel.LOW)
+    bond.duration_days = 730.0
+    scored = score_bonds_all_profiles([bond], key_rate=14.5, tax_rate=0.13)
+    before = dict(scored[0].profile_scores)
+    policy = DurationPolicy(rate_scenario=RateScenario.CUT, duration_score_weight=0.20)
+    adjusted = apply_duration_scoring(
+        scored,
+        policy,
+    )
+    after = adjusted[0].profile_scores
+    from bond_monitor.domain.screening.scorer import (
+        _duration_scale_years,
+        duration_adjustment_for_bond,
+    )
+
+    adjustment = duration_adjustment_for_bond(
+        scored[0],
+        policy,
+        duration_scale=_duration_scale_years(scored, policy),
+    )
+    assert adjustment > 0
+    for key in before:
+        assert after[key] == min(100.0, before[key] + adjustment)
 
 
 def _make_bond(

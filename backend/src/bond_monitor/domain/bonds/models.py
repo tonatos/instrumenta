@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from enum import Enum, StrEnum
 
@@ -106,7 +106,7 @@ class BondRecord:
 
     # --- Yield (% per annum) ---
     ytm: float | None = None
-    ytm_net: float | None = None  # ytm after НДФЛ (populated by core.scorer.score_bonds)
+    ytm_net: float | None = None  # ytm after НДФЛ (populated by scorer)
 
     # --- Coupon ---
     coupon_rate: float | None = None  # annual coupon rate, %
@@ -185,6 +185,7 @@ class BondRecord:
     credit_rating: str | None = None
 
     # --- Composite scores [0–100] ---
+    profile_scores: dict[str, float] = field(default_factory=dict)
     score: float | None = None
     ytm_score: float | None = None
     risk_score: float | None = None
