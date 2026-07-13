@@ -9,12 +9,12 @@ GIT_BRANCH="${GIT_BRANCH:-main}"
 cd "$APP_DIR"
 
 if [[ ! -d .git ]]; then
-  echo "ERROR: ${APP_DIR} is not a git repository. Run pyinfra bootstrap first." >&2
+  echo "ERROR: ${APP_DIR} is not a git repository. Run deploy bootstrap first." >&2
   exit 1
 fi
 
 if [[ ! -f .env ]]; then
-  echo "ERROR: ${APP_DIR}/.env not found. Run pyinfra bootstrap first." >&2
+  echo "ERROR: ${APP_DIR}/.env not found. Run deploy bootstrap first." >&2
   exit 1
 fi
 

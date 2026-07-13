@@ -1,0 +1,21 @@
+{
+  "status": 200,
+  "body": {
+    "aci_rub_per_bond": 0.0,
+    "broker_aci_amount_rub": null,
+    "broker_clean_amount_rub": null,
+    "broker_commission_rub": null,
+    "broker_total_amount_rub": null,
+    "clean_amount_rub": 1000.0,
+    "face_value_rub": 1000.0,
+    "local_total_amount_rub": 1000.0,
+    "lot_size": 1,
+    "market_price_pct": 100.0,
+    "money_rub": 80000.0,
+    "order_bonds": 1,
+    "order_lots": 1,
+    "order_price_pct": 100.0,
+    "preview_source": "moex",
+    "sufficient_cash": true
+  }
+}

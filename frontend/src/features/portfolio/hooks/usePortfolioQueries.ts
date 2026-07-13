@@ -143,7 +143,7 @@ export function usePortfolioQueries() {
   }, [bonds?.bonds, positionIsins]);
 
   const { data: positionBonds } = useQuery({
-    queryKey: ["bonds-by-isins", missingPositionIsins, portfolioRiskProfile],
+    queryKey: ["bonds-by-isins", activeId, missingPositionIsins, portfolioRiskProfile],
     queryFn: () => api.getBondsByIsins(missingPositionIsins, portfolioRiskProfile),
     enabled: missingPositionIsins.length > 0 && portfolioReady,
     staleTime: STALE.bonds,
@@ -155,11 +155,13 @@ export function usePortfolioQueries() {
     for (const bond of bonds?.bonds ?? []) {
       byIsin.set(bond.isin, bond);
     }
-    for (const bond of positionBonds?.bonds ?? []) {
-      byIsin.set(bond.isin, bond);
+    if (missingPositionIsins.length > 0) {
+      for (const bond of positionBonds?.bonds ?? []) {
+        byIsin.set(bond.isin, bond);
+      }
     }
     return [...byIsin.values()];
-  }, [bonds?.bonds, positionBonds?.bonds]);
+  }, [bonds?.bonds, missingPositionIsins.length, positionBonds?.bonds]);
 
   const slots = plan?.slots ?? [];
 

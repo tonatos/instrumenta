@@ -270,7 +270,7 @@ export function TradingActionQueue({
                 Зафиксировать план
               </Button>
               <p className="text-xs text-muted-foreground">
-                Закрепить текущие рекомендации покупки и реинвестиций на время исполнения
+                Закрепить текущие рекомендации докупки и реинвестиций на время исполнения
               </p>
             </div>
             {createPlanError && (
@@ -388,7 +388,7 @@ export function TradingActionQueue({
 
         {!deploySession && buySuggestions.length > 0 && (
           <p className="text-xs text-muted-foreground" data-testid="freeze-plan-required-hint">
-            Покупки и реинвестиции доступны только после фиксации плана закупки.
+            Докупка и реинвестиции доступны только после фиксации плана закупки.
           </p>
         )}
 

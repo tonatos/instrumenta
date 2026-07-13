@@ -87,7 +87,8 @@ test.describe("Карточка бумаги", () => {
     // Sheet should open with key sections
     await expect(page.getByText("Идентификаторы")).toBeVisible({ timeout: 5000 });
     await expect(page.getByText("Скоринг")).toBeVisible();
-    await expect(page.getByText("YTM-скор × 0.45")).toBeVisible();
+    await expect(page.getByText("Составляющие")).toBeVisible();
+    await expect(page.getByText("Итог по стратегиям")).toBeVisible();
   });
 
   test("sheet показывает кнопку Т-Инвестиции если есть ISIN", async ({ page }) => {
@@ -148,8 +149,11 @@ test.describe("Карточка бумаги", () => {
     };
 
     await page.route("**/api/v1/bonds/**", async (route) => {
-      const url = route.request().url();
-      if (url.includes("/bonds/CALLTEST") && !url.includes("?")) {
+      const url = new URL(route.request().url());
+      const path = url.pathname.replace(/\/$/, "");
+      const detailSecid = path.match(/\/bonds\/([^/]+)$/)?.[1];
+
+      if (detailSecid === "CALLTEST") {
         await route.fulfill({ json: { bond, coupons: [] } });
         return;
       }
@@ -206,8 +210,11 @@ test.describe("Карточка бумаги", () => {
     };
 
     await page.route("**/api/v1/bonds/**", async (route) => {
-      const url = route.request().url();
-      if (url.includes("/bonds/ISSUERTEST") && !url.includes("?")) {
+      const url = new URL(route.request().url());
+      const path = url.pathname.replace(/\/$/, "");
+      const detailSecid = path.match(/\/bonds\/([^/]+)$/)?.[1];
+
+      if (detailSecid === "ISSUERTEST") {
         await route.fulfill({ json: { bond, coupons: [] } });
         return;
       }

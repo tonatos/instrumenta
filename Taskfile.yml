@@ -3,9 +3,8 @@ version: "3"
 tasks:
   run:back:
     desc: Run backend
-    deps: [sync:back]
     cmds:
-      - uv run --directory backend uvicorn bond_monitor.main:app --reload --port 8000
+      - cd backend && go run ./cmd/api
 
   run:front:
     desc: Run frontend
@@ -16,31 +15,27 @@ tasks:
 
   run:notifier:
     desc: Run notification worker locally
-    deps: [sync:back]
     dotenv: [.env]
     cmds:
-      - uv run --directory backend python -m bond_monitor.notifier
+      - cd backend && go run ./cmd/notifier
 
   dev:notify:simulate:
-    desc: "Write dev notification overrides (usage: task dev:notify:simulate -- put-offer --portfolio <id>)"
-    deps: [sync:back]
+    desc: Write fake alert overrides (requires NOTIFICATIONS_DEV=true)
     dotenv: [.env]
     cmds:
-      - uv run --directory backend python -m bond_monitor.dev.notifications simulate {{.CLI_ARGS}}
+      - cd backend && go run ./cmd/dev-notify simulate {{.CLI_ARGS}}
 
   dev:notify:scan:
-    desc: Run one notifier scan cycle (requires NOTIFICATIONS_DEV=true)
-    deps: [sync:back]
+    desc: Run one notifier scan cycle (requires NOTIFICATIONS_DEV=true for fake alerts)
     dotenv: [.env]
     cmds:
-      - uv run --directory backend python -m bond_monitor.dev.notifications scan
+      - cd backend && go run ./cmd/dev-notify scan
 
   dev:notify:reset:
-    desc: "Clear notifier ledger (usage: task dev:notify:reset -- --portfolio <id>)"
-    deps: [sync:back]
+    desc: Clear notifier delivery ledger (optionally --portfolio <id>)
     dotenv: [.env]
     cmds:
-      - uv run --directory backend python -m bond_monitor.dev.notifications reset {{.CLI_ARGS}}
+      - cd backend && go run ./cmd/dev-notify reset {{.CLI_ARGS}}
 
   test:
     desc: All tests (back, then front)
@@ -50,14 +45,12 @@ tasks:
 
   test:back:
     desc: Test backend
-    deps: [sync:back]
-    dotenv: [.env]
     cmds:
-      - uv run --directory backend pytest tests/unit -q --disable-warnings
+      - cd backend && go test ./...
 
   test:front:
     desc: Test frontend
-    deps: [sync:back, sync:front]
+    deps: [sync:front]
     dotenv: [.env]
     dir: ./e2e/playwright
     cmds:
@@ -68,7 +61,7 @@ tasks:
   sync:back:
     desc: Sync backend dependencies
     cmds:
-      - uv sync --directory backend --extra dev --python 3.12
+      - cd backend && go mod download
   
   sync:front:
     desc: Sync frontend dependencies
@@ -77,33 +70,33 @@ tasks:
       - npm install
 
   deploy:sync:
-    desc: Install pyinfra deploy dependencies
+    desc: Download Porter deploy dependencies
     cmds:
-      - uv sync --group deploy
+      - cd deploy && go mod download
 
   deploy:bootstrap:
     desc: First-time VPS setup (Docker, git clone, .env, compose)
     deps: [deploy:sync]
     cmds:
-      - uv run --group deploy --directory deploy pyinfra inventory.py bootstrap.py -y
+      - cd deploy && go run . bootstrap
 
   deploy:bootstrap-dry:
     desc: Preview first-time VPS bootstrap
     deps: [deploy:sync]
     cmds:
-      - uv run --group deploy --directory deploy pyinfra inventory.py bootstrap.py --dry
+      - cd deploy && go run . bootstrap -dry-run
 
   deploy:update:
     desc: Manual update on VPS (git pull + compose pull, keeps .env)
     deps: [deploy:sync]
     cmds:
-      - uv run --group deploy --directory deploy pyinfra inventory.py update.py -y
+      - cd deploy && go run . update
 
   deploy:update-dry:
     desc: Preview manual VPS update
     deps: [deploy:sync]
     cmds:
-      - uv run --group deploy --directory deploy pyinfra inventory.py update.py --dry
+      - cd deploy && go run . update -dry-run
 
   deploy:
     desc: Alias for deploy:update (routine deploy is automatic via GitHub Actions)

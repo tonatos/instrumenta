@@ -1,0 +1,39 @@
+{
+  "status": 200,
+  "body": {
+    "account_id": null,
+    "account_kind": null,
+    "cash_balance_rub": 0.0,
+    "closed_positions_count": 0,
+    "data": {
+      "account_id": null,
+      "account_kind": null,
+      "account_label": null,
+      "api_trade_only": true,
+      "cash_balance_rub": 0.0,
+      "closed_positions_count": 0,
+      "created_at": "<TIMESTAMP>",
+      "frozen_forecast": null,
+      "horizon_date": "2027-01-01",
+      "id": "<ID>",
+      "initial_amount_rub": 100000.0,
+      "max_weighted_duration_years": null,
+      "mode": "simulation",
+      "name": "Golden Portfolio",
+      "positions": [],
+      "risk_profile": "normal",
+      "slots": [],
+      "target_duration_years": null,
+      "trading_started_at": null,
+      "updated_at": "<TIMESTAMP>"
+    },
+    "horizon_date": "2027-01-01",
+    "id": "<ID>",
+    "initial_amount_rub": 100000.0,
+    "invested_capital_rub": 100000.0,
+    "mode": "simulation",
+    "name": "Golden Portfolio",
+    "positions_count": 0,
+    "risk_profile": "normal"
+  }
+}

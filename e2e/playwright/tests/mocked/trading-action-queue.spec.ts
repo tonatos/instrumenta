@@ -157,16 +157,22 @@ const diversifiedBuySuggestions = [
 
 async function mockBondRoutes(page: import("@playwright/test").Page) {
   await page.route("**/api/v1/bonds/**", async (route) => {
-    const url = route.request().url();
-    if (url.includes("/bonds/TEST1") && !url.includes("?")) {
-      await route.fulfill({
-        json: {
-          bond: testBondDetail,
-          coupons: [],
-        },
-      });
-      return;
+    const url = new URL(route.request().url());
+    const path = url.pathname.replace(/\/$/, "");
+    const detailSecid = path.match(/\/bonds\/([^/]+)$/)?.[1];
+
+    if (detailSecid) {
+      if (detailSecid === "TEST1" || detailSecid === buySuggestion.isin) {
+        await route.fulfill({
+          json: {
+            bond: testBondDetail,
+            coupons: [],
+          },
+        });
+        return;
+      }
     }
+
     await route.fulfill({
       json: {
         bonds: [testBondDetail],
@@ -184,6 +190,9 @@ async function setupTradingMocks(
   } = {},
 ) {
   await mockConfig(page);
+  await page.route("**/api/v1/favorites/**", async (route) => {
+    await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });
+  });
   await mockTradingPortfolioRoutes(page, PORTFOLIO_ID, tradingPortfolio, {
     plan: planMock,
     advice: adviceResponse(),

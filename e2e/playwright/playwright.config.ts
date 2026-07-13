@@ -5,7 +5,7 @@ export default defineConfig({
   globalTeardown: "./global-teardown.ts",
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  retries: process.env.CI ? 2 : 1,
   reporter: process.env.CI ? [["github"], ["line"]] : "line",
   use: {
     baseURL: process.env.BASE_URL || "http://localhost:5173",
@@ -16,7 +16,7 @@ export default defineConfig({
     ? undefined
     : [
         {
-          command: "cd ../../backend && uv run uvicorn bond_monitor.main:app --port 8000",
+          command: "cd ../../backend && go run ./cmd/api",
           url: "http://localhost:8000/health",
           reuseExistingServer: true,
           timeout: 120_000,

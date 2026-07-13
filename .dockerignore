@@ -24,7 +24,7 @@ frontend/dist/
 
 e2e/
 docs/
-deploy/inventory.py
+deploy/inventory.yaml
 
 *.md
 !README.md

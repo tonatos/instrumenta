@@ -1,0 +1,2732 @@
+{
+  "status": 200,
+  "body": {
+    "advice": {
+      "active_orders": [],
+      "as_of": "<TIMESTAMP>",
+      "available_money_rub": 80000.0,
+      "blocked_money_rub": 0.0,
+      "cashflow": [
+        {
+          "amount_rub": 207.123288,
+          "bonds_count": 16,
+          "date": "2026-07-20",
+          "description": "Купон по ДОМ 2P5 (16 шт.)",
+          "is_projected": true,
+          "kind": "coupon",
+          "lots": 16,
+          "related_isin": "RU000A109U97"
+        },
+        {
+          "amount_rub": 205.746575,
+          "bonds_count": 17,
+          "date": "2026-08-01",
+          "description": "Купон по ВТБ Б1-346 (17 шт.)",
+          "is_projected": true,
+          "kind": "coupon",
+          "lots": 17,
+          "related_isin": "RU000A107B35"
+        },
+        {
+          "amount_rub": 335.342466,
+          "bonds_count": 17,
+          "date": "2026-08-04",
+          "description": "Купон по ГТЛК 2P-07 (17 шт.)",
+          "is_projected": true,
+          "kind": "coupon",
+          "lots": 17,
+          "related_isin": "RU000A10AU73"
+        },
+        {
+          "amount_rub": 17000.0,
+          "bonds_count": 17,
+          "date": "2026-08-04",
+          "description": "Погашение ГТЛК 2P-07 (17 шт.)",
+          "is_projected": true,
+          "kind": "maturity",
+          "lots": 17,
+          "related_isin": "RU000A10AU73"
+        },
+        {
+          "amount_rub": 352.808219,
+          "bonds_count": 17,
+          "date": "2026-08-07",
+          "description": "Купон по ВИС Ф БП07 (17 шт.)",
+          "is_projected": true,
+          "kind": "coupon",
+          "lots": 17,
+          "related_isin": "RU000A10AV15"
+        },
+        {
+          "amount_rub": 17000.0,
+          "bonds_count": 17,
+          "date": "2026-08-07",
+          "description": "Погашение ВИС Ф БП07 (17 шт.)",
+          "is_projected": true,
+          "kind": "maturity",
+          "lots": 17,
+          "related_isin": "RU000A10AV15"
+        },
+        {
+          "amount_rub": 207.123288,
+          "bonds_count": 16,
+          "date": "2026-08-19",
+          "description": "Купон по ДОМ 2P5 (16 шт.)",
+          "is_projected": true,
+          "kind": "coupon",
+          "lots": 16,
+          "related_isin": "RU000A109U97"
+        },
+        {
+          "amount_rub": 205.746575,
+          "bonds_count": 17,
+          "date": "2026-09-01",
+          "description": "Купон по ВТБ Б1-346 (17 шт.)",
+          "is_projected": true,
+          "kind": "coupon",
+          "lots": 17,
+          "related_isin": "RU000A107B35"
+        },
+        {
+          "amount_rub": 17000.0,
+          "bonds_count": 17,
+          "date": "2026-09-10",
+          "description": "Погашение ТФинанс1P1 (17 шт.)",
+          "is_projected": true,
+          "kind": "maturity",
+          "lots": 17,
+          "related_isin": "RU000A109KT4"
+        },
+        {
+          "amount_rub": 207.123288,
+          "bonds_count": 16,
+          "date": "2026-09-18",
+          "description": "Купон по ДОМ 2P5 (16 шт.)",
+          "is_projected": true,
+          "kind": "coupon",
+          "lots": 16,
+          "related_isin": "RU000A109U97"
+        },
+        {
+          "amount_rub": 205.746575,
+          "bonds_count": 17,
+          "date": "2026-10-02",
+          "description": "Купон по ВТБ Б1-346 (17 шт.)",
+          "is_projected": true,
+          "kind": "coupon",
+          "lots": 17,
+          "related_isin": "RU000A107B35"
+        },
+        {
+          "amount_rub": 594.616438,
+          "bonds_count": 15,
+          "date": "2026-10-07",
+          "description": "Купон по ОФЗ 26226 (15 шт.)",
+          "is_projected": true,
+          "kind": "coupon",
+          "lots": 15,
+          "related_isin": "RU000A0ZZYW2"
+        },
+        {
+          "amount_rub": 15000.0,
+          "bonds_count": 15,
+          "date": "2026-10-07",
+          "description": "Погашение ОФЗ 26226 (15 шт.)",
+          "is_projected": true,
+          "kind": "maturity",
+          "lots": 15,
+          "related_isin": "RU000A0ZZYW2"
+        },
+        {
+          "amount_rub": 207.123288,
+          "bonds_count": 16,
+          "date": "2026-10-18",
+          "description": "Купон по ДОМ 2P5 (16 шт.)",
+          "is_projected": true,
+          "kind": "coupon",
+          "lots": 16,
+          "related_isin": "RU000A109U97"
+        },
+        {
+          "amount_rub": 16000.0,
+          "bonds_count": 16,
+          "date": "2026-10-18",
+          "description": "Погашение ДОМ 2P5 (16 шт.)",
+          "is_projected": true,
+          "kind": "maturity",
+          "lots": 16,
+          "related_isin": "RU000A109U97"
+        },
+        {
+          "amount_rub": 205.746575,
+          "bonds_count": 17,
+          "date": "2026-11-02",
+          "description": "Купон по ВТБ Б1-346 (17 шт.)",
+          "is_projected": true,
+          "kind": "coupon",
+          "lots": 17,
+          "related_isin": "RU000A107B35"
+        },
+        {
+          "amount_rub": 17000.0,
+          "bonds_count": 17,
+          "date": "2026-12-01",
+          "description": "Погашение ВТБ Б1-346 (17 шт.)",
+          "is_projected": true,
+          "kind": "maturity",
+          "lots": 17,
+          "related_isin": "RU000A107B35"
+        }
+      ],
+      "deploy_session": null,
+      "holdings": [],
+      "money_rub": 80000.0,
+      "performance": {
+        "as_of": "<TIMESTAMP>",
+        "commission_paid_rub": -0.0,
+        "coupons_received_rub": 0.0,
+        "invested_rub": -0.0,
+        "realized_profit_rub": 0.0,
+        "received_rub": 0.0,
+        "tax_paid_rub": -0.0,
+        "unrealized_value_rub": 0.0,
+        "xirr_pct": null
+      },
+      "suggestions": [
+        {
+          "chat_template": null,
+          "due_date": null,
+          "figi": "TCS00A10AV15",
+          "id": "<ID>",
+          "isin": "RU000A10AV15",
+          "kind": "buy",
+          "lots": 14,
+          "market_price_pct": 100.41,
+          "name": "ВИС Ф БП07",
+          "offer_window_status": null,
+          "reason": "Свободный кэш на счёте — рекомендуем докупить по стратегии портфеля (Распределено 79,984 ₽ из 80,000 ₽ по 8 бумагам. Остаток: 16 ₽.)",
+          "risk_acknowledgeable": false,
+          "source_isin": null,
+          "submission_end": null,
+          "submission_start": null,
+          "suggested_price_pct": 100.912,
+          "urgency": "normal"
+        },
+        {
+          "chat_template": null,
+          "due_date": null,
+          "figi": "TCS00A10AU73",
+          "id": "<ID>",
+          "isin": "RU000A10AU73",
+          "kind": "buy",
+          "lots": 13,
+          "market_price_pct": 100.34,
+          "name": "ГТЛК 2P-07",
+          "offer_window_status": null,
+          "reason": "Свободный кэш на счёте — рекомендуем докупить по стратегии портфеля (Распределено 79,984 ₽ из 80,000 ₽ по 8 бумагам. Остаток: 16 ₽.)",
+          "risk_acknowledgeable": false,
+          "source_isin": null,
+          "submission_end": null,
+          "submission_start": null,
+          "suggested_price_pct": 100.8417,
+          "urgency": "normal"
+        },
+        {
+          "chat_template": null,
+          "due_date": null,
+          "figi": "TCS70A109KT4",
+          "id": "<ID>",
+          "isin": "RU000A109KT4",
+          "kind": "buy",
+          "lots": 13,
+          "market_price_pct": 100.08,
+          "name": "ТФинанс1P1",
+          "offer_window_status": null,
+          "reason": "Свободный кэш на счёте — рекомендуем докупить по стратегии портфеля (Распределено 79,984 ₽ из 80,000 ₽ по 8 бумагам. Остаток: 16 ₽.)",
+          "risk_acknowledgeable": false,
+          "source_isin": null,
+          "submission_end": null,
+          "submission_start": null,
+          "suggested_price_pct": 100.5804,
+          "urgency": "normal"
+        },
+        {
+          "chat_template": null,
+          "due_date": null,
+          "figi": "BBG01KDTJJ04",
+          "id": "<ID>",
+          "isin": "RU000A107B35",
+          "kind": "buy",
+          "lots": 13,
+          "market_price_pct": 99.55,
+          "name": "ВТБ Б1-346",
+          "offer_window_status": null,
+          "reason": "Свободный кэш на счёте — рекомендуем докупить по стратегии портфеля (Распределено 79,984 ₽ из 80,000 ₽ по 8 бумагам. Остаток: 16 ₽.)",
+          "risk_acknowledgeable": false,
+          "source_isin": null,
+          "submission_end": null,
+          "submission_start": null,
+          "suggested_price_pct": 100.0477,
+          "urgency": "normal"
+        },
+        {
+          "chat_template": null,
+          "due_date": null,
+          "figi": "TCS00A109U97",
+          "id": "<ID>",
+          "isin": "RU000A109U97",
+          "kind": "buy",
+          "lots": 13,
+          "market_price_pct": 100.23,
+          "name": "ДОМ 2P5",
+          "offer_window_status": null,
+          "reason": "Свободный кэш на счёте — рекомендуем докупить по стратегии портфеля (Распределено 79,984 ₽ из 80,000 ₽ по 8 бумагам. Остаток: 16 ₽.)",
+          "risk_acknowledgeable": false,
+          "source_isin": null,
+          "submission_end": null,
+          "submission_start": null,
+          "suggested_price_pct": 100.7311,
+          "urgency": "normal"
+        },
+        {
+          "chat_template": null,
+          "due_date": null,
+          "figi": "BBG00N8J90K7",
+          "id": "<ID>",
+          "isin": "RU000A0ZZYW2",
+          "kind": "buy",
+          "lots": 13,
+          "market_price_pct": 98.611,
+          "name": "ОФЗ 26226",
+          "offer_window_status": null,
+          "reason": "Свободный кэш на счёте — рекомендуем докупить по стратегии портфеля (Распределено 79,984 ₽ из 80,000 ₽ по 8 бумагам. Остаток: 16 ₽.)",
+          "risk_acknowledgeable": false,
+          "source_isin": null,
+          "submission_end": null,
+          "submission_start": null,
+          "suggested_price_pct": 99.1041,
+          "urgency": "normal"
+        },
+        {
+          "chat_template": null,
+          "due_date": null,
+          "figi": "TCS00A106SF2",
+          "id": "<ID>",
+          "isin": "RU000A106SF2",
+          "kind": "buy",
+          "lots": 2,
+          "market_price_pct": 99.47,
+          "name": "ИнтЛиз1Р06",
+          "offer_window_status": null,
+          "reason": "Свободный кэш на счёте — рекомендуем докупить по стратегии портфеля (Распределено 79,984 ₽ из 80,000 ₽ по 8 бумагам. Остаток: 16 ₽.)",
+          "risk_acknowledgeable": false,
+          "source_isin": null,
+          "submission_end": null,
+          "submission_start": null,
+          "suggested_price_pct": 99.9673,
+          "urgency": "normal"
+        },
+        {
+          "chat_template": null,
+          "due_date": null,
+          "figi": "BBG0024TRF04",
+          "id": "<ID>",
+          "isin": "RU000A0JRTL6",
+          "kind": "buy",
+          "lots": 1,
+          "market_price_pct": 100.317,
+          "name": "ОФЗ 46023",
+          "offer_window_status": null,
+          "reason": "Свободный кэш на счёте — рекомендуем докупить по стратегии портфеля (Распределено 79,984 ₽ из 80,000 ₽ по 8 бумагам. Остаток: 16 ₽.)",
+          "risk_acknowledgeable": false,
+          "source_isin": null,
+          "submission_end": null,
+          "submission_start": null,
+          "suggested_price_pct": 100.8186,
+          "urgency": "normal"
+        }
+      ],
+      "warnings": [],
+      "weighted_duration_years": null
+    },
+    "plan": {
+      "cashflow": [
+        {
+          "amount_rub": 169.841096,
+          "balance_after_rub": 80169.84,
+          "bonds_count": 16,
+          "date": "2026-07-20",
+          "kind": "coupon",
+          "label": "Купон по ДОМ 2P5 (16 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 168.712192,
+          "balance_after_rub": 80338.55,
+          "bonds_count": 17,
+          "date": "2026-08-01",
+          "kind": "coupon",
+          "label": "Купон по ВТБ Б1-346 (17 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 274.980822,
+          "balance_after_rub": 80613.53,
+          "bonds_count": 17,
+          "date": "2026-08-04",
+          "kind": "coupon",
+          "label": "Купон по ГТЛК 2P-07 (17 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 17000.0,
+          "balance_after_rub": 97613.53,
+          "bonds_count": 17,
+          "date": "2026-08-04",
+          "kind": "maturity",
+          "label": "Погашение ГТЛК 2P-07 (17 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": -16202.56,
+          "balance_after_rub": 81410.97,
+          "bonds_count": 16,
+          "date": "2026-08-06",
+          "kind": "purchase",
+          "label": "Покупка 16 лот(а) — ДОМ 2P5 (16 шт.)",
+          "lots": 16
+        },
+        {
+          "amount_rub": -16027.68,
+          "balance_after_rub": 65383.29,
+          "bonds_count": 16,
+          "date": "2026-08-06",
+          "kind": "purchase",
+          "label": "Покупка 16 лот(а) — ТФинанс1P1 (16 шт.)",
+          "lots": 16
+        },
+        {
+          "amount_rub": -16115.84,
+          "balance_after_rub": 49267.45,
+          "bonds_count": 16,
+          "date": "2026-08-06",
+          "kind": "purchase",
+          "label": "Покупка 16 лот(а) — ОФЗ 26226 (16 шт.)",
+          "lots": 16
+        },
+        {
+          "amount_rub": -16124.16,
+          "balance_after_rub": 33143.29,
+          "bonds_count": 16,
+          "date": "2026-08-06",
+          "kind": "purchase",
+          "label": "Покупка 16 лот(а) — ОФЗ 29016 (16 шт.)",
+          "lots": 16
+        },
+        {
+          "amount_rub": -16009.28,
+          "balance_after_rub": 17134.01,
+          "bonds_count": 16,
+          "date": "2026-08-06",
+          "kind": "purchase",
+          "label": "Покупка 16 лот(а) — ВТБ Б1-346 (16 шт.)",
+          "lots": 16
+        },
+        {
+          "amount_rub": -16238.08,
+          "balance_after_rub": 895.93,
+          "bonds_count": 16,
+          "date": "2026-08-06",
+          "kind": "purchase",
+          "label": "Покупка 16 лот(а) — ОФЗ 26219 (16 шт.)",
+          "lots": 16
+        },
+        {
+          "amount_rub": -505.72,
+          "balance_after_rub": 390.21,
+          "bonds_count": 1,
+          "date": "2026-08-06",
+          "kind": "purchase",
+          "label": "Покупка 1 лот(а) — Новотр 1Р4 (1 шт.)",
+          "lots": 1
+        },
+        {
+          "amount_rub": -348.51,
+          "balance_after_rub": 41.7,
+          "bonds_count": 2,
+          "date": "2026-08-06",
+          "kind": "purchase",
+          "label": "Покупка 2 лот(а) — АБЗ-1 1Р05 (2 шт.)",
+          "lots": 2
+        },
+        {
+          "amount_rub": 289.30274,
+          "balance_after_rub": 331.01,
+          "bonds_count": 17,
+          "date": "2026-08-07",
+          "kind": "coupon",
+          "label": "Купон по ВИС Ф БП07 (17 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 17000.0,
+          "balance_after_rub": 17331.01,
+          "bonds_count": 17,
+          "date": "2026-08-07",
+          "kind": "maturity",
+          "label": "Погашение ВИС Ф БП07 (17 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": -5063.3,
+          "balance_after_rub": 12267.71,
+          "bonds_count": 5,
+          "date": "2026-08-09",
+          "kind": "purchase",
+          "label": "Покупка 5 лот(а) — ДОМ 2P5 (5 шт.)",
+          "lots": 5
+        },
+        {
+          "amount_rub": -5008.65,
+          "balance_after_rub": 7259.06,
+          "bonds_count": 5,
+          "date": "2026-08-09",
+          "kind": "purchase",
+          "label": "Покупка 5 лот(а) — ТФинанс1P1 (5 шт.)",
+          "lots": 5
+        },
+        {
+          "amount_rub": -5036.2,
+          "balance_after_rub": 2222.86,
+          "bonds_count": 5,
+          "date": "2026-08-09",
+          "kind": "purchase",
+          "label": "Покупка 5 лот(а) — ОФЗ 26226 (5 шт.)",
+          "lots": 5
+        },
+        {
+          "amount_rub": -2004.5,
+          "balance_after_rub": 218.36,
+          "bonds_count": 2,
+          "date": "2026-08-09",
+          "kind": "purchase",
+          "label": "Покупка 2 лот(а) — СамолетP20 (2 шт.)",
+          "lots": 2
+        },
+        {
+          "amount_rub": -174.255,
+          "balance_after_rub": 44.1,
+          "bonds_count": 1,
+          "date": "2026-08-09",
+          "kind": "purchase",
+          "label": "Покупка 1 лот(а) — АБЗ-1 1Р05 (1 шт.)",
+          "lots": 1
+        },
+        {
+          "amount_rub": 392.757534,
+          "balance_after_rub": 436.86,
+          "bonds_count": 37,
+          "date": "2026-08-19",
+          "kind": "coupon",
+          "label": "Купон по ДОМ 2P5 (37 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 12.521849,
+          "balance_after_rub": 449.38,
+          "bonds_count": 1,
+          "date": "2026-08-25",
+          "kind": "coupon",
+          "label": "Купон по Новотр 1Р4 (1 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 499.55,
+          "balance_after_rub": 948.93,
+          "bonds_count": 1,
+          "date": "2026-08-25",
+          "kind": "maturity",
+          "label": "Погашение Новотр 1Р4 (1 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 28.643836,
+          "balance_after_rub": 977.58,
+          "bonds_count": 2,
+          "date": "2026-08-29",
+          "kind": "coupon",
+          "label": "Купон по СамолетP20 (2 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 4.246027,
+          "balance_after_rub": 981.82,
+          "bonds_count": 3,
+          "date": "2026-08-31",
+          "kind": "coupon",
+          "label": "Купон по АБЗ-1 1Р05 (3 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 327.500137,
+          "balance_after_rub": 1309.32,
+          "bonds_count": 33,
+          "date": "2026-09-01",
+          "kind": "coupon",
+          "label": "Купон по ВТБ Б1-346 (33 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 38000.0,
+          "balance_after_rub": 39309.32,
+          "bonds_count": 38,
+          "date": "2026-09-10",
+          "kind": "maturity",
+          "label": "Погашение ТФинанс1P1 (38 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": -7050.68,
+          "balance_after_rub": 32258.64,
+          "bonds_count": 7,
+          "date": "2026-09-12",
+          "kind": "purchase",
+          "label": "Покупка 7 лот(а) — ОФЗ 26226 (7 шт.)",
+          "lots": 7
+        },
+        {
+          "amount_rub": -7054.32,
+          "balance_after_rub": 25204.32,
+          "bonds_count": 7,
+          "date": "2026-09-12",
+          "kind": "purchase",
+          "label": "Покупка 7 лот(а) — ОФЗ 29016 (7 шт.)",
+          "lots": 7
+        },
+        {
+          "amount_rub": -6075.96,
+          "balance_after_rub": 19128.36,
+          "bonds_count": 6,
+          "date": "2026-09-12",
+          "kind": "purchase",
+          "label": "Покупка 6 лот(а) — ДОМ 2P5 (6 шт.)",
+          "lots": 6
+        },
+        {
+          "amount_rub": -7004.06,
+          "balance_after_rub": 12124.3,
+          "bonds_count": 7,
+          "date": "2026-09-12",
+          "kind": "purchase",
+          "label": "Покупка 7 лот(а) — ВТБ Б1-346 (7 шт.)",
+          "lots": 7
+        },
+        {
+          "amount_rub": -6318.06,
+          "balance_after_rub": 5806.24,
+          "bonds_count": 6,
+          "date": "2026-09-12",
+          "kind": "purchase",
+          "label": "Покупка 6 лот(а) — Самолет 01 (6 шт.)",
+          "lots": 6
+        },
+        {
+          "amount_rub": -5011.25,
+          "balance_after_rub": 794.99,
+          "bonds_count": 5,
+          "date": "2026-09-12",
+          "kind": "purchase",
+          "label": "Покупка 5 лот(а) — СамолетP20 (5 шт.)",
+          "lots": 5
+        },
+        {
+          "amount_rub": -697.02,
+          "balance_after_rub": 97.97,
+          "bonds_count": 4,
+          "date": "2026-09-12",
+          "kind": "purchase",
+          "label": "Покупка 4 лот(а) — АБЗ-1 1Р05 (4 шт.)",
+          "lots": 4
+        },
+        {
+          "amount_rub": 507.007123,
+          "balance_after_rub": 604.98,
+          "bonds_count": 16,
+          "date": "2026-09-16",
+          "kind": "coupon",
+          "label": "Купон по ОФЗ 26219 (16 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 15970.7104,
+          "balance_after_rub": 16575.69,
+          "bonds_count": 16,
+          "date": "2026-09-16",
+          "kind": "maturity",
+          "label": "Погашение ОФЗ 26219 (16 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 456.447945,
+          "balance_after_rub": 17032.14,
+          "bonds_count": 43,
+          "date": "2026-09-18",
+          "kind": "coupon",
+          "label": "Купон по ДОМ 2P5 (43 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": -5036.2,
+          "balance_after_rub": 11995.94,
+          "bonds_count": 5,
+          "date": "2026-09-18",
+          "kind": "purchase",
+          "label": "Покупка 5 лот(а) — ОФЗ 26226 (5 шт.)",
+          "lots": 5
+        },
+        {
+          "amount_rub": -5038.8,
+          "balance_after_rub": 6957.14,
+          "bonds_count": 5,
+          "date": "2026-09-18",
+          "kind": "purchase",
+          "label": "Покупка 5 лот(а) — ОФЗ 29016 (5 шт.)",
+          "lots": 5
+        },
+        {
+          "amount_rub": -5063.3,
+          "balance_after_rub": 1893.84,
+          "bonds_count": 5,
+          "date": "2026-09-18",
+          "kind": "purchase",
+          "label": "Покупка 5 лот(а) — ДОМ 2P5 (5 шт.)",
+          "lots": 5
+        },
+        {
+          "amount_rub": -1008.69,
+          "balance_after_rub": 885.15,
+          "bonds_count": 1,
+          "date": "2026-09-18",
+          "kind": "purchase",
+          "label": "Покупка 1 лот(а) — Россет1Р14 (1 шт.)",
+          "lots": 1
+        },
+        {
+          "amount_rub": -871.275,
+          "balance_after_rub": 13.87,
+          "bonds_count": 5,
+          "date": "2026-09-18",
+          "kind": "purchase",
+          "label": "Покупка 5 лот(а) — АБЗ-1 1Р05 (5 шт.)",
+          "lots": 5
+        },
+        {
+          "amount_rub": 100.253425,
+          "balance_after_rub": 114.13,
+          "bonds_count": 7,
+          "date": "2026-09-28",
+          "kind": "coupon",
+          "label": "Купон по СамолетP20 (7 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 6992.566,
+          "balance_after_rub": 7106.69,
+          "bonds_count": 7,
+          "date": "2026-09-28",
+          "kind": "maturity",
+          "label": "Погашение СамолетP20 (7 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 16.98411,
+          "balance_after_rub": 7123.68,
+          "bonds_count": 12,
+          "date": "2026-09-30",
+          "kind": "coupon",
+          "label": "Купон по АБЗ-1 1Р05 (12 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 2096.9004,
+          "balance_after_rub": 9220.58,
+          "bonds_count": 12,
+          "date": "2026-09-30",
+          "kind": "maturity",
+          "label": "Погашение АБЗ-1 1Р05 (12 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 396.969863,
+          "balance_after_rub": 9617.55,
+          "bonds_count": 40,
+          "date": "2026-10-02",
+          "kind": "coupon",
+          "label": "Купон по ВТБ Б1-346 (40 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 1560.273534,
+          "balance_after_rub": 11177.82,
+          "bonds_count": 48,
+          "date": "2026-10-07",
+          "kind": "coupon",
+          "label": "Купон по ОФЗ 26226 (48 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 47879.9904,
+          "balance_after_rub": 59057.81,
+          "bonds_count": 48,
+          "date": "2026-10-07",
+          "kind": "maturity",
+          "label": "Погашение ОФЗ 26226 (48 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": -10077.6,
+          "balance_after_rub": 48980.21,
+          "bonds_count": 10,
+          "date": "2026-10-09",
+          "kind": "purchase",
+          "label": "Покупка 10 лот(а) — ОФЗ 29016 (10 шт.)",
+          "lots": 10
+        },
+        {
+          "amount_rub": -10005.8,
+          "balance_after_rub": 38974.41,
+          "bonds_count": 10,
+          "date": "2026-10-09",
+          "kind": "purchase",
+          "label": "Покупка 10 лот(а) — ВТБ Б1-346 (10 шт.)",
+          "lots": 10
+        },
+        {
+          "amount_rub": -9477.09,
+          "balance_after_rub": 29497.32,
+          "bonds_count": 9,
+          "date": "2026-10-09",
+          "kind": "purchase",
+          "label": "Покупка 9 лот(а) — Самолет 01 (9 шт.)",
+          "lots": 9
+        },
+        {
+          "amount_rub": -10086.9,
+          "balance_after_rub": 19410.42,
+          "bonds_count": 10,
+          "date": "2026-10-09",
+          "kind": "purchase",
+          "label": "Покупка 10 лот(а) — Россет1Р14 (10 шт.)",
+          "lots": 10
+        },
+        {
+          "amount_rub": -10114.2,
+          "balance_after_rub": 9296.22,
+          "bonds_count": 10,
+          "date": "2026-10-09",
+          "kind": "purchase",
+          "label": "Покупка 10 лот(а) — sГПБ005P1P (10 шт.)",
+          "lots": 10
+        },
+        {
+          "amount_rub": -9138.24,
+          "balance_after_rub": 157.98,
+          "bonds_count": 9,
+          "date": "2026-10-09",
+          "kind": "purchase",
+          "label": "Покупка 9 лот(а) — АЛЬФАБ2Р25 (9 шт.)",
+          "lots": 9
+        },
+        {
+          "amount_rub": 509.523288,
+          "balance_after_rub": 667.5,
+          "bonds_count": 48,
+          "date": "2026-10-18",
+          "kind": "coupon",
+          "label": "Купон по ДОМ 2P5 (48 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 48000.0,
+          "balance_after_rub": 48667.5,
+          "bonds_count": 48,
+          "date": "2026-10-18",
+          "kind": "maturity",
+          "label": "Погашение ДОМ 2P5 (48 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": -8062.08,
+          "balance_after_rub": 40605.42,
+          "bonds_count": 8,
+          "date": "2026-10-20",
+          "kind": "purchase",
+          "label": "Покупка 8 лот(а) — ОФЗ 29016 (8 шт.)",
+          "lots": 8
+        },
+        {
+          "amount_rub": -8004.64,
+          "balance_after_rub": 32600.78,
+          "bonds_count": 8,
+          "date": "2026-10-20",
+          "kind": "purchase",
+          "label": "Покупка 8 лот(а) — ВТБ Б1-346 (8 шт.)",
+          "lots": 8
+        },
+        {
+          "amount_rub": -8424.08,
+          "balance_after_rub": 24176.7,
+          "bonds_count": 8,
+          "date": "2026-10-20",
+          "kind": "purchase",
+          "label": "Покупка 8 лот(а) — Самолет 01 (8 шт.)",
+          "lots": 8
+        },
+        {
+          "amount_rub": -8091.36,
+          "balance_after_rub": 16085.34,
+          "bonds_count": 8,
+          "date": "2026-10-20",
+          "kind": "purchase",
+          "label": "Покупка 8 лот(а) — sГПБ005P1P (8 шт.)",
+          "lots": 8
+        },
+        {
+          "amount_rub": -8122.88,
+          "balance_after_rub": 7962.46,
+          "bonds_count": 8,
+          "date": "2026-10-20",
+          "kind": "purchase",
+          "label": "Покупка 8 лот(а) — АЛЬФАБ2Р25 (8 шт.)",
+          "lots": 8
+        },
+        {
+          "amount_rub": -7350.84,
+          "balance_after_rub": 611.62,
+          "bonds_count": 7,
+          "date": "2026-10-20",
+          "kind": "purchase",
+          "label": "Покупка 7 лот(а) — ПСБЛизП01 (7 шт.)",
+          "lots": 7
+        },
+        {
+          "amount_rub": -481.83,
+          "balance_after_rub": 129.79,
+          "bonds_count": 3,
+          "date": "2026-10-20",
+          "kind": "purchase",
+          "label": "Покупка 3 лот(а) — ИнтЛиз1Р07 (3 шт.)",
+          "lots": 3
+        },
+        {
+          "amount_rub": 11000.0,
+          "balance_after_rub": 11129.79,
+          "bonds_count": 11,
+          "date": "2026-10-22",
+          "kind": "maturity",
+          "label": "Погашение Россет1Р14 (11 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 1222.54137,
+          "balance_after_rub": 12352.33,
+          "bonds_count": 23,
+          "date": "2026-10-30",
+          "kind": "coupon",
+          "label": "Купон по Самолет 01 (23 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 117.945205,
+          "balance_after_rub": 12470.28,
+          "bonds_count": 7,
+          "date": "2026-10-30",
+          "kind": "coupon",
+          "label": "Купон по ПСБЛизП01 (7 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 23000.0,
+          "balance_after_rub": 35470.28,
+          "bonds_count": 23,
+          "date": "2026-10-30",
+          "kind": "maturity",
+          "label": "Погашение Самолет 01 (23 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 5.17611,
+          "balance_after_rub": 35475.46,
+          "bonds_count": 3,
+          "date": "2026-10-31",
+          "kind": "coupon",
+          "label": "Купон по ИнтЛиз1Р07 (3 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 479.9136,
+          "balance_after_rub": 35955.37,
+          "bonds_count": 3,
+          "date": "2026-10-31",
+          "kind": "maturity",
+          "label": "Погашение ИнтЛиз1Р07 (3 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": -6003.48,
+          "balance_after_rub": 29951.89,
+          "bonds_count": 6,
+          "date": "2026-11-01",
+          "kind": "purchase",
+          "label": "Покупка 6 лот(а) — ВТБ Б1-346 (6 шт.)",
+          "lots": 6
+        },
+        {
+          "amount_rub": -6046.56,
+          "balance_after_rub": 23905.33,
+          "bonds_count": 6,
+          "date": "2026-11-01",
+          "kind": "purchase",
+          "label": "Покупка 6 лот(а) — ОФЗ 29016 (6 шт.)",
+          "lots": 6
+        },
+        {
+          "amount_rub": -6068.52,
+          "balance_after_rub": 17836.81,
+          "bonds_count": 6,
+          "date": "2026-11-01",
+          "kind": "purchase",
+          "label": "Покупка 6 лот(а) — sГПБ005P1P (6 шт.)",
+          "lots": 6
+        },
+        {
+          "amount_rub": -6092.16,
+          "balance_after_rub": 11744.65,
+          "bonds_count": 6,
+          "date": "2026-11-01",
+          "kind": "purchase",
+          "label": "Покупка 6 лот(а) — АЛЬФАБ2Р25 (6 шт.)",
+          "lots": 6
+        },
+        {
+          "amount_rub": -5925.9,
+          "balance_after_rub": 5818.75,
+          "bonds_count": 6,
+          "date": "2026-11-01",
+          "kind": "purchase",
+          "label": "Покупка 6 лот(а) — ВЭБ1P-18 (6 шт.)",
+          "lots": 6
+        },
+        {
+          "amount_rub": -5250.6,
+          "balance_after_rub": 568.15,
+          "bonds_count": 5,
+          "date": "2026-11-01",
+          "kind": "purchase",
+          "label": "Покупка 5 лот(а) — ПСБЛизП01 (5 шт.)",
+          "lots": 5
+        },
+        {
+          "amount_rub": 635.151781,
+          "balance_after_rub": 1203.3,
+          "bonds_count": 64,
+          "date": "2026-11-02",
+          "kind": "coupon",
+          "label": "Купон по ВТБ Б1-346 (64 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 178.352022,
+          "balance_after_rub": 1381.65,
+          "bonds_count": 6,
+          "date": "2026-11-17",
+          "kind": "coupon",
+          "label": "Купон по ВЭБ1P-18 (6 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 5974.62,
+          "balance_after_rub": 7356.27,
+          "bonds_count": 6,
+          "date": "2026-11-17",
+          "kind": "maturity",
+          "label": "Погашение ВЭБ1P-18 (6 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 623.02589,
+          "balance_after_rub": 7979.3,
+          "bonds_count": 23,
+          "date": "2026-11-26",
+          "kind": "coupon",
+          "label": "Купон по АЛЬФАБ2Р25 (23 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 22992.962,
+          "balance_after_rub": 30972.26,
+          "bonds_count": 23,
+          "date": "2026-11-26",
+          "kind": "maturity",
+          "label": "Погашение АЛЬФАБ2Р25 (23 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 632.45589,
+          "balance_after_rub": 31604.72,
+          "bonds_count": 24,
+          "date": "2026-11-28",
+          "kind": "coupon",
+          "label": "Купон по sГПБ005P1P (24 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 23978.4,
+          "balance_after_rub": 55583.12,
+          "bonds_count": 24,
+          "date": "2026-11-28",
+          "kind": "maturity",
+          "label": "Погашение sГПБ005P1P (24 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": -16124.16,
+          "balance_after_rub": 39458.96,
+          "bonds_count": 16,
+          "date": "2026-11-28",
+          "kind": "purchase",
+          "label": "Покупка 16 лот(а) — ОФЗ 29016 (16 шт.)",
+          "lots": 16
+        },
+        {
+          "amount_rub": 202.191781,
+          "balance_after_rub": 39661.15,
+          "bonds_count": 12,
+          "date": "2026-11-29",
+          "kind": "coupon",
+          "label": "Купон по ПСБЛизП01 (12 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": 12000.0,
+          "balance_after_rub": 51661.15,
+          "bonds_count": 12,
+          "date": "2026-11-29",
+          "kind": "maturity",
+          "label": "Погашение ПСБЛизП01 (12 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": -15116.4,
+          "balance_after_rub": 36544.75,
+          "bonds_count": 15,
+          "date": "2026-11-30",
+          "kind": "purchase",
+          "label": "Покупка 15 лот(а) — ОФЗ 29016 (15 шт.)",
+          "lots": 15
+        },
+        {
+          "amount_rub": 63948.16,
+          "balance_after_rub": 100492.91,
+          "bonds_count": 64,
+          "date": "2026-12-01",
+          "kind": "maturity",
+          "label": "Погашение ВТБ Б1-346 (64 шт.)",
+          "lots": null
+        },
+        {
+          "amount_rub": -29225.04,
+          "balance_after_rub": 71267.87,
+          "bonds_count": 29,
+          "date": "2026-12-01",
+          "kind": "purchase",
+          "label": "Покупка 29 лот(а) — ОФЗ 29016 (29 шт.)",
+          "lots": 29
+        },
+        {
+          "amount_rub": -21162.96,
+          "balance_after_rub": 50104.91,
+          "bonds_count": 21,
+          "date": "2026-12-03",
+          "kind": "purchase",
+          "label": "Покупка 21 лот(а) — ОФЗ 29016 (21 шт.)",
+          "lots": 21
+        },
+        {
+          "amount_rub": 133000.0,
+          "balance_after_rub": 183104.91,
+          "bonds_count": 133,
+          "date": "2026-12-23",
+          "kind": "maturity",
+          "label": "Погашение ОФЗ 29016 (133 шт.)",
+          "lots": null
+        }
+      ],
+      "expected_xirr_pct": 4.13,
+      "final_cash_balance": 183104.91,
+      "final_portfolio_value": 183104.91,
+      "held_positions": [],
+      "initial_cash_rub": 80000.0,
+      "invested_capital_rub": 179649.12,
+      "notes": [
+        "Реинвест 6 августа: Распределено 97,572 ₽ из 97,614 ₽ по 8 бумагам. Остаток: 42 ₽.",
+        "Реинвест 9 августа: Распределено 17,287 ₽ из 17,331 ₽ по 5 бумагам. Остаток: 44 ₽.",
+        "Новотр 1Р4: на дату 27 августа не нашлось подходящей замены — Кэш не распределён: не удалось построить целевую структуру.. Деньги останутся в кэш-балансе.",
+        "27 августа: кэш 949 ₽ не распределён.",
+        "Реинвест 12 сентября: Распределено 39,211 ₽ из 39,309 ₽ по 7 бумагам. Остаток: 98 ₽.",
+        "Реинвест 18 сентября: Распределено 17,018 ₽ из 17,032 ₽ по 5 бумагам. Остаток: 14 ₽.",
+        "СамолетP20: на дату 30 сентября не нашлось подходящей замены — Кэш не распределён: не удалось построить целевую структуру.. Деньги останутся в кэш-балансе.",
+        "30 сентября: кэш 9,221 ₽ не распределён.",
+        "АБЗ-1 1Р05: на дату 2 октября не нашлось подходящей замены — Кэш не распределён: не удалось построить целевую структуру.. Деньги останутся в кэш-балансе.",
+        "2 октября: кэш 9,618 ₽ не распределён.",
+        "Реинвест 9 октября: Распределено 58,900 ₽ из 59,058 ₽ по 6 бумагам. Остаток: 158 ₽.",
+        "Реинвест 20 октября: Распределено 48,538 ₽ из 48,668 ₽ по 7 бумагам. Остаток: 130 ₽.",
+        "Россет1Р14: на дату 24 октября не нашлось подходящей замены — Кэш не распределён: не удалось построить целевую структуру.. Деньги останутся в кэш-балансе.",
+        "24 октября: кэш 11,130 ₽ не распределён.",
+        "Реинвест 1 ноября: Распределено 35,387 ₽ из 35,955 ₽ по 6 бумагам. Остаток: 568 ₽.",
+        "ИнтЛиз1Р07: на дату 2 ноября не нашлось подходящей замены — Кэш не распределён: не удалось построить целевую структуру.. Деньги останутся в кэш-балансе.",
+        "2 ноября: кэш 1,203 ₽ не распределён.",
+        "ВЭБ1P-18: на дату 19 ноября не нашлось подходящей замены — Кэш не распределён: не удалось построить целевую структуру.. Деньги останутся в кэш-балансе.",
+        "19 ноября: кэш 7,356 ₽ не распределён.",
+        "Реинвест 28 ноября: Распределено 16,124 ₽ из 55,583 ₽ по 1 бумагам. Остаток: 39,459 ₽.",
+        "Реинвест 30 ноября: Распределено 15,116 ₽ из 51,661 ₽ по 1 бумагам. Остаток: 36,545 ₽.",
+        "Реинвест 1 декабря: Распределено 29,225 ₽ из 100,493 ₽ по 1 бумагам. Остаток: 71,268 ₽.",
+        "Реинвест 3 декабря: Распределено 21,163 ₽ из 71,268 ₽ по 1 бумагам. Остаток: 50,105 ₽.",
+        "ОФЗ 29016: на дату 25 декабря не нашлось подходящей замены — Кэш не распределён: не удалось построить целевую структуру.. Деньги останутся в кэш-балансе.",
+        "25 декабря: кэш 183,105 ₽ не распределён."
+      ],
+      "slots": [
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A109U97",
+              "name": "ДОМ 2P5",
+              "score": 70.644227,
+              "ytm_net": 12.5624
+            },
+            {
+              "isin": "RU000A109KT4",
+              "name": "ТФинанс1P1",
+              "score": 70.471395,
+              "ytm_net": 14.3172
+            },
+            {
+              "isin": "RU000A0ZZYW2",
+              "name": "ОФЗ 26226",
+              "score": 70.219298,
+              "ytm_net": 11.9392
+            },
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 69.369995,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A0JWM07",
+              "name": "ОФЗ 26219",
+              "score": 66.50949,
+              "ytm_net": 11.5702
+            },
+            {
+              "isin": "RU000A10CZA1",
+              "name": "СамолетP20",
+              "score": 63.969897,
+              "ytm_net": 22.1728
+            },
+            {
+              "isin": "RU000A0JWYJ0",
+              "name": "Самолет 01",
+              "score": 63.604355,
+              "ytm_net": 23.2716
+            },
+            {
+              "isin": "RU000A109K40",
+              "name": "ФосАгро П2",
+              "score": 62.199809,
+              "ytm_net": 12.8002
+            },
+            {
+              "isin": "RU000A106TM6",
+              "name": "ВТБ Б1-343",
+              "score": 60.336918,
+              "ytm_net": 14.6042
+            },
+            {
+              "isin": "RU000A106EZ0",
+              "name": "ВИС Ф БП04",
+              "score": 58.847852,
+              "ytm_net": 14.6206
+            },
+            {
+              "isin": "RU000A109ZQ8",
+              "name": "Россет1Р14",
+              "score": 56.067251,
+              "ytm_net": 13.2512
+            },
+            {
+              "isin": "RU000A1057P8",
+              "name": "РусГидрБП6",
+              "score": 55.994152,
+              "ytm_net": 13.2348
+            },
+            {
+              "isin": "RU000A10B487",
+              "name": "ДелПорт1P4",
+              "score": 55.878655,
+              "ytm_net": 14.555
+            },
+            {
+              "isin": "RU000A103QK3",
+              "name": "МэйлБ1Р1",
+              "score": 54.673966,
+              "ytm_net": 13.7432
+            },
+            {
+              "isin": "RU000A1075S4",
+              "name": "ИКС5Фин3P2",
+              "score": 53.159745,
+              "ytm_net": 12.8904
+            },
+            {
+              "isin": "RU000A106SP1",
+              "name": "Новотр 1Р4",
+              "score": 53.013158,
+              "ytm_net": 14.473
+            },
+            {
+              "isin": "RU000A10B0A2",
+              "name": "Магнит5P03",
+              "score": 52.80507,
+              "ytm_net": 13.5956
+            },
+            {
+              "isin": "RU000A10B420",
+              "name": "ЧеркизБ1P8",
+              "score": 50.203216,
+              "ytm_net": 12.833
+            },
+            {
+              "isin": "RU000A107A28",
+              "name": "sГПБ005P1P",
+              "score": 48.895487,
+              "ytm_net": 12.1852
+            },
+            {
+              "isin": "RU000A107AM4",
+              "name": "АЛЬФАБ2Р25",
+              "score": 48.0,
+              "ytm_net": 11.8162
+            },
+            {
+              "isin": "RU000A10B3T6",
+              "name": "ИЭКХолд1Р3",
+              "score": 46.574765,
+              "ytm_net": 16.2524
+            },
+            {
+              "isin": "RU000A109VM6",
+              "name": "КАМАЗ БП13",
+              "score": 46.325607,
+              "ytm_net": 15.9736
+            },
+            {
+              "isin": "RU000A1070X5",
+              "name": "АБЗ-1 1Р05",
+              "score": 44.795322,
+              "ytm_net": 14.0876
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            },
+            {
+              "isin": "RU000A103PX8",
+              "name": "ЛСР БО 1Р7",
+              "score": 43.589181,
+              "ytm_net": 13.817
+            },
+            {
+              "isin": "RU000A106SF2",
+              "name": "ИнтЛиз1Р06",
+              "score": 43.128655,
+              "ytm_net": 15.9572
+            },
+            {
+              "isin": "RU000A10AXH5",
+              "name": "Магнит5P02",
+              "score": 43.012275,
+              "ytm_net": 11.3324
+            },
+            {
+              "isin": "RU000A107456",
+              "name": "МТС-Банк03",
+              "score": 41.413312,
+              "ytm_net": 14.2024
+            },
+            {
+              "isin": "RU000A10B3Y6",
+              "name": "ВсИнстр1Р6",
+              "score": 39.634503,
+              "ytm_net": 14.6124
+            }
+          ],
+          "expected_cash_rub": 97613.53411,
+          "failure_reason": null,
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A10AU73",
+          "status": "ok",
+          "suggested_isin": "RU000A0JWM07",
+          "suggested_name": "ОФЗ 26219",
+          "trigger_date": "2026-08-04",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A109U97",
+              "name": "ДОМ 2P5",
+              "score": 70.644227,
+              "ytm_net": 12.5624
+            },
+            {
+              "isin": "RU000A109KT4",
+              "name": "ТФинанс1P1",
+              "score": 70.471395,
+              "ytm_net": 14.3172
+            },
+            {
+              "isin": "RU000A0ZZYW2",
+              "name": "ОФЗ 26226",
+              "score": 70.219298,
+              "ytm_net": 11.9392
+            },
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 69.369995,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A0JWM07",
+              "name": "ОФЗ 26219",
+              "score": 66.50949,
+              "ytm_net": 11.5702
+            },
+            {
+              "isin": "RU000A10CZA1",
+              "name": "СамолетP20",
+              "score": 63.969897,
+              "ytm_net": 22.1728
+            },
+            {
+              "isin": "RU000A0JWYJ0",
+              "name": "Самолет 01",
+              "score": 63.604355,
+              "ytm_net": 23.2716
+            },
+            {
+              "isin": "RU000A109K40",
+              "name": "ФосАгро П2",
+              "score": 62.199809,
+              "ytm_net": 12.8002
+            },
+            {
+              "isin": "RU000A106TM6",
+              "name": "ВТБ Б1-343",
+              "score": 60.336918,
+              "ytm_net": 14.6042
+            },
+            {
+              "isin": "RU000A106EZ0",
+              "name": "ВИС Ф БП04",
+              "score": 58.847852,
+              "ytm_net": 14.6206
+            },
+            {
+              "isin": "RU000A109ZQ8",
+              "name": "Россет1Р14",
+              "score": 56.067251,
+              "ytm_net": 13.2512
+            },
+            {
+              "isin": "RU000A1057P8",
+              "name": "РусГидрБП6",
+              "score": 55.994152,
+              "ytm_net": 13.2348
+            },
+            {
+              "isin": "RU000A10B487",
+              "name": "ДелПорт1P4",
+              "score": 55.878655,
+              "ytm_net": 14.555
+            },
+            {
+              "isin": "RU000A103QK3",
+              "name": "МэйлБ1Р1",
+              "score": 54.673966,
+              "ytm_net": 13.7432
+            },
+            {
+              "isin": "RU000A1075S4",
+              "name": "ИКС5Фин3P2",
+              "score": 53.159745,
+              "ytm_net": 12.8904
+            },
+            {
+              "isin": "RU000A106SP1",
+              "name": "Новотр 1Р4",
+              "score": 53.013158,
+              "ytm_net": 14.473
+            },
+            {
+              "isin": "RU000A10B0A2",
+              "name": "Магнит5P03",
+              "score": 52.80507,
+              "ytm_net": 13.5956
+            },
+            {
+              "isin": "RU000A10B420",
+              "name": "ЧеркизБ1P8",
+              "score": 50.203216,
+              "ytm_net": 12.833
+            },
+            {
+              "isin": "RU000A107A28",
+              "name": "sГПБ005P1P",
+              "score": 48.895487,
+              "ytm_net": 12.1852
+            },
+            {
+              "isin": "RU000A107AM4",
+              "name": "АЛЬФАБ2Р25",
+              "score": 48.0,
+              "ytm_net": 11.8162
+            },
+            {
+              "isin": "RU000A10B3T6",
+              "name": "ИЭКХолд1Р3",
+              "score": 46.574765,
+              "ytm_net": 16.2524
+            },
+            {
+              "isin": "RU000A109VM6",
+              "name": "КАМАЗ БП13",
+              "score": 46.325607,
+              "ytm_net": 15.9736
+            },
+            {
+              "isin": "RU000A1070X5",
+              "name": "АБЗ-1 1Р05",
+              "score": 44.795322,
+              "ytm_net": 14.0876
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            },
+            {
+              "isin": "RU000A103PX8",
+              "name": "ЛСР БО 1Р7",
+              "score": 43.589181,
+              "ytm_net": 13.817
+            },
+            {
+              "isin": "RU000A106SF2",
+              "name": "ИнтЛиз1Р06",
+              "score": 43.128655,
+              "ytm_net": 15.9572
+            },
+            {
+              "isin": "RU000A10AXH5",
+              "name": "Магнит5P02",
+              "score": 43.012275,
+              "ytm_net": 11.3324
+            },
+            {
+              "isin": "RU000A107456",
+              "name": "МТС-Банк03",
+              "score": 41.413312,
+              "ytm_net": 14.2024
+            },
+            {
+              "isin": "RU000A10B3Y6",
+              "name": "ВсИнстр1Р6",
+              "score": 39.634503,
+              "ytm_net": 14.6124
+            }
+          ],
+          "expected_cash_rub": 17331.006849,
+          "failure_reason": null,
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A10AV15",
+          "status": "ok",
+          "suggested_isin": "RU000A109U97",
+          "suggested_name": "ДОМ 2P5",
+          "trigger_date": "2026-08-07",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A1070X5",
+              "name": "АБЗ-1 1Р05",
+              "score": 59.158654,
+              "ytm_net": 14.0876
+            },
+            {
+              "isin": "RU000A103PX8",
+              "name": "ЛСР БО 1Р7",
+              "score": 56.183894,
+              "ytm_net": 13.817
+            },
+            {
+              "isin": "RU000A1077X0",
+              "name": "ИнтЛиз1Р07",
+              "score": 55.0,
+              "ytm_net": 14.678
+            }
+          ],
+          "expected_cash_rub": 948.931233,
+          "failure_reason": "пробовали «normal» и любую без дефолта: в окне [6 сентября, 1 января 2027] есть 34 подходящих по сроку и бюджету бумаг(и), но выбрать не удалось",
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A106SP1",
+          "status": "no_candidate",
+          "suggested_isin": null,
+          "suggested_name": null,
+          "trigger_date": "2026-08-25",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A0ZZYW2",
+              "name": "ОФЗ 26226",
+              "score": 70.140537,
+              "ytm_net": 11.9392
+            },
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A109U97",
+              "name": "ДОМ 2P5",
+              "score": 69.567826,
+              "ytm_net": 12.5624
+            },
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 66.613357,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A0JWYJ0",
+              "name": "Самолет 01",
+              "score": 63.604355,
+              "ytm_net": 23.2716
+            },
+            {
+              "isin": "RU000A10CZA1",
+              "name": "СамолетP20",
+              "score": 63.342165,
+              "ytm_net": 22.1728
+            },
+            {
+              "isin": "RU000A109ZQ8",
+              "name": "Россет1Р14",
+              "score": 53.888195,
+              "ytm_net": 13.2512
+            },
+            {
+              "isin": "RU000A1075S4",
+              "name": "ИКС5Фин3P2",
+              "score": 51.558269,
+              "ytm_net": 12.8904
+            },
+            {
+              "isin": "RU000A107A28",
+              "name": "sГПБ005P1P",
+              "score": 48.422921,
+              "ytm_net": 12.1852
+            },
+            {
+              "isin": "RU000A107AM4",
+              "name": "АЛЬФАБ2Р25",
+              "score": 48.0,
+              "ytm_net": 11.8162
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            },
+            {
+              "isin": "RU000A1070X5",
+              "name": "АБЗ-1 1Р05",
+              "score": 41.277327,
+              "ytm_net": 14.0876
+            },
+            {
+              "isin": "RU000A109VM6",
+              "name": "КАМАЗ БП13",
+              "score": 39.788437,
+              "ytm_net": 15.9736
+            },
+            {
+              "isin": "RU000A1013P1",
+              "name": "ВЭБ1P-18",
+              "score": 38.507183,
+              "ytm_net": 12.2426
+            },
+            {
+              "isin": "RU000A107456",
+              "name": "МТС-Банк03",
+              "score": 37.711542,
+              "ytm_net": 14.2024
+            },
+            {
+              "isin": "RU000A1077X0",
+              "name": "ИнтЛиз1Р07",
+              "score": 32.963773,
+              "ytm_net": 14.678
+            },
+            {
+              "isin": "RU000A1070L0",
+              "name": "ЯТЭК 1P-3",
+              "score": 32.454251,
+              "ytm_net": 13.8826
+            },
+            {
+              "isin": "RU000A0JWYQ5",
+              "name": "СистемБ1P4",
+              "score": 25.468457,
+              "ytm_net": 12.054
+            }
+          ],
+          "expected_cash_rub": 39309.321233,
+          "failure_reason": null,
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A109KT4",
+          "status": "ok",
+          "suggested_isin": "RU000A1025B5",
+          "suggested_name": "ОФЗ 29016",
+          "trigger_date": "2026-09-10",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A0ZZYW2",
+              "name": "ОФЗ 26226",
+              "score": 70.140537,
+              "ytm_net": 11.9392
+            },
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A109U97",
+              "name": "ДОМ 2P5",
+              "score": 69.567826,
+              "ytm_net": 12.5624
+            },
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 66.613357,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A0JWYJ0",
+              "name": "Самолет 01",
+              "score": 63.604355,
+              "ytm_net": 23.2716
+            },
+            {
+              "isin": "RU000A10CZA1",
+              "name": "СамолетP20",
+              "score": 63.342165,
+              "ytm_net": 22.1728
+            },
+            {
+              "isin": "RU000A109ZQ8",
+              "name": "Россет1Р14",
+              "score": 53.888195,
+              "ytm_net": 13.2512
+            },
+            {
+              "isin": "RU000A1075S4",
+              "name": "ИКС5Фин3P2",
+              "score": 51.558269,
+              "ytm_net": 12.8904
+            },
+            {
+              "isin": "RU000A107A28",
+              "name": "sГПБ005P1P",
+              "score": 48.422921,
+              "ytm_net": 12.1852
+            },
+            {
+              "isin": "RU000A107AM4",
+              "name": "АЛЬФАБ2Р25",
+              "score": 48.0,
+              "ytm_net": 11.8162
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            },
+            {
+              "isin": "RU000A1070X5",
+              "name": "АБЗ-1 1Р05",
+              "score": 41.277327,
+              "ytm_net": 14.0876
+            },
+            {
+              "isin": "RU000A109VM6",
+              "name": "КАМАЗ БП13",
+              "score": 39.788437,
+              "ytm_net": 15.9736
+            },
+            {
+              "isin": "RU000A1013P1",
+              "name": "ВЭБ1P-18",
+              "score": 38.507183,
+              "ytm_net": 12.2426
+            },
+            {
+              "isin": "RU000A107456",
+              "name": "МТС-Банк03",
+              "score": 37.711542,
+              "ytm_net": 14.2024
+            },
+            {
+              "isin": "RU000A1077X0",
+              "name": "ИнтЛиз1Р07",
+              "score": 32.963773,
+              "ytm_net": 14.678
+            },
+            {
+              "isin": "RU000A1070L0",
+              "name": "ЯТЭК 1P-3",
+              "score": 32.454251,
+              "ytm_net": 13.8826
+            },
+            {
+              "isin": "RU000A0JWYQ5",
+              "name": "СистемБ1P4",
+              "score": 25.468457,
+              "ytm_net": 12.054
+            }
+          ],
+          "expected_cash_rub": 17032.136701,
+          "failure_reason": null,
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A0JWM07",
+          "status": "ok",
+          "suggested_isin": "RU000A109U97",
+          "suggested_name": "ДОМ 2P5",
+          "trigger_date": "2026-09-16",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A109U97",
+              "name": "ДОМ 2P5",
+              "score": 70.527713,
+              "ytm_net": 12.5624
+            },
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 69.071605,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A0JWYJ0",
+              "name": "Самолет 01",
+              "score": 63.604355,
+              "ytm_net": 23.2716
+            },
+            {
+              "isin": "RU000A109ZQ8",
+              "name": "Россет1Р14",
+              "score": 55.831382,
+              "ytm_net": 13.2512
+            },
+            {
+              "isin": "RU000A1075S4",
+              "name": "ИКС5Фин3P2",
+              "score": 52.986395,
+              "ytm_net": 12.8904
+            },
+            {
+              "isin": "RU000A107A28",
+              "name": "sГПБ005P1P",
+              "score": 48.844335,
+              "ytm_net": 12.1852
+            },
+            {
+              "isin": "RU000A107AM4",
+              "name": "АЛЬФАБ2Р25",
+              "score": 48.0,
+              "ytm_net": 11.8162
+            },
+            {
+              "isin": "RU000A109VM6",
+              "name": "КАМАЗ БП13",
+              "score": 45.617998,
+              "ytm_net": 15.9736
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            },
+            {
+              "isin": "RU000A107456",
+              "name": "МТС-Банк03",
+              "score": 41.012618,
+              "ytm_net": 14.2024
+            },
+            {
+              "isin": "RU000A1013P1",
+              "name": "ВЭБ1P-18",
+              "score": 39.010539,
+              "ytm_net": 12.2426
+            },
+            {
+              "isin": "RU000A1077X0",
+              "name": "ИнтЛиз1Р07",
+              "score": 36.943794,
+              "ytm_net": 14.678
+            },
+            {
+              "isin": "RU000A0JWYQ5",
+              "name": "СистемБ1P4",
+              "score": 25.702576,
+              "ytm_net": 12.054
+            }
+          ],
+          "expected_cash_rub": 9220.575636,
+          "failure_reason": "пробовали «normal» и любую без дефолта: в окне [10 октября, 1 января 2027] есть 88 подходящих по сроку и бюджету бумаг(и), но выбрать не удалось",
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A10CZA1",
+          "status": "no_candidate",
+          "suggested_isin": null,
+          "suggested_name": null,
+          "trigger_date": "2026-09-28",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A109U97",
+              "name": "ДОМ 2P5",
+              "score": 70.527713,
+              "ytm_net": 12.5624
+            },
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 69.071605,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A0JWYJ0",
+              "name": "Самолет 01",
+              "score": 63.604355,
+              "ytm_net": 23.2716
+            },
+            {
+              "isin": "RU000A109ZQ8",
+              "name": "Россет1Р14",
+              "score": 55.831382,
+              "ytm_net": 13.2512
+            },
+            {
+              "isin": "RU000A1075S4",
+              "name": "ИКС5Фин3P2",
+              "score": 52.986395,
+              "ytm_net": 12.8904
+            },
+            {
+              "isin": "RU000A107A28",
+              "name": "sГПБ005P1P",
+              "score": 48.844335,
+              "ytm_net": 12.1852
+            },
+            {
+              "isin": "RU000A107AM4",
+              "name": "АЛЬФАБ2Р25",
+              "score": 48.0,
+              "ytm_net": 11.8162
+            },
+            {
+              "isin": "RU000A109VM6",
+              "name": "КАМАЗ БП13",
+              "score": 45.617998,
+              "ytm_net": 15.9736
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            },
+            {
+              "isin": "RU000A107456",
+              "name": "МТС-Банк03",
+              "score": 41.012618,
+              "ytm_net": 14.2024
+            },
+            {
+              "isin": "RU000A1013P1",
+              "name": "ВЭБ1P-18",
+              "score": 39.010539,
+              "ytm_net": 12.2426
+            },
+            {
+              "isin": "RU000A1077X0",
+              "name": "ИнтЛиз1Р07",
+              "score": 36.943794,
+              "ytm_net": 14.678
+            },
+            {
+              "isin": "RU000A0JWYQ5",
+              "name": "СистемБ1P4",
+              "score": 25.702576,
+              "ytm_net": 12.054
+            }
+          ],
+          "expected_cash_rub": 9617.545499,
+          "failure_reason": "пробовали «normal» и любую без дефолта: в окне [12 октября, 1 января 2027] есть 88 подходящих по сроку и бюджету бумаг(и), но выбрать не удалось",
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A1070X5",
+          "status": "no_candidate",
+          "suggested_isin": null,
+          "suggested_name": null,
+          "trigger_date": "2026-09-30",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 68.569283,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A0JWYJ0",
+              "name": "Самолет 01",
+              "score": 63.604355,
+              "ytm_net": 23.2716
+            },
+            {
+              "isin": "RU000A109ZQ8",
+              "name": "Россет1Р14",
+              "score": 55.434308,
+              "ytm_net": 13.2512
+            },
+            {
+              "isin": "RU000A107A28",
+              "name": "sГПБ005P1P",
+              "score": 48.758222,
+              "ytm_net": 12.1852
+            },
+            {
+              "isin": "RU000A107AM4",
+              "name": "АЛЬФАБ2Р25",
+              "score": 48.0,
+              "ytm_net": 11.8162
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            },
+            {
+              "isin": "RU000A107456",
+              "name": "МТС-Банк03",
+              "score": 40.338071,
+              "ytm_net": 14.2024
+            },
+            {
+              "isin": "RU000A1013P1",
+              "name": "ВЭБ1P-18",
+              "score": 38.907682,
+              "ytm_net": 12.2426
+            },
+            {
+              "isin": "RU000A1077X0",
+              "name": "ИнтЛиз1Р07",
+              "score": 36.130511,
+              "ytm_net": 14.678
+            },
+            {
+              "isin": "RU000A0JWYQ5",
+              "name": "СистемБ1P4",
+              "score": 25.654736,
+              "ytm_net": 12.054
+            }
+          ],
+          "expected_cash_rub": 59057.809433,
+          "failure_reason": null,
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A0ZZYW2",
+          "status": "ok",
+          "suggested_isin": "RU000A107A28",
+          "suggested_name": "sГПБ005P1P",
+          "trigger_date": "2026-10-07",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 67.863769,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A0JWYJ0",
+              "name": "Самолет 01",
+              "score": 63.604355,
+              "ytm_net": 23.2716
+            },
+            {
+              "isin": "RU000A107A28",
+              "name": "sГПБ005P1P",
+              "score": 48.637277,
+              "ytm_net": 12.1852
+            },
+            {
+              "isin": "RU000A107AM4",
+              "name": "АЛЬФАБ2Р25",
+              "score": 48.0,
+              "ytm_net": 11.8162
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            },
+            {
+              "isin": "RU000A1013P1",
+              "name": "ВЭБ1P-18",
+              "score": 38.76322,
+              "ytm_net": 12.2426
+            },
+            {
+              "isin": "RU000A1077X0",
+              "name": "ИнтЛиз1Р07",
+              "score": 34.988249,
+              "ytm_net": 14.678
+            },
+            {
+              "isin": "RU000A0JWYQ5",
+              "name": "СистемБ1P4",
+              "score": 25.587544,
+              "ytm_net": 12.054
+            }
+          ],
+          "expected_cash_rub": 48667.502721,
+          "failure_reason": null,
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A109U97",
+          "status": "ok",
+          "suggested_isin": "RU000A0JWYJ0",
+          "suggested_name": "Самолет 01",
+          "trigger_date": "2026-10-18",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 91.694556,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A107A28",
+              "name": "sГПБ005P1P",
+              "score": 53.695213,
+              "ytm_net": 12.1852
+            },
+            {
+              "isin": "RU000A107AM4",
+              "name": "АЛЬФАБ2Р25",
+              "score": 48.0,
+              "ytm_net": 11.8162
+            },
+            {
+              "isin": "RU000A1013P1",
+              "name": "ВЭБ1P-18",
+              "score": 44.804643,
+              "ytm_net": 12.2426
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            }
+          ],
+          "expected_cash_rub": 11129.792721,
+          "failure_reason": "пробовали «normal» и любую без дефолта: в окне [3 ноября, 1 января 2027] есть 65 подходящих по сроку и бюджету бумаг(и), но выбрать не удалось",
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A109ZQ8",
+          "status": "no_candidate",
+          "suggested_isin": null,
+          "suggested_name": null,
+          "trigger_date": "2026-10-22",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 91.694556,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A107A28",
+              "name": "sГПБ005P1P",
+              "score": 53.695213,
+              "ytm_net": 12.1852
+            },
+            {
+              "isin": "RU000A107AM4",
+              "name": "АЛЬФАБ2Р25",
+              "score": 48.0,
+              "ytm_net": 11.8162
+            },
+            {
+              "isin": "RU000A1013P1",
+              "name": "ВЭБ1P-18",
+              "score": 44.804643,
+              "ytm_net": 12.2426
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            }
+          ],
+          "expected_cash_rub": 35955.369005,
+          "failure_reason": null,
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A0JWYJ0",
+          "status": "ok",
+          "suggested_isin": "RU000A107AM4",
+          "suggested_name": "АЛЬФАБ2Р25",
+          "trigger_date": "2026-10-30",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 91.694556,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A107A28",
+              "name": "sГПБ005P1P",
+              "score": 53.695213,
+              "ytm_net": 12.1852
+            },
+            {
+              "isin": "RU000A107AM4",
+              "name": "АЛЬФАБ2Р25",
+              "score": 48.0,
+              "ytm_net": 11.8162
+            },
+            {
+              "isin": "RU000A1013P1",
+              "name": "ВЭБ1P-18",
+              "score": 44.804643,
+              "ytm_net": 12.2426
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            }
+          ],
+          "expected_cash_rub": 1203.300786,
+          "failure_reason": "пробовали «normal» и любую без дефолта: в окне [12 ноября, 1 января 2027] есть 56 подходящих по сроку и бюджету бумаг(и), но выбрать не удалось",
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A1077X0",
+          "status": "no_candidate",
+          "suggested_isin": null,
+          "suggested_name": null,
+          "trigger_date": "2026-10-31",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A107B35",
+              "name": "ВТБ Б1-346",
+              "score": 91.694556,
+              "ytm_net": 13.612
+            },
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            },
+            {
+              "isin": "RU000A10AA10",
+              "name": "ПСБЛизП01",
+              "score": 43.931313,
+              "ytm_net": 11.8408
+            }
+          ],
+          "expected_cash_rub": 7356.272808,
+          "failure_reason": "пробовали «normal» и любую без дефолта: в окне [29 ноября, 1 января 2027] есть 38 подходящих по сроку и бюджету бумаг(и), но выбрать не удалось",
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A1013P1",
+          "status": "no_candidate",
+          "suggested_isin": null,
+          "suggested_name": null,
+          "trigger_date": "2026-11-17",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            }
+          ],
+          "expected_cash_rub": 55583.116589,
+          "failure_reason": null,
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A107AM4",
+          "status": "ok",
+          "suggested_isin": "RU000A1025B5",
+          "suggested_name": "ОФЗ 29016",
+          "trigger_date": "2026-11-26",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            }
+          ],
+          "expected_cash_rub": 51661.14837,
+          "failure_reason": null,
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A107A28",
+          "status": "ok",
+          "suggested_isin": "RU000A1025B5",
+          "suggested_name": "ОФЗ 29016",
+          "trigger_date": "2026-11-28",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            }
+          ],
+          "expected_cash_rub": 100492.90837,
+          "failure_reason": null,
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A10AA10",
+          "status": "ok",
+          "suggested_isin": "RU000A1025B5",
+          "suggested_name": "ОФЗ 29016",
+          "trigger_date": "2026-11-29",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [
+            {
+              "isin": "RU000A1025B5",
+              "name": "ОФЗ 29016",
+              "score": 70.0,
+              "ytm_net": null
+            }
+          ],
+          "expected_cash_rub": 71267.86837,
+          "failure_reason": null,
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A107B35",
+          "status": "ok",
+          "suggested_isin": "RU000A1025B5",
+          "suggested_name": "ОФЗ 29016",
+          "trigger_date": "2026-12-01",
+          "trigger_reason": "maturity"
+        },
+        {
+          "confirmed_isin": null,
+          "eligible_candidates": [],
+          "expected_cash_rub": 183104.90837,
+          "failure_reason": "окно реинвестиции слишком узкое — покупка с 25 декабря, но мин. срок удержания 10 дн. → погашение замены не ранее 4 января 2027, а горизонт плана 1 января 2027",
+          "gap_days": 2,
+          "selection_mode": "strategy",
+          "source_position_isin": "RU000A1025B5",
+          "status": "no_candidate",
+          "suggested_isin": null,
+          "suggested_name": null,
+          "trigger_date": "2026-12-23",
+          "trigger_reason": "maturity"
+        }
+      ],
+      "total_invested_rub": 495190.79,
+      "total_net_profit_rub": 3455.79,
+      "total_net_profit_with_held_rub": 3455.79,
+      "upcoming_put_offers": [],
+      "value_timeline": [
+        {
+          "cash_rub": 80000.0,
+          "date": "2026-07-13",
+          "positions_value_rub": 99649.12,
+          "total_value_rub": 179649.12
+        },
+        {
+          "cash_rub": 80169.84,
+          "date": "2026-07-20",
+          "positions_value_rub": 99532.0,
+          "total_value_rub": 179701.84
+        },
+        {
+          "cash_rub": 80338.55,
+          "date": "2026-08-01",
+          "positions_value_rub": 99331.23,
+          "total_value_rub": 179669.78
+        },
+        {
+          "cash_rub": 97613.53,
+          "date": "2026-08-04",
+          "positions_value_rub": 82281.03,
+          "total_value_rub": 179894.57
+        },
+        {
+          "cash_rub": 41.7,
+          "date": "2026-08-06",
+          "positions_value_rub": 179833.8,
+          "total_value_rub": 179875.51
+        },
+        {
+          "cash_rub": 17331.01,
+          "date": "2026-08-07",
+          "positions_value_rub": 162811.79,
+          "total_value_rub": 180142.79
+        },
+        {
+          "cash_rub": 44.1,
+          "date": "2026-08-09",
+          "positions_value_rub": 180065.88,
+          "total_value_rub": 180109.98
+        },
+        {
+          "cash_rub": 436.86,
+          "date": "2026-08-19",
+          "positions_value_rub": 179883.17,
+          "total_value_rub": 180320.03
+        },
+        {
+          "cash_rub": 948.93,
+          "date": "2026-08-25",
+          "positions_value_rub": 179273.55,
+          "total_value_rub": 180222.48
+        },
+        {
+          "cash_rub": 977.58,
+          "date": "2026-08-29",
+          "positions_value_rub": 179201.67,
+          "total_value_rub": 180179.24
+        },
+        {
+          "cash_rub": 981.82,
+          "date": "2026-08-31",
+          "positions_value_rub": 179165.73,
+          "total_value_rub": 180147.55
+        },
+        {
+          "cash_rub": 1309.32,
+          "date": "2026-09-01",
+          "positions_value_rub": 179147.76,
+          "total_value_rub": 180457.08
+        },
+        {
+          "cash_rub": 39309.32,
+          "date": "2026-09-10",
+          "positions_value_rub": 140986.03,
+          "total_value_rub": 180295.36
+        },
+        {
+          "cash_rub": 97.97,
+          "date": "2026-09-12",
+          "positions_value_rub": 180164.56,
+          "total_value_rub": 180262.54
+        },
+        {
+          "cash_rub": 16575.69,
+          "date": "2026-09-16",
+          "positions_value_rub": 164051.39,
+          "total_value_rub": 180627.08
+        },
+        {
+          "cash_rub": 13.87,
+          "date": "2026-09-18",
+          "positions_value_rub": 181024.68,
+          "total_value_rub": 181038.55
+        },
+        {
+          "cash_rub": 7106.69,
+          "date": "2026-09-28",
+          "positions_value_rub": 173756.16,
+          "total_value_rub": 180862.85
+        },
+        {
+          "cash_rub": 9220.58,
+          "date": "2026-09-30",
+          "positions_value_rub": 171604.04,
+          "total_value_rub": 180824.61
+        },
+        {
+          "cash_rub": 9617.55,
+          "date": "2026-10-02",
+          "positions_value_rub": 171550.89,
+          "total_value_rub": 181168.43
+        },
+        {
+          "cash_rub": 59057.81,
+          "date": "2026-10-07",
+          "positions_value_rub": 123418.0,
+          "total_value_rub": 182475.81
+        },
+        {
+          "cash_rub": 157.98,
+          "date": "2026-10-09",
+          "positions_value_rub": 182280.04,
+          "total_value_rub": 182438.02
+        },
+        {
+          "cash_rub": 48667.5,
+          "date": "2026-10-18",
+          "positions_value_rub": 133788.54,
+          "total_value_rub": 182456.05
+        },
+        {
+          "cash_rub": 129.79,
+          "date": "2026-10-20",
+          "positions_value_rub": 182237.01,
+          "total_value_rub": 182366.8
+        },
+        {
+          "cash_rub": 11129.79,
+          "date": "2026-10-22",
+          "positions_value_rub": 171031.58,
+          "total_value_rub": 182161.37
+        },
+        {
+          "cash_rub": 35470.28,
+          "date": "2026-10-30",
+          "positions_value_rub": 147265.4,
+          "total_value_rub": 182735.68
+        },
+        {
+          "cash_rub": 35955.37,
+          "date": "2026-10-31",
+          "positions_value_rub": 146761.38,
+          "total_value_rub": 182716.75
+        },
+        {
+          "cash_rub": 568.15,
+          "date": "2026-11-01",
+          "positions_value_rub": 182124.75,
+          "total_value_rub": 182692.9
+        },
+        {
+          "cash_rub": 1203.3,
+          "date": "2026-11-02",
+          "positions_value_rub": 182089.34,
+          "total_value_rub": 183292.64
+        },
+        {
+          "cash_rub": 7356.27,
+          "date": "2026-11-17",
+          "positions_value_rub": 175558.23,
+          "total_value_rub": 182914.5
+        },
+        {
+          "cash_rub": 30972.26,
+          "date": "2026-11-26",
+          "positions_value_rub": 152197.88,
+          "total_value_rub": 183170.14
+        },
+        {
+          "cash_rub": 39458.96,
+          "date": "2026-11-28",
+          "positions_value_rub": 144261.74,
+          "total_value_rub": 183720.7
+        },
+        {
+          "cash_rub": 51661.15,
+          "date": "2026-11-29",
+          "positions_value_rub": 132233.79,
+          "total_value_rub": 183894.93
+        },
+        {
+          "cash_rub": 36544.75,
+          "date": "2026-11-30",
+          "positions_value_rub": 147339.95,
+          "total_value_rub": 183884.7
+        },
+        {
+          "cash_rub": 71267.87,
+          "date": "2026-12-01",
+          "positions_value_rub": 112549.7,
+          "total_value_rub": 183817.57
+        },
+        {
+          "cash_rub": 50104.91,
+          "date": "2026-12-03",
+          "positions_value_rub": 133662.69,
+          "total_value_rub": 183767.6
+        },
+        {
+          "cash_rub": 183104.91,
+          "date": "2026-12-23",
+          "positions_value_rub": 0.0,
+          "total_value_rub": 183104.91
+        },
+        {
+          "cash_rub": 183104.91,
+          "date": "2027-01-01",
+          "positions_value_rub": 0.0,
+          "total_value_rub": 183104.91
+        }
+      ],
+      "weighted_duration_years": 0.06
+    }
+  }
+}

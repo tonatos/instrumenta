@@ -1,0 +1,28 @@
+{
+  "status": 200,
+  "body": {
+    "portfolio_yield_pct": 1.94,
+    "results": [
+      {
+        "coupon_income_rub": 2695.1,
+        "hold_days": 15,
+        "invested_rub": 49111.24,
+        "lots": 47,
+        "name": "ЖКХРСЯ БО1",
+        "profit_rub": 583.86,
+        "secid": "RU000A100PB0"
+      },
+      {
+        "coupon_income_rub": 0.0,
+        "hold_days": 87,
+        "invested_rub": 49663.29,
+        "lots": 51,
+        "name": "iКарРус1P4",
+        "profit_rub": 1336.71,
+        "secid": "RU000A109TG2"
+      }
+    ],
+    "total_invested_rub": 98774.53,
+    "total_profit_rub": 1920.57
+  }
+}

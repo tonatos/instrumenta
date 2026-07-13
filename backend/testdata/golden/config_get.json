@@ -1,0 +1,14 @@
+{
+  "status": 200,
+  "body": {
+    "auth_enabled": false,
+    "key_rate": 14.5,
+    "max_days": 120,
+    "min_volume_rub": 500000.0,
+    "production_configured": true,
+    "sandbox_configured": true,
+    "tax_rate": 18.0,
+    "telegram_oidc_configured": true,
+    "tinkoff_configured": true
+  }
+}

@@ -11,9 +11,9 @@ services:
       - path: .env
         required: false
     environment:
-      PYTHONUNBUFFERED: "1"
       CACHE_DIR: "/app/cache"
       REDIS_URL: "redis://redis:6379/0"
+      BOND_MONITOR_REPO_ROOT: "/app"
     volumes:
       - ./data/ratings.json:/app/data/ratings.json:ro
       - ./cache:/app/cache
@@ -58,14 +58,14 @@ services:
   notifier:
     image: bond-monitor-api:latest
     container_name: bond-monitor-notifier
-    command: ["python", "-m", "bond_monitor.notifier"]
+    command: ["/app/notifier"]
     env_file:
       - path: .env
         required: false
     environment:
-      PYTHONUNBUFFERED: "1"
       CACHE_DIR: "/app/cache"
       REDIS_URL: "redis://redis:6379/0"
+      BOND_MONITOR_REPO_ROOT: "/app"
     volumes:
       - ./data/ratings.json:/app/data/ratings.json:ro
       - ./cache:/app/cache

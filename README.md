@@ -1,6 +1,6 @@
 # Bond Monitor — краткосрочные облигации РФ
 
-Bond Monitor — веб-приложение для отбора и планирования портфеля краткосрочных облигаций РФ. Данные MOEX ISS, рейтингов и T-Invest собираются в единую базу; скринер ранжирует бумаги по YTM, ликвидности и риску. Планировщик автосоставляет портфель, прогнозирует cashflow, реинвестиции и XIRR до горизонта. В TRADING mode портфель сверяется со счётом брокера; фоновый **notifier** мониторит пут-оферты и риск эмитента, шлёт Telegram и публикует события в UI. Стек: Litestar API + React SPA + Redis.
+Bond Monitor — веб-приложение для отбора и планирования портфеля краткосрочных облигаций РФ. Данные MOEX ISS, рейтингов и T-Invest собираются в единую базу; скринер ранжирует бумаги по YTM, ликвидности и риску. Планировщик автосоставляет портфель, прогнозирует cashflow, реинвестиции и XIRR до горизонта. В TRADING mode портфель сверяется со счётом брокера; фоновый **notifier** мониторит пут-оферты и риск эмитента, шлёт Telegram и публикует события в UI. Стек: **Go API** (`backend/cmd/api`) + **React SPA** + **Redis**.
 
 
 ## На чём зарабатываем
@@ -37,19 +37,16 @@ docker compose up --build
 
 ### Локальная разработка
 
-```bash
-# Backend
-cp .env.example .env
-uv sync --directory backend --extra dev --python 3.12
-uv run --directory backend uvicorn bond_monitor.main:app --reload --port 8000
+Требования: Go 1.25+, Node.js 20+.
 
-# или
+```bash
+cp .env.example .env
+
+# Backend (Go API, порт 8000)
 task run:back
+# или: cd backend && go run ./cmd/api
 
 # Frontend (другой терминал)
-cd frontend && npm install && npm run dev
-
-# или
 task run:front
 
 # Notifier (нужен Redis — в Docker он поднимается compose'ом;
@@ -58,34 +55,46 @@ task run:notifier
 ```
 
 - Web UI: http://localhost:5173 (прокси `/api` → `:8000`)
+- Логи API: `LOG_LEVEL=DEBUG` в `.env` (structured `slog` в stdout)
 
-Для Telegram-уведомлений добавьте в `.env`:
+Для Telegram-уведомлений и режима торговли добавьте в `.env`:
 
 ```env
+T_TRADING_TOKEN_SANDBOX=...    # sandbox T-Invest (режим торговли)
 TELEGRAM_BOT_TOKEN=...
 TELEGRAM_NOTIFY_USER_ID=139693774
 REDIS_URL=redis://localhost:6379/0
+LOG_LEVEL=DEBUG
 ```
 
 ### Тесты
 
 ```bash
-# Backend unit tests
-uv run --directory backend pytest tests/unit -m "not sandbox"
+# Backend: unit + golden HTTP tests
+task test:back
+# или: cd backend && go test ./...
 
-# Sandbox integration (требует T_TRADING_TOKEN_SANDBOX)
-T_TRADING_TOKEN_SANDBOX=t.xxx uv run --directory backend pytest tests/integration/sandbox -m sandbox
+# Frontend e2e (Playwright поднимает Go API + Vite сам)
+task test:front
 
-# Playwright e2e (нужен запущенный frontend + API)
-cd e2e/playwright && npm install && npx playwright test
+# Live e2e (нужен уже запущенный backend + frontend)
+cd e2e/playwright && npx playwright test tests/live
 ```
+
+**Trading / T-Invest:** mocked e2e не ходят в брокера (API мокается в браузере). Реальный sandbox — ручная проверка с `T_TRADING_TOKEN_SANDBOX` в `.env`.
 
 ## Структура
 
 ```
-backend/src/bond_monitor/   # Litestar API, DDD layers
-  notifier/                 # фоновый воркер (python -m bond_monitor.notifier)
-  domain/notifications/     # правила алертов, fingerprint, доставка
+backend/
+  cmd/api/                  # HTTP entrypoint
+  cmd/notifier/             # фоновый воркер
+  internal/
+    domain/                 # чистая бизнес-логика
+    application/            # use cases
+    infrastructure/         # MOEX, T-Invest SDK, SQLite, Redis, Telegram
+    interfaces/http/        # chi router, handlers, serializers
+  testdata/golden/          # golden snapshots API-контракта
 frontend/src/               # React + Tailwind + shadcn-style UI
 e2e/playwright/             # Webapp e2e tests
 data/ratings.json           # Vendored credit ratings (read-only)
@@ -112,49 +121,41 @@ cache/                      # MOEX cache, SQLite DB, notifier ledger
 
 Образ notifier = образ API (`ghcr.io/tonatos/bond-monitor-api`), другой `CMD`.
 
-### Локальное тестирование (dev-CLI)
+### Локальное тестирование уведомлений
 
-Для детерминированной проверки алертов без ожидания реальных событий:
-
-1. В `.env`: `NOTIFICATIONS_DEV=true`, `AUTH_DISABLED=true`, `T_TRADING_TOKEN_SANDBOX`, `REDIS_URL`, `TELEGRAM_*`
+1. В `.env`: `NOTIFICATIONS_DEV=true`, `AUTH_DISABLED=true`, `T_TRADING_TOKEN_SANDBOX`, `REDIS_URL`, `TELEGRAM_*`, `NOTIFIER_SCAN_INTERVAL_SEC=60`
 2. `docker compose up -d redis` (или полный compose)
-3. `task run:back` + `task run:front` + **`task run:notifier`** (или notifier из docker compose)
-4. В UI: создать trading-портфель → sandbox account → attach → купить любую бумагу
-5. Скопировать `portfolio_id` из URL
-
-`simulate` только **подкладывает fake-данные** в `cache/dev_notification_overrides.json`. Доставку делает **notifier** на следующем цикле скана. Если `NOTIFIER_SCAN_INTERVAL_SEC=60`, подождите до минуты — `dev:notify:scan` не обязателен.
-
-**Пут-оферта (action):**
+3. `task run:back` + `task run:front`
+4. В UI: trading-портфель → sandbox account → attach → позиции на счёте
+5. Зажечь тестовое событие и доставить:
 
 ```bash
-task dev:notify:simulate -- put-offer --portfolio <id>
-# дождаться следующего скана notifier, либо сразу:
+# Пут-оферта (окно подачи OPEN)
+task dev:notify:simulate -- put-offer --portfolio <portfolio_id>
+
+# Ухудшение риска
+task dev:notify:simulate -- risk-default --portfolio <portfolio_id>
+task dev:notify:simulate -- risk-downgrade --portfolio <portfolio_id>
+
+# Один проход scan → Redis + Telegram + GET /notifications
 task dev:notify:scan
+
+# Или daemon (тот же NOTIFICATIONS_DEV подмешивает overrides на каждом скане)
+task run:notifier
 ```
 
-**Риск — дефолт (critical, Telegram):**
+Сброс ledger (повторная доставка того же fingerprint):
 
 ```bash
-task dev:notify:simulate -- risk-default --portfolio <id>
+task dev:notify:reset
+task dev:notify:reset -- --portfolio <portfolio_id>
 ```
 
-**Риск — понижение рейтинга (soon, in-app):**
-
-```bash
-task dev:notify:simulate -- risk-downgrade --portfolio <id>
-```
-
-Повторная доставка того же события:
-
-```bash
-task dev:notify:reset -- --portfolio <id>
-```
-
-Overrides применяются только при `NOTIFICATIONS_DEV=true`. `dev:notify:scan` — ускоритель для мгновенного прогона без ожидания интервала notifier.
+Overrides пишутся в `cache/dev_notification_overrides.json`. Unit-тесты логики: `go test ./internal/dev/notifications/`.
 
 ## Деплой на VPS
 
-Production-стек: **Caddy** (HTTPS, Let's Encrypt) → **nginx** (SPA + `/api` proxy) → **Litestar API** → **SQLite** (`cache/` volume). Параллельно: **Redis** (шина уведомлений) + **notifier** (фоновый мониторинг, тот же образ API).
+Production-стек: **Caddy** (HTTPS, Let's Encrypt) → **nginx** (SPA + `/api` proxy) → **Go API** → **SQLite** (`cache/` volume). Параллельно: **Redis** (шина уведомлений) + **notifier** (фоновый мониторинг, тот же образ API).
 
 ### Требования
 
@@ -184,11 +185,10 @@ ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/bond-monitor-gha -N "
 **2. Bootstrap на VPS** (Docker, git clone, `.env` с секретами):
 
 ```bash
-cp deploy/inventory.py.example deploy/inventory.py
-# заполнить host, domain, токены
+cp deploy/inventory.example.yaml deploy/inventory.yaml
+# заполнить host, domain, токены (если копируете с example)
 
 brew install go-task   # macOS
-uv sync --group deploy
 task deploy:bootstrap
 ```
 

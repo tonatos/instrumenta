@@ -1,0 +1,46 @@
+# Copy to inventory.yaml and fill in your VPS details.
+# inventory.yaml is gitignored — never commit secrets.
+
+host: "77.238.250.101"
+ssh_user: root
+ssh_key: ~/.ssh/id_ed25519
+
+domain: bond.example.com
+app_dir: /opt/bond-monitor
+project_name: bond-monitor
+compose_files:
+  - docker-compose.yml
+  - docker-compose.prod.yml
+git_repo: git@github.com:tonatos/bond-monitor.git
+git_branch: main
+image_tag: main
+tls_caddy_data_dir: /opt/tls/caddy
+tls_caddy_config_dir: /opt/tls/caddy-config
+
+# T-Invest tokens (optional, for TRADING mode)
+tinkoff_token: ""
+t_trading_token_sandbox: ""
+t_trading_token_production: ""
+
+# Scoring defaults
+key_rate: 14.5
+tax_rate: 13
+max_days: 120
+min_volume_rub: 500000
+log_level: INFO
+
+# Auth (Telegram OIDC + JWT whitelist)
+auth_disabled: false
+auth_secret: change-me-to-a-long-random-string
+telegram_oidc_client_id: ""
+telegram_oidc_client_secret: ""
+allowed_telegram_ids: "" # comma-separated, e.g. "123456789,987654321"
+
+# Notifier worker
+notifier_scan_interval_sec: 3600
+telegram_bot_token: ""
+telegram_notify_user_id: 0
+
+# GHCR (only for private packages; public images pull without login)
+# ghcr_username: tonatos
+# ghcr_token: "" # PAT with read:packages
