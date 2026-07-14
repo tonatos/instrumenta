@@ -32,12 +32,12 @@ func (s *Service) GetPortfolio(ctx context.Context, portfolioID string) (*domain
 	return s.repo.GetByID(ctx, portfolioID)
 }
 
-func (s *Service) CreatePortfolio(ctx context.Context, name string, initialAmountRub float64, horizonDate time.Time, riskProfile domain.RiskProfile, apiTradeOnly bool, maxWeightedDurationYears, targetDurationYears *float64) (domain.Portfolio, error) {
+func (s *Service) CreatePortfolio(ctx context.Context, name string, initialAmountRub float64, horizonDate time.Time, riskProfile domain.RiskProfile, apiTradeOnly bool, turboEntryEnabled bool, maxWeightedDurationYears, targetDurationYears *float64) (domain.Portfolio, error) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	p := domain.Portfolio{
 		ID: newPortfolioID(), Name: name, CreatedAt: now, UpdatedAt: now,
 		InitialAmountRub: initialAmountRub, HorizonDate: horizonDate, RiskProfile: riskProfile,
-		APITradeOnly: apiTradeOnly, MaxWeightedDurationYears: maxWeightedDurationYears,
+		APITradeOnly: apiTradeOnly, TurboEntryEnabled: turboEntryEnabled, MaxWeightedDurationYears: maxWeightedDurationYears,
 		TargetDurationYears: targetDurationYears, CashBalanceRub: initialAmountRub,
 		Mode: domain.PortfolioModeSimulation, RiskBaselines: map[string]domain.RiskSnapshot{},
 	}
@@ -61,6 +61,7 @@ func (s *Service) AutoComposePortfolio(ctx context.Context, portfolioID string, 
 	positions, remainingCash, _ := domain.AutoCompose(
 		p.InitialAmountRub, universe, p.RiskProfile, p.HorizonDate, today,
 		keyRate, taxRate, p.APITradeOnly, policy,
+		&domain.DefaultDiversificationPolicy, nil,
 	)
 	p.Positions = positions
 	p.CashBalanceRub = remainingCash
@@ -86,7 +87,7 @@ func (s *Service) BuildPortfolioPlan(ctx context.Context, portfolioID string, un
 	return plan, nil
 }
 
-func (s *Service) UpdatePortfolioFields(ctx context.Context, portfolioID string, name *string, initialAmountRub *float64, horizonDate *time.Time, riskProfile *domain.RiskProfile, apiTradeOnly *bool, maxWeightedDurationYears, targetDurationYears any) (domain.Portfolio, error) {
+func (s *Service) UpdatePortfolioFields(ctx context.Context, portfolioID string, name *string, initialAmountRub *float64, horizonDate *time.Time, riskProfile *domain.RiskProfile, apiTradeOnly *bool, turboEntryEnabled *bool, maxWeightedDurationYears, targetDurationYears any) (domain.Portfolio, error) {
 	p, err := s.repo.GetByID(ctx, portfolioID)
 	if err != nil || p == nil {
 		return domain.Portfolio{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
@@ -105,6 +106,9 @@ func (s *Service) UpdatePortfolioFields(ctx context.Context, portfolioID string,
 	}
 	if apiTradeOnly != nil {
 		p.APITradeOnly = *apiTradeOnly
+	}
+	if turboEntryEnabled != nil {
+		p.TurboEntryEnabled = *turboEntryEnabled
 	}
 	if maxWeightedDurationYears != unsetValue {
 		if maxWeightedDurationYears == nil {

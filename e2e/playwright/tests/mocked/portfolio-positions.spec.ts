@@ -94,6 +94,7 @@ test.describe("Позиции — жизненный цикл", () => {
               secid: "OPEN1",
               isin: "RU000AOPEN1",
               name: "Активная облигация",
+              sector: "financial",
               ytm: 14.5,
               ytm_net: 12.62,
               score: 78,
@@ -107,6 +108,7 @@ test.describe("Позиции — жизненный цикл", () => {
               secid: "PEND1",
               isin: "RU000APEND1",
               name: "Ожидающая покупка",
+              sector: "it",
               ytm: 13.0,
               ytm_net: 11.31,
               score: 65,
@@ -155,5 +157,18 @@ test.describe("Позиции — жизненный цикл", () => {
     await expect(page.getByTestId("position-score-RU000AOPEN1")).toHaveText("78");
     await expect(page.getByTestId("position-ytm-RU000APEND1")).toHaveText("11.31%");
     await expect(page.getByTestId("position-score-RU000APEND1")).toHaveText("65");
+  });
+
+  test("показывает сектор и структуру по секторам", async ({ page }) => {
+    await page.getByRole("tab", { name: /Позиции/ }).click();
+
+    await expect(page.getByTestId("position-row-RU000AOPEN1")).toContainText("Финансы");
+    await expect(page.getByTestId("position-row-RU000APEND1")).toContainText("IT");
+
+    await page.getByRole("tab", { name: /По секторам/ }).click();
+
+    await expect(page.getByText("Структура по секторам")).toBeVisible();
+    await expect(page.getByText("71.43%")).toBeVisible();
+    await expect(page.getByText("28.57%")).toBeVisible();
   });
 });

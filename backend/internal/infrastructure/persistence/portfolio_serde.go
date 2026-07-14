@@ -10,6 +10,7 @@ import (
 
 type portfolioDataJSON struct {
 	APITradeOnly             bool                           `json:"api_trade_only"`
+	TurboEntryEnabled        bool                           `json:"turbo_entry_enabled"`
 	MaxWeightedDurationYears *float64                       `json:"max_weighted_duration_years"`
 	TargetDurationYears      *float64                       `json:"target_duration_years"`
 	AccountLabel             *string                        `json:"account_label"`
@@ -77,6 +78,7 @@ type reinvestmentSlotJSON struct {
 func portfolioToDataJSON(p portfolio.Portfolio) ([]byte, error) {
 	data := portfolioDataJSON{
 		APITradeOnly:             p.APITradeOnly,
+		TurboEntryEnabled:        p.TurboEntryEnabled,
 		MaxWeightedDurationYears: p.MaxWeightedDurationYears,
 		TargetDurationYears:      p.TargetDurationYears,
 		AccountLabel:             p.AccountLabel,
@@ -128,6 +130,7 @@ func portfolioFromRow(row portfolioRow) (portfolio.Portfolio, error) {
 		CashBalanceRub:   row.CashBalanceRub,
 		Mode:             portfolio.PortfolioMode(row.Mode),
 		APITradeOnly:     data.APITradeOnly,
+		TurboEntryEnabled: data.TurboEntryEnabled,
 		MaxWeightedDurationYears: data.MaxWeightedDurationYears,
 		TargetDurationYears:      data.TargetDurationYears,
 		AccountLabel:             data.AccountLabel,

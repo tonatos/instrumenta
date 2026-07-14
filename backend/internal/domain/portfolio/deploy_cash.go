@@ -209,6 +209,7 @@ func DeployCash(
 		allocations, composeNotes := ComposeBuyAllocations(
 			holdingsValue+cashRub, cashRub, currentLotsByISIN, universe, profile,
 			horizonDate, asOfDate, keyRate, taxRate, apiTradeOnly, accountKind, dp,
+			&DefaultDiversificationPolicy,
 		)
 		notes = append(notes, composeNotes...)
 		spent := sumAllocationAmount(allocations)
@@ -240,6 +241,7 @@ func DeployCash(
 
 	targetPositions, leftover, composeNotes := AutoCompose(
 		cashRub, universe, profile, horizonDate, asOfDate, keyRate, taxRate, apiTradeOnly, dp,
+		&DefaultDiversificationPolicy, currentLotsByISIN,
 	)
 	notes = append(notes, composeNotes...)
 	allocations = positionsToAllocations(targetPositions, universeByISIN, existingISINs, accountKind)

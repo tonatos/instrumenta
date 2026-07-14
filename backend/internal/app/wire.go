@@ -11,6 +11,7 @@ import (
 	"github.com/tonatos/bond-monitor/backend/internal/application"
 	"github.com/tonatos/bond-monitor/backend/internal/application/adapters"
 	appbonds "github.com/tonatos/bond-monitor/backend/internal/application/bonds"
+	appmarketsignals "github.com/tonatos/bond-monitor/backend/internal/application/market_signals"
 	appnotifications "github.com/tonatos/bond-monitor/backend/internal/application/notifications"
 	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
 	apptrading "github.com/tonatos/bond-monitor/backend/internal/application/trading"
@@ -60,6 +61,7 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 	favoritesRepo := persistence.NewFavoritesRepository(db)
 	notificationsRepo := persistence.NewNotificationsRepository(db)
 	deployRepo := persistence.NewDeploySessionRepository(db)
+	radarRepo := persistence.NewMarketRadarRepository(db.DB)
 
 	bondInner := appbonds.NewService(
 		settings.KeyRate,
@@ -75,6 +77,7 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 	tradingInner := apptrading.NewService(
 		portfolioRepo,
 		deployRepo,
+		notificationsRepo,
 		settings.TTradingTokenSandbox,
 		settings.TTradingTokenProduction,
 	)
@@ -87,6 +90,8 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 		consumer = noopConsumer{}
 	}
 
+	getRadar := appmarketsignals.NewGetRadarUseCase(radarRepo, portfolioInner)
+
 	deps := httpapi.Deps{
 		Settings:      settings,
 		JWT:           jwtManager,
@@ -95,6 +100,7 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 		Portfolios:    adapters.NewPortfolioService(portfolioInner),
 		Trading:       tradingInner,
 		Notifications: adapters.NewNotificationsRepository(notificationsRepo),
+		MarketRadar:   adapters.NewMarketRadarService(getRadar),
 		HTTPClient:    &http.Client{Timeout: 20 * time.Second},
 	}
 
@@ -123,6 +129,8 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 
 	portfolioRepo := persistence.NewPortfolioRepository(db)
 	notificationsRepo := persistence.NewNotificationsRepository(db)
+	spreadRepo := persistence.NewSpreadSnapshotsRepository(db.DB)
+	radarRepo := persistence.NewMarketRadarRepository(db.DB)
 	tradingCtx := apptrading.NewContext(portfolioRepo, settings.TTradingTokenSandbox, settings.TTradingTokenProduction)
 	bondSvc := appbonds.NewService(
 		settings.KeyRate,
@@ -141,7 +149,13 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 	}
 	telegram := notifications.NewTelegramClient(settings.TelegramBotToken, settings.TelegramNotifyUserID)
 	deliver := appnotifications.NewDeliverUseCase(ledger, bus, telegram, notificationsRepo)
-	scanner := appnotifications.NewScanUseCase(tradingCtx, bondSvc, deliver, logger, settings.NotificationsDev)
+	radarScan := appmarketsignals.NewScanRadarUseCase(
+		bondSvc, spreadRepo, radarRepo, settings.KeyRate, settings.TaxRateFraction(),
+	)
+	scanner := appnotifications.NewScanUseCase(
+		tradingCtx, bondSvc, deliver, spreadRepo, radarScan, logger, settings.NotificationsDev,
+		settings.KeyRate, settings.TaxRateFraction(),
+	)
 	cleanup := func() { _ = db.Close() }
 	return scanner, db, cleanup, nil
 }

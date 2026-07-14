@@ -1,6 +1,6 @@
 # Bond Monitor — краткосрочные облигации РФ
 
-Bond Monitor — веб-приложение для отбора и планирования портфеля краткосрочных облигаций РФ. Данные MOEX ISS, рейтингов и T-Invest собираются в единую базу; скринер ранжирует бумаги по YTM, ликвидности и риску. Планировщик автосоставляет портфель, прогнозирует cashflow, реинвестиции и XIRR до горизонта. В TRADING mode портфель сверяется со счётом брокера; фоновый **notifier** мониторит пут-оферты и риск эмитента, шлёт Telegram и публикует события в UI. Стек: **Go API** (`backend/cmd/api`) + **React SPA** + **Redis**.
+Bond Monitor — веб-приложение для отбора и планирования портфеля краткосрочных облигаций РФ. Данные MOEX ISS, рейтингов и T-Invest собираются в единую базу; скринер ранжирует бумаги по YTM, ликвидности и риску. Планировщик автосоставляет портфель, прогнозирует cashflow, реинвестиции и XIRR до горизонта. В TRADING mode портфель сверяется со счётом брокера; фоновый **notifier** мониторит пут-оферты, риск эмитента и market signals, строит **Market Radar** по рынку, шлёт Telegram и публикует события в UI. Стек: **Go API** (`backend/cmd/api`) + **React SPA** + **Redis**.
 
 
 ## На чём зарабатываем
@@ -14,12 +14,13 @@ Bond Monitor — веб-приложение для отбора и планир
 
 ## Возможности
 
-- **Скринер** — таблица ликвидных бумаг со скорингом YTM/риск/ликвидность
+- **Скринер** — таблица ликвидных бумаг со скорингом YTM/риск/ликвидность, фильтр по секторам
 - **Избранное** — отслеживание выбранных ISIN
-- **Портфель** — автосостав, прогноз cashflow, планирование до горизонта
+- **Портфель** — автосостав, прогноз cashflow, планирование до горизонта; вкладка **«Сигналы»** (spread anomaly, sector stress, turbo-entry по **вашим** позициям)
+- **Radar** (`/radar`) — read-model рынка: heatmap секторов Δ7д, топ аномалий спреда, dip-идеи (discovery по liquid universe)
 - **Калькулятор** — расчёт доходности с учётом НДФЛ
 - **Торговля** (TRADING mode) — интеграция T-Invest API (sandbox/production)
-- **Уведомления** — фоновый воркер: пут-оферта (окно подачи открыто), критичные изменения риска эмитента; Telegram + панель в UI
+- **Уведомления** — фоновый воркер: пут-оферта, риск эмитента, market signals по holdings; Telegram + панели в UI
 
 ## Быстрый старт
 
@@ -95,7 +96,9 @@ backend/
     infrastructure/         # MOEX, T-Invest SDK, SQLite, Redis, Telegram
     interfaces/http/        # chi router, handlers, serializers
   testdata/golden/          # golden snapshots API-контракта
+  migrations/               # SQL-миграции (001…003), применяются при старте API/notifier
 frontend/src/               # React + Tailwind + shadcn-style UI
+  features/radar/           # Market Radar (/radar)
 e2e/playwright/             # Webapp e2e tests
 data/ratings.json           # Vendored credit ratings (read-only)
 cache/                      # MOEX cache, SQLite DB, notifier ledger
@@ -103,19 +106,35 @@ cache/                      # MOEX cache, SQLite DB, notifier ledger
 
 Подробная архитектура — в [AGENTS.md](AGENTS.md).
 
+При обновлении кода перезапустите **api** и **notifier** — SQL-миграции из `backend/migrations/` применяются автоматически при старте (в т.ч. `spread_snapshots`, `market_radar_runs`).
+
 ## Notification worker
 
-Фоновый процесс `notifier` периодически (по умолчанию раз в час) сканирует trading-портфели:
+Фоновый процесс `notifier` периодически (по умолчанию раз в час, локально часто `60` сек) сканирует trading-портфели и **один раз за цикл** — market radar по liquid universe.
+
+### Portfolio alerts (per-portfolio)
 
 | Событие | Условие |
 |---------|---------|
 | Пут-оферта | Окно подачи **открыто**, решение `pending` |
 | Риск эмитента | Эскалация относительно `risk_baselines` (дефолт, рейтинг и т.д.) |
+| Spread anomaly / sector stress / turbo-entry | Market signals по **held** бумагам (`domain/market_signals`) |
 
-**Каналы доставки:**
+### Market Radar (market-wide read-model)
+
+После portfolio scan воркер вызывает `ScanMarketRadar`: upsert `spread_snapshots` для liquid universe → snapshot в `market_radar_runs`. API отдаёт **только read-model** (`GET /api/v1/market-radar`), без hot-path пересчёта.
+
+| Секция radar | Когда появляется |
+|--------------|------------------|
+| **Аномалии спреда** | Сразу (cross-sectional vs peers) |
+| **Heatmap секторов Δ7д** | После ~7 дней накопления `spread_snapshots` |
+| **Dip-идеи** | Тоже требуют историю цен 7d |
+
+**Каналы доставки (portfolio alerts):**
 
 - **Telegram** — push на `TELEGRAM_NOTIFY_USER_ID` (critical risk + put-offer action)
-- **Redis Stream** → API consumer → `GET /api/v1/portfolios/{id}/notifications`
+- **Redis Stream** → API consumer → `GET /api/v1/portfolios/{id}/notifications` (пут-оферта, риск, market signals по holdings)
+- **Market Radar UI** — `GET /api/v1/market-radar` (без Telegram в v1)
 
 Идемпотентность: ledger `cache/notifier_ledger.db` + fingerprint на событие. При недоступности Redis воркер пишет напрямую в SQLite.
 

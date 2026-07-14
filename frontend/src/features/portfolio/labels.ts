@@ -31,6 +31,11 @@ export const NOTIFICATION_KIND_LABELS: Record<string, string> = {
   put_offer_action: "Пут-оферта",
   put_offer_watch: "На контроле",
   risk_escalation: "Риск эмитента",
+  sector_concentration: "Концентрация сектора",
+  spread_anomaly: "Спред (аномалия)",
+  spread_widening: "Спред (расширение)",
+  sector_stress: "Секторное давление",
+  turbo_entry: "Turbo-entry",
 };
 
 export const OFFER_WINDOW_STATUS_LABELS: Record<string, string> = {

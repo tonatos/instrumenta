@@ -122,6 +122,21 @@ CREATE TABLE IF NOT EXISTS deploy_sessions (
     cash_snapshot_rub REAL NOT NULL, items_json TEXT NOT NULL, warnings_json TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL, expires_at TEXT NOT NULL, completed_at TEXT
 );
+CREATE TABLE IF NOT EXISTS spread_snapshots (
+    isin TEXT NOT NULL,
+    date TEXT NOT NULL,
+    credit_spread_pp REAL NOT NULL,
+    last_price_pct REAL,
+    sector TEXT NOT NULL DEFAULT '',
+    rating_ordinal INTEGER,
+    PRIMARY KEY (isin, date)
+);
+CREATE TABLE IF NOT EXISTS market_radar_runs (
+    id TEXT PRIMARY KEY,
+    scanned_at TEXT NOT NULL,
+    universe_count INTEGER NOT NULL,
+    payload_json TEXT NOT NULL
+);
 `
 	_, err := db.Exec(schema)
 	return err

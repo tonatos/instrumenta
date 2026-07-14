@@ -29,6 +29,7 @@ import {
 } from "@/features/screener/screenerRiskProfile";
 import { buildScreenerQueryParams } from "@/features/screener/screenerQuery";
 import { useDebouncedValue } from "@/features/screener/useDebouncedValue";
+import { SECTOR_FILTER_OPTIONS } from "@/features/bonds/sectorLabels";
 import { RISK_LABELS as PROFILE_RISK_LABELS } from "@/features/portfolio/labels";
 import { useRateScenario } from "@/features/settings/RateScenarioProvider";
 import { Badge } from "@/components/ui/badge";
@@ -137,6 +138,7 @@ export function ScreenerPage() {
   const [maxLotPrice, setMaxLotPrice] = useState<number | "">(0);
   const [couponTypes, setCouponTypes] = useState<string[]>([]);
   const [riskLevels, setRiskLevels] = useState<number[]>([]);
+  const [sectors, setSectors] = useState<string[]>([]);
   const [hideSubordinated, setHideSubordinated] = useState(false);
   const [hideDefault, setHideDefault] = useState(true);
 
@@ -163,6 +165,7 @@ export function ScreenerPage() {
         maxLotPrice: debouncedMaxLotPrice,
         couponTypes,
         riskLevels,
+        sectors,
         hideDefault,
         hideSubordinated,
         search: searchQuery,
@@ -177,6 +180,7 @@ export function ScreenerPage() {
       debouncedMaxLotPrice,
       couponTypes,
       riskLevels,
+      sectors,
       hideDefault,
       hideSubordinated,
       searchQuery,
@@ -240,6 +244,7 @@ export function ScreenerPage() {
     setMaxLotPrice(0);
     setCouponTypes([]);
     setRiskLevels([]);
+    setSectors([]);
     setHideSubordinated(false);
     setHideDefault(true);
     setSearchInput("");
@@ -454,6 +459,7 @@ export function ScreenerPage() {
       maxLotPrice,
       couponTypes,
       riskLevels,
+      sectors,
       hideDefault,
       hideSubordinated,
       search: searchQuery,
@@ -481,6 +487,9 @@ export function ScreenerPage() {
 
   const toggleRiskLevel = (v: number) =>
     setRiskLevels((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
+
+  const toggleSector = (v: string) =>
+    setSectors((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
 
   return (
     <div className="space-y-4">
@@ -765,6 +774,37 @@ export function ScreenerPage() {
                   )}
                 >
                   {rl.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sector */}
+          <div className="space-y-1.5 sm:col-span-2">
+            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+              Сектор
+              <Tooltip content="Отрасль эмитента по классификации T-Invest. Можно выбрать несколько.">
+                <button type="button" className="opacity-60 hover:opacity-100">
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                </button>
+              </Tooltip>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {SECTOR_FILTER_OPTIONS.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => toggleSector(s.value)}
+                  className={cn(
+                    "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
+                    sectors.includes(s.value)
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border hover:bg-muted/50",
+                  )}
+                >
+                  {s.label}
                 </button>
               ))}
             </div>

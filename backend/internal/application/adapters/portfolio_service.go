@@ -25,7 +25,11 @@ func (s *PortfolioService) ListPortfolios(ctx context.Context) ([]portfolio.Port
 }
 
 func (s *PortfolioService) CreatePortfolio(ctx context.Context, params application.CreatePortfolioParams) (portfolio.Portfolio, error) {
-	p, err := s.inner.CreatePortfolio(ctx, params.Name, params.InitialAmountRub, params.HorizonDate, params.RiskProfile, params.APITradeOnly, params.MaxWeightedDurationYears, params.TargetDurationYears)
+	p, err := s.inner.CreatePortfolio(
+		ctx, params.Name, params.InitialAmountRub, params.HorizonDate, params.RiskProfile, params.APITradeOnly,
+		params.TurboEntryEnabled,
+		params.MaxWeightedDurationYears, params.TargetDurationYears,
+	)
 	return p, mapPortfolioErr(err)
 }
 
@@ -50,7 +54,11 @@ func (s *PortfolioService) UpdatePortfolio(ctx context.Context, id string, param
 	if params.SetTargetDuration {
 		targetDuration = params.TargetDurationYears
 	}
-	p, err := s.inner.UpdatePortfolioFields(ctx, id, params.Name, params.InitialAmountRub, params.HorizonDate, params.RiskProfile, params.APITradeOnly, maxWeighted, targetDuration)
+	p, err := s.inner.UpdatePortfolioFields(
+		ctx, id, params.Name, params.InitialAmountRub, params.HorizonDate, params.RiskProfile, params.APITradeOnly,
+		params.TurboEntryEnabled,
+		maxWeighted, targetDuration,
+	)
 	return p, mapPortfolioErr(err)
 }
 

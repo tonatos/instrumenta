@@ -13,6 +13,7 @@ function makeBond(
     prev_volume_rub: number;
     subordinated: boolean;
     defaulted: boolean;
+    sector: string;
   }> = {},
 ) {
   const warnings: string[] = [];
@@ -55,14 +56,14 @@ function makeBond(
     tinvest_enriched: true,
     issuer_name: "Эмитент",
     instrument_full_name: "Тест",
-    sector: "corp",
+    sector: overrides.sector ?? "corp",
     description: "",
   };
 }
 
 const allBonds = [
-  makeBond({ secid: "LIQ1", isin: "RU000ALIQ1", name: "Ликвидная", prev_volume_rub: 1_000_000 }),
-  makeBond({ secid: "ILL1", isin: "RU000AILL1", name: "Низкий объём", prev_volume_rub: 100_000 }),
+  makeBond({ secid: "LIQ1", isin: "RU000ALIQ1", name: "Ликвидная", prev_volume_rub: 1_000_000, sector: "financial" }),
+  makeBond({ secid: "ILL1", isin: "RU000AILL1", name: "Низкий объём", prev_volume_rub: 100_000, sector: "real_estate" }),
   makeBond({ secid: "SUB1", isin: "RU000ASUB1", name: "Субординированная", subordinated: true }),
   makeBond({ secid: "DEF1", isin: "RU000ADEF1", name: "Дефолтная", defaulted: true }),
   ...Array.from({ length: 55 }, (_, i) =>
@@ -101,6 +102,11 @@ function filterBonds(url: URL) {
         b.secid.toLowerCase().includes(q) ||
         b.isin.toLowerCase().includes(q),
     );
+  }
+  const sectors = url.searchParams.get("sectors");
+  if (sectors) {
+    const allowed = new Set(sectors.split(",").map((s) => s.trim().toLowerCase()));
+    filtered = filtered.filter((b) => allowed.has((b.sector ?? "").toLowerCase()));
   }
   return filtered;
 }
@@ -168,5 +174,14 @@ test.describe("Скринер — серверные фильтры", () => {
 
     await page.locator('[data-testid="screener-load-more"]').scrollIntoViewIfNeeded();
     await expectScreenerCount(page, "58 из 58");
+  });
+
+  test("фильтр по сектору отправляет sectors и уменьшает total", async ({ page }) => {
+    await page.goto("/");
+    await expectScreenerCount(page, "50 из 58");
+
+    await page.getByRole("button", { name: "Финансы", exact: true }).click();
+    await expectScreenerCount(page, "1 из 1");
+    await expect(page.getByRole("button", { name: "Ликвидная" })).toBeVisible();
   });
 });

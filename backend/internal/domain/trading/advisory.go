@@ -573,6 +573,7 @@ func Advise(
 	alertSuggestions := AlertsToSuggestions(notifications.CollectAlerts(notifications.AlertParams{
 		Portfolio: p, Holdings: holdingSnapshots(holdings), Positions: positions,
 		Universe: universe, Today: today, NotificationPolicy: notifPolicy, RiskPolicy: riskPolicy,
+		KeyRatePP: params.KeyRate, TaxRateFraction: params.TaxRate,
 	}))
 	suggestions := append(append(append(buySuggestions, reinvestSuggestions...), reinvestWatch...), alertSuggestions...)
 	warnings := CollectAccountWarnings(snapshot, universeByISIN(universe), holdings)

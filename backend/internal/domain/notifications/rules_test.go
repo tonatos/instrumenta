@@ -1,6 +1,7 @@
 package notifications_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -55,6 +56,7 @@ func TestCollectAlertsPutOfferActionWhenWindowOpen(t *testing.T) {
 		Positions: []portfolio.PortfolioPosition{position},
 		Universe:  []bonds.BondRecord{bond},
 		Today:     today,
+		KeyRatePP: 16, TaxRateFraction: 0.13,
 	})
 	var putAlerts []notifications.Alert
 	for _, a := range alerts {
@@ -103,6 +105,7 @@ func TestCollectAlertsNoPutOfferWhenWindowNotOpen(t *testing.T) {
 		Positions: []portfolio.PortfolioPosition{position},
 		Universe:  []bonds.BondRecord{bond},
 		Today:     today,
+		KeyRatePP: 16, TaxRateFraction: 0.13,
 	})
 	for _, a := range alerts {
 		if a.Kind == notifications.AlertKindPutOfferAction || a.Kind == notifications.AlertKindPutOfferWatch {
@@ -126,6 +129,7 @@ func TestCollectAlertsRiskEscalation(t *testing.T) {
 		Holdings:  []notifications.HoldingSnapshot{{ISIN: isin, FIGI: "FIGI-R", Lots: 2, CurrentPricePct: &price}},
 		Universe:  []bonds.BondRecord{bond},
 		Today:     time.Now(),
+		KeyRatePP: 16, TaxRateFraction: 0.13,
 	})
 	var riskAlerts []notifications.Alert
 	for _, a := range alerts {
@@ -158,6 +162,7 @@ func TestCollectAlertsRiskCriticalDefault(t *testing.T) {
 		Holdings:  []notifications.HoldingSnapshot{{ISIN: isin, FIGI: "FIGI-D", Lots: 2}},
 		Universe:  []bonds.BondRecord{bond},
 		Today:     time.Now(),
+		KeyRatePP: 16, TaxRateFraction: 0.13,
 	})
 	for _, a := range alerts {
 		if a.Kind == notifications.AlertKindRiskEscalation {
@@ -188,6 +193,7 @@ func TestCollectAlertsPutOfferSkippedWhenHoldDecision(t *testing.T) {
 		Positions: []portfolio.PortfolioPosition{position},
 		Universe:  []bonds.BondRecord{bond},
 		Today:     today,
+		KeyRatePP: 16, TaxRateFraction: 0.13,
 	})
 	for _, a := range alerts {
 		if a.Kind == notifications.AlertKindPutOfferAction {
@@ -198,4 +204,61 @@ func TestCollectAlertsPutOfferSkippedWhenHoldDecision(t *testing.T) {
 
 func TestHoldingSnapshotUnusedFields(t *testing.T) {
 	_ = holdingSnapshot("RU000A1", "FIGI-1", 2)
+}
+
+func TestCollectAlertsSpreadAnomaly(t *testing.T) {
+	today := time.Date(2026, 7, 28, 0, 0, 0, 0, time.UTC)
+	p := testutil.MakePortfolio(func(p *portfolio.Portfolio) { p.ID = "p-spread" })
+
+	rating := "ruA"
+	sector := "financial"
+	liq := 1_000_000.0
+	dur := 365.0
+
+	target := testutil.MakeBond(func(b *bonds.BondRecord) {
+		b.ISIN, b.Name, b.FIGI = "RU000SPREAD1", "Spread Bond", "FIGI-S1"
+		b.CreditRating = &rating
+		b.Sector = sector
+		b.PrevVolumeRub = &liq
+		b.DurationDays = &dur
+		ytmNet := 25.0
+		b.YTMNet = &ytmNet
+	})
+
+	var peers []bonds.BondRecord
+	for i := 0; i < 6; i++ {
+		peers = append(peers, testutil.MakeBond(func(b *bonds.BondRecord) {
+			b.ISIN, b.Name, b.FIGI = fmt.Sprintf("RU000PEER%d", i), "Peer", fmt.Sprintf("FIGI-P%d", i)
+			b.CreditRating = &rating
+			b.Sector = sector
+			b.PrevVolumeRub = &liq
+			b.DurationDays = &dur
+			ytmNet := 14.5
+			b.YTMNet = &ytmNet
+		}))
+	}
+
+	universe := append([]bonds.BondRecord{target}, peers...)
+	alerts := notifications.CollectAlerts(notifications.AlertParams{
+		Portfolio: p,
+		Holdings:  []notifications.HoldingSnapshot{{ISIN: target.ISIN, FIGI: target.FIGI, Lots: 2}},
+		Universe:  universe,
+		Today:     today,
+		KeyRatePP: 10, TaxRateFraction: 0,
+		Rules: []notifications.AlertRule{
+			notifications.SpreadAnomalyRule{},
+		},
+	})
+	var spreadAlerts []notifications.Alert
+	for _, a := range alerts {
+		if a.Kind == notifications.AlertKindSpreadAnomaly {
+			spreadAlerts = append(spreadAlerts, a)
+		}
+	}
+	if len(spreadAlerts) != 1 {
+		t.Fatalf("expected 1 spread alert, got %d", len(spreadAlerts))
+	}
+	if spreadAlerts[0].ISIN != target.ISIN {
+		t.Fatalf("unexpected isin %s", spreadAlerts[0].ISIN)
+	}
 }

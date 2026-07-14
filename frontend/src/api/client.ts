@@ -21,6 +21,7 @@ import type {
   TradingAdviceResponse,
   TradingStateResponse,
   DeploySessionResponse,
+  MarketRadarResponse,
   NotificationsListResponse,
 } from "./types";
 import { getAuthToken, notifyUnauthorized } from "@/features/auth/authStorage";
@@ -101,6 +102,7 @@ function buildBondsQuery(params: BondListParams = {}): string {
   if (params.max_lot_price_rub != null) q.set("max_lot_price_rub", String(params.max_lot_price_rub));
   if (params.coupon_types?.length) q.set("coupon_types", params.coupon_types.join(","));
   if (params.risk_levels?.length) q.set("risk_levels", params.risk_levels.join(","));
+  if (params.sectors?.length) q.set("sectors", params.sectors.join(","));
   if (params.hide_default) q.set("hide_default", "true");
   if (params.hide_subordinated) q.set("hide_subordinated", "true");
   if (params.q?.trim()) q.set("q", params.q.trim());
@@ -158,6 +160,7 @@ export const api = {
     horizon_date: string;
     risk_profile: string;
     api_trade_only?: boolean;
+    turbo_entry_enabled?: boolean;
     max_weighted_duration_years?: number | null;
     target_duration_years?: number | null;
   }) =>
@@ -173,6 +176,7 @@ export const api = {
       horizon_date?: string;
       risk_profile?: string;
       api_trade_only?: boolean;
+      turbo_entry_enabled?: boolean;
       max_weighted_duration_years?: number | null;
       target_duration_years?: number | null;
     },
@@ -338,6 +342,11 @@ export const api = {
     request<void>(`/notifications/${encodeURIComponent(notificationId)}/dismiss`, {
       method: "POST",
     }),
+
+  getMarketRadar: (highlightPortfolios = true) =>
+    request<MarketRadarResponse>(
+      `/market-radar${highlightPortfolios ? "" : "?highlight_portfolios=false"}`,
+    ),
 
   calculatePortfolio: (body: {
     secids: string[];

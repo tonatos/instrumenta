@@ -26,6 +26,7 @@ func NewRouter(deps Deps, logger *slog.Logger) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/config", h.GetConfig)
 		r.Get("/config/", h.GetConfig)
+		r.Get("/market-radar", h.GetMarketRadar)
 
 		r.Route("/auth", func(r chi.Router) {
 			r.Get("/telegram/login", h.TelegramLogin)

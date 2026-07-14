@@ -39,7 +39,10 @@ func TestAutoComposeDiversifies(t *testing.T) {
 		isin := "RU000" + string(rune('0'+i+1))
 		universe = append(universe, makeBond(isin, "Bond", m, 99, 18, 80-float64(i), bonds.BoolPtr(true), nil))
 	}
-	positions, cash, _ := portfolio.AutoCompose(400_000, universe, portfolio.RiskProfileNormal, horizon, today, 14.5, 0.13, true, portfolio.DefaultDurationPolicy)
+	positions, cash, _ := portfolio.AutoCompose(
+		400_000, universe, portfolio.RiskProfileNormal, horizon, today, 14.5, 0.13, true, portfolio.DefaultDurationPolicy,
+		&portfolio.DefaultDiversificationPolicy, nil,
+	)
 	if len(positions) < 1 {
 		t.Fatal("expected positions")
 	}
@@ -53,7 +56,10 @@ func TestAutoComposeExcludesDistressedBonds(t *testing.T) {
 	horizon := shared.MustParseDate("2027-01-01")
 	distressed := makeBond("RU000DST", "Distressed", shared.MustParseDate("2026-09-01"), 75, 35, 95, bonds.BoolPtr(true), nil)
 	quality := makeBond("RU000QAL", "Quality", shared.MustParseDate("2026-09-01"), 99, 16, 70, bonds.BoolPtr(true), nil)
-	positions, _, _ := portfolio.AutoCompose(200_000, []bonds.BondRecord{distressed, quality}, portfolio.RiskProfileAggressive, horizon, today, 14.5, 0.13, false, portfolio.DefaultDurationPolicy)
+	positions, _, _ := portfolio.AutoCompose(
+		200_000, []bonds.BondRecord{distressed, quality}, portfolio.RiskProfileAggressive, horizon, today, 14.5, 0.13, false, portfolio.DefaultDurationPolicy,
+		&portfolio.DefaultDiversificationPolicy, nil,
+	)
 	if len(positions) == 0 {
 		t.Fatal("expected at least one position")
 	}
@@ -127,5 +133,40 @@ func TestInvestedCapitalSimulationMode(t *testing.T) {
 	p := portfolio.Portfolio{InitialAmountRub: 100_000, Mode: portfolio.PortfolioModeSimulation}
 	if v := portfolio.InvestedCapitalRub(p, nil); v != 100_000 {
 		t.Fatalf("expected 100000, got %v", v)
+	}
+}
+
+func TestEmptySimulationPortfolioPlanHasNoPhantomCompose(t *testing.T) {
+	today := shared.MustParseDate("2026-07-14")
+	horizon := shared.MustParseDate("2027-07-14")
+	universe := []bonds.BondRecord{
+		makeBond("RU0001", "Bond A", shared.MustParseDate("2027-03-01"), 99, 18, 80, bonds.BoolPtr(true), nil),
+		makeBond("RU0002", "Bond B", shared.MustParseDate("2027-05-01"), 99, 17, 75, bonds.BoolPtr(true), nil),
+	}
+	p := portfolio.Portfolio{
+		InitialAmountRub: 400_000,
+		HorizonDate:      horizon,
+		RiskProfile:      portfolio.RiskProfileNormal,
+		CashBalanceRub:   400_000,
+		Mode:             portfolio.PortfolioModeSimulation,
+		APITradeOnly:     true,
+	}
+
+	plan := portfolio.BuildPlan(p, universe, today, 16, 0.13, nil, true, portfolio.DefaultDurationPolicy)
+
+	if len(plan.Events) != 0 {
+		t.Fatalf("expected no cashflow events, got %d", len(plan.Events))
+	}
+	if plan.FinalPortfolioValueRub != 400_000 {
+		t.Fatalf("expected flat final value 400000, got %v", plan.FinalPortfolioValueRub)
+	}
+	if plan.TotalNetProfitRub != 0 {
+		t.Fatalf("expected zero profit, got %v", plan.TotalNetProfitRub)
+	}
+	if plan.EffectiveAnnualReturnPct != nil && *plan.EffectiveAnnualReturnPct != 0 {
+		t.Fatalf("expected zero XIRR, got %v", *plan.EffectiveAnnualReturnPct)
+	}
+	if len(plan.AllPositions) != 0 {
+		t.Fatalf("expected no phantom positions, got %d", len(plan.AllPositions))
 	}
 }

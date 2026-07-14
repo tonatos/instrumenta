@@ -52,6 +52,7 @@ func TestApplyDevOverridesPutOfferTriggersAlert(t *testing.T) {
 		Positions: positions,
 		Universe:  universe,
 		Today:     today,
+		KeyRatePP: 16, TaxRateFraction: 0.13,
 		Rules:     notifications.WorkerAlertRules,
 	})
 	var putAlerts []notifications.Alert
@@ -89,6 +90,7 @@ func TestApplyDevOverridesRiskDefaultTriggersCritical(t *testing.T) {
 		Holdings:  []notifications.HoldingSnapshot{{ISIN: isin, FIGI: "FIGI-D", Lots: 2}},
 		Universe:  universe,
 		Today:     time.Now(),
+		KeyRatePP: 16, TaxRateFraction: 0.13,
 		Rules:     notifications.WorkerAlertRules,
 	})
 	var riskAlerts []notifications.Alert

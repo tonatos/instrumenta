@@ -1,8 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { api } from "@/api/client";
 import type { Notification } from "@/api/types";
 import { NOTIFICATION_KIND_LABELS } from "@/features/portfolio/labels";
+import { usePortfolioNotifications } from "@/features/portfolio/marketSignals";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -50,11 +51,8 @@ interface NotificationsPanelProps {
 
 export function NotificationsPanel({ portfolioId }: NotificationsPanelProps) {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery({
-    queryKey: ["notifications", portfolioId],
-    queryFn: () => api.getNotifications(portfolioId),
-    refetchInterval: 60_000,
-  });
+  const { notifications, unreadNotificationsCount, isLoading } =
+    usePortfolioNotifications(portfolioId);
 
   const markRead = useMutation({
     mutationFn: (notificationId: string) => api.markNotificationRead(notificationId),
@@ -62,9 +60,6 @@ export function NotificationsPanel({ portfolioId }: NotificationsPanelProps) {
       queryClient.invalidateQueries({ queryKey: ["notifications", portfolioId] });
     },
   });
-
-  const notifications = data?.notifications ?? [];
-  const unreadCount = notifications.filter((item) => item.is_unread).length;
 
   if (isLoading) {
     return null;
@@ -83,12 +78,12 @@ export function NotificationsPanel({ portfolioId }: NotificationsPanelProps) {
         <p className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
           <Bell className="h-4 w-4" />
           Уведомления
-          {unreadCount > 0 && (
+          {unreadNotificationsCount > 0 && (
             <Badge
               className="bg-amber-500/20 text-amber-900 dark:text-amber-200"
               data-testid="notifications-unread-badge"
             >
-              {unreadCount}
+              {unreadNotificationsCount}
             </Badge>
           )}
         </p>

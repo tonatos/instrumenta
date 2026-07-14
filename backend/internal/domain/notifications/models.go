@@ -18,6 +18,11 @@ const (
 	AlertKindPutOfferAction  AlertKind = "put_offer_action"
 	AlertKindPutOfferWatch   AlertKind = "put_offer_watch"
 	AlertKindRiskEscalation  AlertKind = "risk_escalation"
+	AlertKindSectorConcentration AlertKind = "sector_concentration"
+	AlertKindSpreadAnomaly   AlertKind = "spread_anomaly"
+	AlertKindSpreadWidening  AlertKind = "spread_widening"
+	AlertKindSectorStress    AlertKind = "sector_stress"
+	AlertKindTurboEntry      AlertKind = "turbo_entry"
 )
 
 // Alert is a detected portfolio event for suggestions and outbound notifications.
@@ -40,4 +45,5 @@ type Alert struct {
 	SubmissionStart      *time.Time
 	SubmissionEnd        *time.Time
 	EscalationKinds      []string
+	ExtraPayload         map[string]any
 }

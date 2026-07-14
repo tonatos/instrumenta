@@ -49,6 +49,7 @@ type CreatePortfolioParams struct {
 	HorizonDate              time.Time
 	RiskProfile              portfolio.RiskProfile
 	APITradeOnly             bool
+	TurboEntryEnabled        bool
 	MaxWeightedDurationYears *float64
 	TargetDurationYears      *float64
 }
@@ -60,6 +61,7 @@ type UpdatePortfolioParams struct {
 	HorizonDate              *time.Time
 	RiskProfile              *portfolio.RiskProfile
 	APITradeOnly             *bool
+	TurboEntryEnabled        *bool
 	MaxWeightedDurationYears *float64
 	TargetDurationYears      *float64
 	SetMaxWeightedDuration   bool
@@ -158,6 +160,55 @@ type NotificationsRepository interface {
 type NotificationConsumer interface {
 	Start(ctx context.Context) error
 	Stop(ctx context.Context) error
+}
+
+// MarketRadarResponse is the read-model for GET /market-radar.
+type MarketRadarResponse struct {
+	ScannedAt       string                  `json:"scanned_at"`
+	UniverseScanned int                     `json:"universe_scanned"`
+	Sectors         []MarketRadarSectorRow  `json:"sectors"`
+	Anomalies       []MarketRadarAnomalyRow `json:"anomalies"`
+	DipIdeas        []MarketRadarDipIdeaRow `json:"dip_ideas"`
+}
+
+type MarketRadarSectorRow struct {
+	Sector       string   `json:"sector"`
+	Change7dPct  float64  `json:"change_7d_pct"`
+	AnomalyCount int      `json:"anomaly_count"`
+	DipIdeaCount int      `json:"dip_idea_count"`
+	BondCount    int      `json:"bond_count"`
+	InPortfolios []string `json:"in_portfolios,omitempty"`
+}
+
+type MarketRadarAnomalyRow struct {
+	ISIN             string   `json:"isin"`
+	Secid            string   `json:"secid"`
+	Name             string   `json:"name"`
+	Sector           string   `json:"sector"`
+	SpreadPP         float64  `json:"spread_pp"`
+	ExpectedSpreadPP float64  `json:"expected_spread_pp"`
+	DeltaPP          float64  `json:"delta_pp"`
+	ZScore           *float64 `json:"z_score,omitempty"`
+	Peers            int      `json:"peers"`
+	InPortfolios     []string `json:"in_portfolios,omitempty"`
+}
+
+type MarketRadarDipIdeaRow struct {
+	ISIN                     string   `json:"isin"`
+	Secid                    string   `json:"secid"`
+	Name                     string   `json:"name"`
+	Sector                   string   `json:"sector"`
+	BondChange7dPct          float64  `json:"bond_change_7d_pct"`
+	SectorChange7dPct        float64  `json:"sector_change_7d_pct"`
+	IdiosyncraticExcess7dPct float64  `json:"idiosyncratic_excess_pct"`
+	Score                    float64  `json:"score"`
+	Interpretation           string   `json:"interpretation"`
+	InPortfolios             []string `json:"in_portfolios,omitempty"`
+}
+
+// MarketRadarService reads the latest market radar snapshot.
+type MarketRadarService interface {
+	GetMarketRadar(ctx context.Context, highlightPortfolios bool) (*MarketRadarResponse, error)
 }
 
 // DatabaseInitializer prepares persistence on startup.
