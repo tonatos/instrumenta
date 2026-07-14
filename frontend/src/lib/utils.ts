@@ -78,3 +78,19 @@ export function formatDate(
   }
   return `${parsed.day} ${monthName} ${parsed.year}`;
 }
+
+/** Human-readable Russian date+time: «28 июля, 15:00» or «28 июля 2027, 15:00». */
+export function formatDateTime(
+  value: string | null | undefined,
+  referenceDate: Date = new Date(),
+): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return formatDate(value, referenceDate);
+  }
+  const datePart = formatDate(dateToIso(date), referenceDate);
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${datePart}, ${hours}:${minutes}`;
+}

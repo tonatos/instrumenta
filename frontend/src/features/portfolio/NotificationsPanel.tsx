@@ -6,7 +6,7 @@ import { NOTIFICATION_KIND_LABELS } from "@/features/portfolio/labels";
 import { usePortfolioNotifications } from "@/features/portfolio/marketSignals";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 
 function notificationTitle(notification: Notification): string {
   const payload = notification.payload;
@@ -105,8 +105,16 @@ export function NotificationsPanel({ portfolioId }: NotificationsPanelProps) {
               )}
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <p className="text-sm font-medium">{notificationTitle(notification)}</p>
-                <Badge variant="outline" className="text-xs">
+                <div className="min-w-0 space-y-0.5">
+                  <p className="text-sm font-medium">{notificationTitle(notification)}</p>
+                  <p
+                    className="text-xs text-muted-foreground"
+                    data-testid={`notification-${notification.id}-created-at`}
+                  >
+                    {formatDateTime(notification.created_at)}
+                  </p>
+                </div>
+                <Badge variant="outline" className="shrink-0 text-xs">
                   {kindLabel}
                 </Badge>
               </div>

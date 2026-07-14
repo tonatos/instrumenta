@@ -26,19 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatDate } from "@/lib/utils";
-
-function formatScannedAt(value: string | null | undefined): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return formatDate(value);
-  return date.toLocaleString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import { formatDateTime } from "@/lib/utils";
 
 const RISK_PROFILES: { value: ScreenerRiskProfile; label: string }[] = [
   { value: "conservative", label: "Консервативный" },
@@ -122,7 +110,7 @@ export function RadarPage() {
     );
   }
 
-  const scannedLabel = formatScannedAt(data.scanned_at);
+  const scannedLabel = data.scanned_at ? formatDateTime(data.scanned_at) : null;
 
   return (
     <div className="space-y-6" data-testid="radar-page">

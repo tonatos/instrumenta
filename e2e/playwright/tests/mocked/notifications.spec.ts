@@ -114,6 +114,7 @@ test.describe("Уведомления портфеля", () => {
     await expect(panel).toBeVisible();
     await expect(panel.getByTestId("notifications-unread-badge")).toHaveText("2");
     await expect(panel.getByText("Put Offer Bond")).toBeVisible();
+    await expect(panel.getByTestId("notification-notif-1-created-at")).toContainText("28 июля");
     await expect(panel.getByText("Окно подачи по пут-оферте открыто")).toBeVisible();
     await expect(panel.getByText("Концентрация в секторе")).toBeVisible();
     await expect(panel.getByText("Spread Bond")).not.toBeVisible();
