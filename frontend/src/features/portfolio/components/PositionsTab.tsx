@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, X } from "lucide-react";
 import { api } from "@/api/client";
 import type { Bond, PortfolioPosition, PutOfferDecision, TradingAdviceResponse } from "@/api/types";
 import { bondScoreForProfile, type BondRiskProfile } from "@/features/bonds/bondScore";
+import { sectorLabel } from "@/features/bonds/sectorLabels";
+import { isMarketSignal } from "@/features/portfolio/marketSignals";
 import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
 import {
   OFFER_WINDOW_STATUS_LABELS,
@@ -12,14 +14,13 @@ import {
   SOURCE_LABELS,
 } from "@/features/portfolio/labels";
 import { SellPositionDialog } from "@/features/portfolio/trading/SellPositionDialog";
-import { buildTradingDisplayPositions } from "@/features/portfolio/trading/buildTradingDisplayPositions";
+import { resolveVisiblePositions } from "@/features/portfolio/trading/buildTradingDisplayPositions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import { Tooltip } from "@/components/ui/tooltip";
 import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
-
 const ACTIVE_ORDER_STATUSES = new Set([
   "EXECUTION_REPORT_STATUS_NEW",
   "EXECUTION_REPORT_STATUS_PARTIALLYFILL",
@@ -51,6 +52,7 @@ export function PositionsTab({
   const [addLots, setAddLots] = useState(1);
   const [selectedIsin, setSelectedIsin] = useState<string | null>(null);
   const [detailSecid, setDetailSecid] = useState<string | null>(null);
+  const [detailIsin, setDetailIsin] = useState<string | null>(null);
   const [sellPosition, setSellPosition] = useState<PortfolioPosition | null>(null);
 
   const canSellInTrading = isTrading;
@@ -82,18 +84,31 @@ export function PositionsTab({
     [bonds],
   );
 
+  const { data: notificationsData } = useQuery({
+    queryKey: ["notifications", portfolioId],
+    queryFn: () => api.getNotifications(portfolioId),
+    enabled: Boolean(portfolioId),
+    refetchInterval: 60_000,
+  });
+
+  const signalsByIsin = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const n of notificationsData?.notifications ?? []) {
+      if (!isMarketSignal(n)) continue;
+      const isin = typeof n.payload?.isin === "string" ? n.payload.isin : "";
+      if (!isin) continue;
+      const list = map.get(isin) ?? [];
+      list.push(n.kind);
+      map.set(isin, list);
+    }
+    return map;
+  }, [notificationsData?.notifications]);
+
   const visiblePositions = useMemo(() => {
-    if (!isTrading) {
+    if (isTrading && (adviceLoading || !tradingAdvice)) {
       return positions;
     }
-    if (adviceLoading || !tradingAdvice) {
-      return positions;
-    }
-    return buildTradingDisplayPositions(
-      tradingAdvice.holdings,
-      positions,
-      bondsByIsin,
-    );
+    return resolveVisiblePositions(positions, isTrading, bondsByIsin, tradingAdvice);
   }, [isTrading, positions, tradingAdvice, adviceLoading, bondsByIsin]);
 
   const removeMutation = useMutation({
@@ -142,31 +157,36 @@ export function PositionsTab({
           Позиций нет — воспользуйтесь «Автосостав» или добавьте бумаги вручную
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-xs" data-testid="positions-table">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="px-3 py-2 text-left font-semibold">Бумага</th>
-                {isTrading && (
-                  <th className="px-3 py-2 text-left font-semibold">Статус</th>
-                )}
-                <th className="px-3 py-2 text-right font-semibold">YTM</th>
-                <th className="px-3 py-2 text-right font-semibold">Скор</th>
-                <th className="px-3 py-2 text-right font-semibold">Лотов</th>
-                <th className="px-3 py-2 text-right font-semibold">Вложено</th>
-                <th className="px-3 py-2 text-left font-semibold">Источник</th>
-                <th className="px-3 py-2 text-left font-semibold">Погашение</th>
-                {(canSellInTrading || !isTrading) && <th className="w-20 px-2 py-2" />}
-              </tr>
-            </thead>
-            <tbody>
-              {visiblePositions.map((pos) => {
+        <div className="space-y-3">
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-xs" data-testid="positions-table">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Бумага</th>
+                  {isTrading && (
+                    <th className="px-3 py-2 text-left font-semibold">Статус</th>
+                  )}
+                  <th className="px-3 py-2 text-left font-semibold">Сектор</th>
+                  <th className="px-3 py-2 text-left font-semibold">Сигнал</th>
+                  <th className="px-3 py-2 text-right font-semibold">YTM</th>
+                  <th className="px-3 py-2 text-right font-semibold">Скор</th>
+                  <th className="px-3 py-2 text-right font-semibold">Лотов</th>
+                  <th className="px-3 py-2 text-right font-semibold">Вложено</th>
+                  <th className="px-3 py-2 text-left font-semibold">Источник</th>
+                  <th className="px-3 py-2 text-left font-semibold">Погашение</th>
+                  {(canSellInTrading || !isTrading) && <th className="w-20 px-2 py-2" />}
+                </tr>
+              </thead>
+              <tbody>
+                {visiblePositions.map((pos) => {
                 const status = pos.status ?? "active";
                 const bond = bondsByIsin.get(pos.isin);
                 const profileScore = bond ? bondScoreForProfile(bond, riskProfile) : null;
                 const detailId = bond?.secid ?? pos.isin;
                 const manualSell = pos.figi ? activeSellByFigi.get(pos.figi) : undefined;
                 const sellBlocked = manualSell != null;
+                const sector = bond?.sector?.trim();
+                const signals = signalsByIsin.get(pos.isin) ?? [];
                 return (
                 <tr
                   key={pos.isin}
@@ -175,7 +195,10 @@ export function PositionsTab({
                   className={cn(
                     "cursor-pointer border-t border-border hover:bg-muted/20",
                   )}
-                  onClick={() => setDetailSecid(detailId)}
+                  onClick={() => {
+                    setDetailSecid(detailId);
+                    setDetailIsin(pos.isin);
+                  }}
                 >
                   <td className="px-3 py-2">
                     <button
@@ -184,6 +207,7 @@ export function PositionsTab({
                       onClick={(e) => {
                         e.stopPropagation();
                         setDetailSecid(detailId);
+                        setDetailIsin(pos.isin);
                       }}
                     >
                       {pos.name}
@@ -219,6 +243,24 @@ export function PositionsTab({
                       </div>
                     </td>
                   )}
+                  <td className="max-w-[160px] px-3 py-2">
+                    <span className={cn("block truncate", !sector && "text-muted-foreground")}>
+                      {sectorLabel(sector)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    {signals.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {signals.slice(0, 2).map((k) => (
+                          <Badge key={k} variant="secondary" className="text-[10px] font-normal">
+                            {k === "turbo_entry" ? "Turbo" : k === "sector_stress" ? "Сектор" : "Спред"}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td
                     className="whitespace-nowrap px-3 py-2 text-right font-mono"
                     data-testid={`position-ytm-${pos.isin}`}
@@ -344,8 +386,9 @@ export function PositionsTab({
                 </tr>
                 );
               })}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -387,7 +430,12 @@ export function PositionsTab({
       <BondDetailSheet
         secid={detailSecid}
         riskProfile={riskProfile}
-        onClose={() => setDetailSecid(null)}
+        portfolioId={portfolioId}
+        isin={detailIsin}
+        onClose={() => {
+          setDetailSecid(null);
+          setDetailIsin(null);
+        }}
       />
 
       <SellPositionDialog

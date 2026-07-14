@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	"github.com/tonatos/bond-monitor/backend/internal/domain/market_signals"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
 )
@@ -26,6 +27,8 @@ type AlertContext struct {
 	Positions           []portfolio.PortfolioPosition
 	Universe            []bonds.BondRecord
 	Today               time.Time
+	KeyRatePP           float64
+	TaxRateFraction     float64
 	NotificationPolicy  NotificationPolicy
 	RiskPolicy          portfolio.RiskMonitorPolicy
 }
@@ -164,6 +167,137 @@ func (RiskEscalationRule) Evaluate(ctx AlertContext) []Alert {
 	return alerts
 }
 
+type SpreadAnomalyRule struct {
+	Policy market_signals.SpreadAnomalyPolicy
+}
+
+func (r SpreadAnomalyRule) Evaluate(ctx AlertContext) []Alert {
+	policy := r.Policy
+	if policy.MinPeers == 0 {
+		policy = market_signals.DefaultSpreadAnomalyPolicy
+	}
+	universeByISIN := ctx.universeByISIN()
+	var alerts []Alert
+
+	for _, holding := range ctx.Holdings {
+		if holding.ISIN == "" || holding.Lots <= 0 {
+			continue
+		}
+		bond, ok := universeByISIN[holding.ISIN]
+		if !ok {
+			continue
+		}
+		if bond.Sector == "" {
+			continue
+		}
+		targetSpread := market_signals.CreditSpreadPP(bond, ctx.KeyRatePP, ctx.TaxRateFraction)
+		if targetSpread == nil {
+			continue
+		}
+		peers := market_signals.PeerGroup(bond, ctx.Universe, policy)
+		if len(peers) < policy.MinPeers {
+			continue
+		}
+		spreads := make([]float64, 0, len(peers))
+		for _, p := range peers {
+			if s := market_signals.CreditSpreadPP(p, ctx.KeyRatePP, ctx.TaxRateFraction); s != nil {
+				spreads = append(spreads, *s)
+			}
+		}
+		stats := market_signals.SpreadStatsFromPeers(spreads)
+		if stats == nil || stats.Peers < policy.MinPeers {
+			continue
+		}
+		anomaly := *targetSpread - stats.ExpectedPP
+		z := market_signals.ZScore(*targetSpread, stats.ExpectedPP, stats.StdDevPP)
+		isAnomaly := anomaly >= policy.MinAnomalyPP
+		if z != nil && *z >= policy.MinZScore {
+			isAnomaly = true
+		}
+		if !isAnomaly {
+			continue
+		}
+		alerts = append(alerts, Alert{
+			PortfolioID: ctx.Portfolio.ID, Kind: AlertKindSpreadAnomaly,
+			ISIN: holding.ISIN, Name: holding.Name, Lots: holding.Lots, FIGI: strPtr(holding.FIGI),
+			Reason: fmt.Sprintf(
+				"Кредитный спред расширился относительно похожих бумаг: %.1f п.п. vs медиана %.1f п.п. (Δ %.1f п.п., peers %d).",
+				*targetSpread, stats.ExpectedPP, anomaly, stats.Peers,
+			),
+			Urgency:   AlertUrgencyNormal,
+			DetailKey: bond.Sector,
+		})
+	}
+	return alerts
+}
+
+type SectorConcentrationRule struct {
+	MaxSectorShare float64
+}
+
+func (r SectorConcentrationRule) Evaluate(ctx AlertContext) []Alert {
+	universeByISIN := ctx.universeByISIN()
+	maxShare := r.MaxSectorShare
+	if maxShare <= 0 {
+		maxShare = portfolio.DefaultDiversificationPolicy.MaxSectorShare
+	}
+
+	lotsByISIN := make(map[string]int)
+	if len(ctx.Holdings) > 0 {
+		for _, h := range ctx.Holdings {
+			if h.ISIN != "" && h.Lots > 0 {
+				lotsByISIN[h.ISIN] += h.Lots
+			}
+		}
+	} else {
+		for _, p := range ctx.Positions {
+			if p.ISIN != "" && p.Lots > 0 {
+				lotsByISIN[p.ISIN] += p.Lots
+			}
+		}
+	}
+
+	totalValue := 0.0
+	for isin, lots := range lotsByISIN {
+		b, ok := universeByISIN[isin]
+		if !ok {
+			continue
+		}
+		if p := b.PricePerLotRub(); p != nil && *p > 0 {
+			totalValue += *p * float64(lots)
+		}
+	}
+	if totalValue <= 0 {
+		return nil
+	}
+	exposures := portfolio.ExposureBySector(universeByISIN, lotsByISIN, totalValue)
+	for _, e := range exposures {
+		if e.Key == "unknown" {
+			continue
+		}
+		if e.Share <= maxShare {
+			continue
+		}
+		sectorLabel := e.Key
+		sharePct := e.Share * 100
+		alerts := []Alert{{
+			PortfolioID: ctx.Portfolio.ID,
+			Kind:        AlertKindSectorConcentration,
+			ISIN:        "sector:" + e.Key,
+			Name:        "Концентрация в секторе: " + sectorLabel,
+			Lots:        0,
+			Reason: fmt.Sprintf(
+				"Сектор «%s» занимает %.1f%% портфеля (лимит %.0f%%). Рекомендуем диверсифицировать.",
+				sectorLabel, sharePct, maxShare*100,
+			),
+			Urgency:   AlertUrgencyNormal,
+			DetailKey: e.Key,
+		}}
+		return alerts
+	}
+	return nil
+}
+
 func strPtr(s string) *string {
 	if s == "" {
 		return nil
@@ -175,11 +309,15 @@ var DefaultAlertRules = []AlertRule{
 	PutOfferActionRule{},
 	PutOfferWatchRule{},
 	RiskEscalationRule{},
+	SectorConcentrationRule{},
+	SpreadAnomalyRule{},
 }
 
 var WorkerAlertRules = []AlertRule{
 	PutOfferActionRule{},
 	RiskEscalationRule{},
+	SectorConcentrationRule{},
+	SpreadAnomalyRule{},
 }
 
 // AlertParams groups inputs for CollectAlerts.
@@ -189,6 +327,8 @@ type AlertParams struct {
 	Positions          []portfolio.PortfolioPosition
 	Universe           []bonds.BondRecord
 	Today              time.Time
+	KeyRatePP          float64
+	TaxRateFraction    float64
 	Rules              []AlertRule
 	NotificationPolicy NotificationPolicy
 	RiskPolicy         portfolio.RiskMonitorPolicy
@@ -199,6 +339,7 @@ func CollectAlerts(params AlertParams) []Alert {
 	ctx := AlertContext{
 		Portfolio: params.Portfolio, Holdings: params.Holdings, Positions: params.Positions,
 		Universe: params.Universe, Today: params.Today,
+		KeyRatePP: params.KeyRatePP, TaxRateFraction: params.TaxRateFraction,
 		NotificationPolicy: params.NotificationPolicy, RiskPolicy: params.RiskPolicy,
 	}
 	rules := params.Rules

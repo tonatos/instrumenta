@@ -245,6 +245,7 @@ export function PortfolioPage() {
                             active.api_trade_only ??
                             active.data?.api_trade_only ??
                             true,
+                            turbo_entry_enabled: active.data?.turbo_entry_enabled ?? false,
                           max_weighted_duration_years:
                             active.data?.max_weighted_duration_years != null
                               ? String(active.data.max_weighted_duration_years)

@@ -77,6 +77,22 @@ func TestFilterBondListSearch(t *testing.T) {
 	}
 }
 
+func TestFilterBondListSectors(t *testing.T) {
+	list := []bonds.BondRecord{
+		bondFixture("FIN", "I1", "Financial", func(b *bonds.BondRecord) { b.Sector = "financial" }),
+		bondFixture("RE", "I2", "RealEstate", func(b *bonds.BondRecord) { b.Sector = "real_estate" }),
+		bondFixture("EMPTY", "I3", "NoSector"),
+	}
+	out := bonds.FilterBondList(list, bonds.BondListQuery{Sectors: []string{"financial", "real_estate"}})
+	if len(out) != 2 {
+		t.Fatalf("expected 2 bonds, got %+v", out)
+	}
+	outOne := bonds.FilterBondList(list, bonds.BondListQuery{Sectors: []string{"financial"}})
+	if len(outOne) != 1 || outOne[0].Secid != "FIN" {
+		t.Fatalf("expected financial bond only, got %+v", outOne)
+	}
+}
+
 func TestSortBondListByYTMNet(t *testing.T) {
 	list := []bonds.BondRecord{
 		bondFixture("A", "I1", "A", func(b *bonds.BondRecord) { b.YTMNet = bonds.FloatPtr(10) }),

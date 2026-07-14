@@ -237,6 +237,7 @@ func PortfolioToResponse(p portfolio.Portfolio, today time.Time) PortfolioRespon
 		HorizonDate:              shared.FormatISODate(p.HorizonDate),
 		RiskProfile:              string(p.RiskProfile),
 		APITradeOnly:             p.APITradeOnly,
+		TurboEntryEnabled:        p.TurboEntryEnabled,
 		MaxWeightedDurationYears: p.MaxWeightedDurationYears,
 		TargetDurationYears:      p.TargetDurationYears,
 		CashBalanceRub:           p.CashBalanceRub,

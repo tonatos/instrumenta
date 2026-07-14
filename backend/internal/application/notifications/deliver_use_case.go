@@ -120,8 +120,25 @@ func alertPayload(alert domain.Alert) map[string]any {
 		"reason":       alert.Reason,
 		"urgency":      string(alert.Urgency),
 	}
+	if alert.ExtraPayload != nil {
+		for k, v := range alert.ExtraPayload {
+			if _, exists := payload[k]; exists {
+				continue
+			}
+			payload[k] = v
+		}
+	}
 	if alert.FIGI != nil {
 		payload["figi"] = *alert.FIGI
+	}
+	if alert.SuggestedPricePct != nil {
+		payload["suggested_price_pct"] = *alert.SuggestedPricePct
+	}
+	if alert.MarketPricePct != nil {
+		payload["market_price_pct"] = *alert.MarketPricePct
+	}
+	if alert.Lots > 0 {
+		payload["lots"] = alert.Lots
 	}
 	if alert.DueDate != nil {
 		payload["due_date"] = alert.DueDate.Format("2006-01-02")

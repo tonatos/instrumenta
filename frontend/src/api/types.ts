@@ -65,6 +65,7 @@ export interface BondListParams {
   max_lot_price_rub?: number;
   coupon_types?: string[];
   risk_levels?: number[];
+  sectors?: string[];
   hide_default?: boolean;
   hide_subordinated?: boolean;
   q?: string;
@@ -175,6 +176,7 @@ export interface PortfolioData {
   horizon_date: string;
   mode: string;
   api_trade_only?: boolean;
+  turbo_entry_enabled?: boolean;
   max_weighted_duration_years?: number | null;
   target_duration_years?: number | null;
   account_id: string | null;
@@ -493,7 +495,15 @@ export interface SandboxPayInResponse {
   money_rub: number;
 }
 
-export type NotificationKind = "put_offer_action" | "risk_escalation" | "put_offer_watch";
+export type NotificationKind =
+  | "put_offer_action"
+  | "risk_escalation"
+  | "put_offer_watch"
+  | "sector_concentration"
+  | "spread_anomaly"
+  | "spread_widening"
+  | "sector_stress"
+  | "turbo_entry";
 
 export interface Notification {
   id: string;
@@ -510,6 +520,49 @@ export interface Notification {
 
 export interface NotificationsListResponse {
   notifications: Notification[];
+}
+
+export interface MarketRadarSectorRow {
+  sector: string;
+  change_7d_pct: number;
+  anomaly_count: number;
+  dip_idea_count: number;
+  bond_count: number;
+  in_portfolios?: string[];
+}
+
+export interface MarketRadarAnomalyRow {
+  isin: string;
+  secid: string;
+  name: string;
+  sector: string;
+  spread_pp: number;
+  expected_spread_pp: number;
+  delta_pp: number;
+  z_score?: number | null;
+  peers: number;
+  in_portfolios?: string[];
+}
+
+export interface MarketRadarDipIdeaRow {
+  isin: string;
+  secid: string;
+  name: string;
+  sector: string;
+  bond_change_7d_pct: number;
+  sector_change_7d_pct: number;
+  idiosyncratic_excess_pct: number;
+  score: number;
+  interpretation: string;
+  in_portfolios?: string[];
+}
+
+export interface MarketRadarResponse {
+  scanned_at: string;
+  universe_scanned: number;
+  sectors: MarketRadarSectorRow[];
+  anomalies: MarketRadarAnomalyRow[];
+  dip_ideas: MarketRadarDipIdeaRow[];
 }
 
 export interface AccountOperation {

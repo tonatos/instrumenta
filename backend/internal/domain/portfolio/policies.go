@@ -32,6 +32,18 @@ var DefaultPortfolioAllocationPolicy = PortfolioAllocationPolicy{
 	MinPositionShare:     0.03,
 }
 
+// DiversificationPolicy constrains portfolio concentration by issuer/sector.
+// It is applied in compose/deploy pipelines as a guardrail, not as a score penalty.
+type DiversificationPolicy struct {
+	MaxSectorShare float64
+	MaxIssuerShare float64
+}
+
+var DefaultDiversificationPolicy = DiversificationPolicy{
+	MaxSectorShare: 0.35,
+	MaxIssuerShare: 0.25,
+}
+
 type BondSelectionPolicy struct {
 	MinCleanPricePct           float64
 	MinReplacementHorizonDays  int

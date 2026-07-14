@@ -27,6 +27,7 @@ export function buildScreenerQueryParams(input: {
   maxLotPrice: number | "";
   couponTypes: string[];
   riskLevels: number[];
+  sectors: string[];
   hideDefault: boolean;
   hideSubordinated: boolean;
   search: string;
@@ -52,6 +53,7 @@ export function buildScreenerQueryParams(input: {
   }
   if (input.couponTypes.length > 0) params.coupon_types = input.couponTypes;
   if (input.riskLevels.length > 0) params.risk_levels = input.riskLevels;
+  if (input.sectors.length > 0) params.sectors = input.sectors;
   if (input.search.trim()) params.q = input.search.trim();
   if (input.page != null) params.page = input.page;
   if (input.exportAll) params.export = true;

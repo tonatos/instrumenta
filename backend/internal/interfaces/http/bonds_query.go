@@ -49,6 +49,9 @@ func ParseBondListQuery(r *http.Request) domainBonds.BondListQuery {
 			}
 		}
 	}
+	if v := strings.TrimSpace(q.Get("sectors")); v != "" {
+		query.Sectors = splitCSV(v)
+	}
 	if v := strings.TrimSpace(q.Get("page")); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			query.Page = n

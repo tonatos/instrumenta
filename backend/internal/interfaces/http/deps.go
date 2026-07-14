@@ -17,6 +17,7 @@ type Deps struct {
 	Portfolios    application.PortfolioService
 	Trading       application.TradingService
 	Notifications application.NotificationsRepository
+	MarketRadar   application.MarketRadarService
 	HTTPClient    *http.Client
 }
 

@@ -1,0 +1,41 @@
+{
+  "status": 200,
+  "body": {
+    "anomalies": [
+      {
+        "delta_pp": 10.3,
+        "expected_spread_pp": 8.2,
+        "isin": "RU000A109874",
+        "name": "Test Bond",
+        "peers": 8,
+        "secid": "TEST1",
+        "sector": "energy",
+        "spread_pp": 18.5
+      }
+    ],
+    "dip_ideas": [
+      {
+        "bond_change_7d_pct": -22.1,
+        "idiosyncratic_excess_pct": -6.8,
+        "interpretation": "sector_panic_overshoot",
+        "isin": "RU000A109874",
+        "name": "Test Bond",
+        "score": 71,
+        "secid": "TEST1",
+        "sector": "energy",
+        "sector_change_7d_pct": -15.3
+      }
+    ],
+    "scanned_at": "2026-07-14T18:00:00Z",
+    "sectors": [
+      {
+        "anomaly_count": 12,
+        "bond_count": 45,
+        "change_7d_pct": -16.2,
+        "dip_idea_count": 4,
+        "sector": "energy"
+      }
+    ],
+    "universe_scanned": 842
+  }
+}

@@ -48,9 +48,15 @@ func AutoCompose(
 	keyRate, taxRate float64,
 	apiTradeOnly bool,
 	dp DurationPolicy,
+	divPolicy *DiversificationPolicy,
+	currentLotsByISIN map[string]int,
 ) (positions []PortfolioPosition, leftoverCash float64, notes []string) {
 	if initialAmount <= 0 {
 		return nil, 0, []string{"Бюджет ≤ 0 — нечего распределять"}
+	}
+	policy := DefaultDiversificationPolicy
+	if divPolicy != nil {
+		policy = *divPolicy
 	}
 	ctx := SelectionContext(profile, horizonDate, today, apiTradeOnly, nil)
 	selection := SelectRankedBonds(universe, ctx, DefaultBondSelectionPolicy, keyRate, taxRate, dp, nil)
@@ -79,6 +85,54 @@ func AutoCompose(
 		cost float64
 	}
 	bought := make(map[string]*lotState)
+
+	universeByISIN := make(map[string]bonds.BondRecord, len(universe))
+	for _, b := range universe {
+		universeByISIN[b.ISIN] = b
+	}
+	sectorSpent := make(map[string]float64)
+	issuerSpent := make(map[string]float64)
+	if currentLotsByISIN != nil {
+		for isin, lots := range currentLotsByISIN {
+			if lots <= 0 {
+				continue
+			}
+			b, ok := universeByISIN[isin]
+			if !ok {
+				continue
+			}
+			p := b.PricePerLotRub()
+			if p == nil || *p <= 0 {
+				continue
+			}
+			v := *p * float64(lots)
+			if k := exposureKey(b.Sector); k != "unknown" {
+				sectorSpent[k] += v
+			}
+			if k := exposureKey(b.IssuerName); k != "unknown" {
+				issuerSpent[k] += v
+			}
+		}
+	}
+
+	withinCaps := func(bond bonds.BondRecord, extraRub float64) bool {
+		if initialAmount <= 0 || extraRub <= 0 {
+			return true
+		}
+		sector := exposureKey(bond.Sector)
+		issuer := exposureKey(bond.IssuerName)
+		if policy.MaxSectorShare > 0 {
+			if sector != "unknown" && (sectorSpent[sector]+extraRub)/initialAmount > policy.MaxSectorShare {
+				return false
+			}
+		}
+		if policy.MaxIssuerShare > 0 {
+			if issuer != "unknown" && (issuerSpent[issuer]+extraRub)/initialAmount > policy.MaxIssuerShare {
+				return false
+			}
+		}
+		return true
+	}
 
 	for _, bond := range scored {
 		if remaining < minPerPosition || len(positions) >= targetCount {
@@ -114,8 +168,17 @@ func AutoCompose(
 		if targetLots < 1 || costAtTarget < minPerPosition {
 			continue
 		}
+		if !withinCaps(bond, costAtTarget) {
+			continue
+		}
 		positions = append(positions, PositionFromBond(bond, targetLots, today, PositionSourceInitial))
 		bought[bond.ISIN] = &lotState{bond: bond, lots: targetLots, cost: costAtTarget}
+		if k := exposureKey(bond.Sector); k != "unknown" {
+			sectorSpent[k] += costAtTarget
+		}
+		if k := exposureKey(bond.IssuerName); k != "unknown" {
+			issuerSpent[k] += costAtTarget
+		}
 		remaining -= costAtTarget
 	}
 
@@ -138,9 +201,18 @@ func AutoCompose(
 				if state.cost+lotCost > maxPerPosition {
 					continue
 				}
+				if !withinCaps(state.bond, lotCost) {
+					continue
+				}
 				state.lots++
 				state.cost += lotCost
 				remaining -= lotCost
+				if k := exposureKey(state.bond.Sector); k != "unknown" {
+					sectorSpent[k] += lotCost
+				}
+				if k := exposureKey(state.bond.IssuerName); k != "unknown" {
+					issuerSpent[k] += lotCost
+				}
 				changed = true
 				if remaining < lotCost {
 					break
@@ -175,8 +247,17 @@ func AutoCompose(
 			if cost < minPerPosition {
 				continue
 			}
+			if !withinCaps(bond, cost) {
+				continue
+			}
 			positions = append(positions, PositionFromBond(bond, maxLots, today, PositionSourceInitial))
 			bought[bond.ISIN] = &lotState{bond: bond, lots: maxLots, cost: cost}
+			if k := exposureKey(bond.Sector); k != "unknown" {
+				sectorSpent[k] += cost
+			}
+			if k := exposureKey(bond.IssuerName); k != "unknown" {
+				issuerSpent[k] += cost
+			}
 			remaining -= cost
 			if len(positions) >= MinAutoPositions || remaining < minPerPosition {
 				break
@@ -338,6 +419,7 @@ func ComposeBuyAllocations(
 	apiTradeOnly bool,
 	accountKind *AccountKind,
 	dp DurationPolicy,
+	divPolicy *DiversificationPolicy,
 ) ([]BuyAllocation, []string) {
 	if cashToDeployRub <= 0 {
 		return nil, []string{"Сумма к развёртыванию ≤ 0 — нечего распределять."}
@@ -354,7 +436,10 @@ func ComposeBuyAllocations(
 		deployUniverse = topScoredExistingBonds(universe, existingISINs, profile, horizonDate, today, keyRate, taxRate, apiTradeOnly, dp)
 		notes = append(notes, "Лимит 10 позиций — докупаем только существующие бумаги.")
 	}
-	targetPositions, _, composeNotes := AutoCompose(totalBudgetRub, deployUniverse, profile, horizonDate, today, keyRate, taxRate, apiTradeOnly, dp)
+	targetPositions, _, composeNotes := AutoCompose(
+		totalBudgetRub, deployUniverse, profile, horizonDate, today, keyRate, taxRate, apiTradeOnly, dp,
+		divPolicy, currentLotsByISIN,
+	)
 	notes = append(notes, composeNotes...)
 	if len(targetPositions) == 0 {
 		return nil, append(notes, "Кэш не распределён: не удалось построить целевую структуру.")

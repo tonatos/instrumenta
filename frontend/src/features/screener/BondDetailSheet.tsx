@@ -6,6 +6,8 @@ import {
   PROFILE_SCORE_WEIGHTS,
   type BondRiskProfile,
 } from "@/features/bonds/bondScore";
+import { sectorLabel } from "@/features/bonds/sectorLabels";
+import { isMarketSignal } from "@/features/portfolio/marketSignals";
 import { OFFER_WINDOW_STATUS_LABELS, RISK_LABELS } from "@/features/portfolio/labels";
 import { useRateScenario } from "@/features/settings/RateScenarioProvider";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +22,8 @@ interface Props {
   secid: string | null;
   onClose: () => void;
   riskProfile?: BondRiskProfile;
+  portfolioId?: string;
+  isin?: string | null;
 }
 
 const RISK_LEVEL_LABELS: Record<number, { label: string; className: string }> = {
@@ -150,6 +154,8 @@ export function BondDetailSheet({
   secid,
   onClose,
   riskProfile = "normal",
+  portfolioId,
+  isin,
 }: Props) {
   const queryClient = useQueryClient();
   const rateScenario = useRateScenario();
@@ -158,6 +164,13 @@ export function BondDetailSheet({
     queryKey: ["bond", secid, riskProfile, rateScenario],
     queryFn: () => api.getBond(secid!, riskProfile),
     enabled: !!secid,
+  });
+
+  const { data: notificationsData } = useQuery({
+    queryKey: ["notifications", portfolioId],
+    queryFn: () => api.getNotifications(portfolioId!),
+    enabled: Boolean(portfolioId),
+    refetchInterval: 60_000,
   });
 
   const toggleFavorite = useMutation({
@@ -186,6 +199,19 @@ export function BondDetailSheet({
   const showIssuerSection = Boolean(
     bond && (bond.issuer_name || bond.sector || bond.description),
   );
+
+  const signal = (() => {
+    if (!isin) return null;
+    const items = (notificationsData?.notifications ?? []).filter((n) => {
+      if (!isMarketSignal(n)) {
+        return false;
+      }
+      return typeof n.payload?.isin === "string" && n.payload.isin === isin;
+    });
+    if (items.length === 0) return null;
+    items.sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""));
+    return items[0];
+  })();
 
   return (
     <Sheet open={!!secid} onOpenChange={(o) => !o && onClose()}>
@@ -251,13 +277,55 @@ export function BondDetailSheet({
                     Эмитент
                   </h3>
                   <dl className="divide-y divide-border/50">
-                    {bond.sector && <InfoRow label="Сектор" value={bond.sector} />}
+                    {bond.sector && <InfoRow label="Сектор" value={sectorLabel(bond.sector)} />}
                   </dl>
                   {bond.description && (
                     <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
                       {bond.description}
                     </p>
                   )}
+                </section>
+                <Separator />
+              </>
+            )}
+
+            {signal && (
+              <>
+                <section>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Рыночный контекст
+                  </h3>
+                  <div className="space-y-2 rounded-lg border border-sky-400/40 bg-sky-500/5 p-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <p className="text-sm font-medium">{signal.payload?.name as string}</p>
+                      <Badge variant="outline" className="text-xs">
+                        {signal.kind}
+                      </Badge>
+                    </div>
+                    {typeof signal.payload?.reason === "string" && (
+                      <p className="text-sm text-muted-foreground">{signal.payload.reason}</p>
+                    )}
+                    <dl className="divide-y divide-border/50">
+                      {typeof signal.payload?.bond_change_7d_pct === "number" && (
+                        <InfoRow
+                          label="Бумага (7д)"
+                          value={`${signal.payload.bond_change_7d_pct.toFixed(1)}%`}
+                        />
+                      )}
+                      {typeof signal.payload?.sector_change_7d_pct === "number" && (
+                        <InfoRow
+                          label="Сектор (7д)"
+                          value={`${signal.payload.sector_change_7d_pct.toFixed(1)}%`}
+                        />
+                      )}
+                      {typeof signal.payload?.spread_change_7d_pp === "number" && (
+                        <InfoRow
+                          label="Спред (7д)"
+                          value={`${signal.payload.spread_change_7d_pp.toFixed(1)} п.п.`}
+                        />
+                      )}
+                    </dl>
+                  </div>
                 </section>
                 <Separator />
               </>

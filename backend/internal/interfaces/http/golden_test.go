@@ -213,6 +213,17 @@ func TestGoldenNotificationsList(t *testing.T) {
 	assertGoldenBody(t, "notifications_list", rr.Code, rr.Body.Bytes())
 }
 
+func TestGoldenMarketRadarEmpty(t *testing.T) {
+	deps := httpapi.Deps{
+		Settings:    config.Load(),
+		MarketRadar: mockMarketRadarService{},
+	}
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/market-radar", nil)
+	testRouter(t, deps).ServeHTTP(rr, req)
+	assertGoldenBody(t, "market_radar_empty", rr.Code, rr.Body.Bytes())
+}
+
 func TestGoldenDeploySessionConflict(t *testing.T) {
 	deps := httpapi.Deps{
 		Settings: config.Load(),
@@ -479,6 +490,31 @@ func (mockNotificationsRepo) MarkRead(context.Context, string) (*application.Not
 }
 func (mockNotificationsRepo) Dismiss(context.Context, string) (*application.NotificationRecord, error) {
 	return nil, nil
+}
+
+type mockMarketRadarService struct{}
+
+func (mockMarketRadarService) GetMarketRadar(context.Context, bool) (*application.MarketRadarResponse, error) {
+	return &application.MarketRadarResponse{
+		ScannedAt:       "2026-07-14T18:00:00Z",
+		UniverseScanned: 842,
+		Sectors: []application.MarketRadarSectorRow{
+			{Sector: "energy", Change7dPct: -16.2, AnomalyCount: 12, DipIdeaCount: 4, BondCount: 45},
+		},
+		Anomalies: []application.MarketRadarAnomalyRow{
+			{
+				ISIN: "RU000A109874", Secid: "TEST1", Name: "Test Bond", Sector: "energy",
+				SpreadPP: 18.5, ExpectedSpreadPP: 8.2, DeltaPP: 10.3, Peers: 8,
+			},
+		},
+		DipIdeas: []application.MarketRadarDipIdeaRow{
+			{
+				ISIN: "RU000A109874", Secid: "TEST1", Name: "Test Bond", Sector: "energy",
+				BondChange7dPct: -22.1, SectorChange7dPct: -15.3, IdiosyncraticExcess7dPct: -6.8,
+				Score: 71, Interpretation: "sector_panic_overshoot",
+			},
+		},
+	}, nil
 }
 
 func TestLitestarErrorShape(t *testing.T) {

@@ -92,6 +92,22 @@ export function PortfolioForm({
           </span>
         </span>
       </label>
+
+      <label className="flex cursor-pointer items-start gap-2 text-sm sm:col-span-2">
+        <input
+          type="checkbox"
+          className="mt-1"
+          checked={form.turbo_entry_enabled}
+          onChange={(e) => setForm({ ...form, turbo_entry_enabled: e.target.checked })}
+        />
+        <span>
+          <span className="font-medium text-foreground">Turbo-entry</span>
+          <span className="mt-0.5 block text-muted-foreground">
+            Тактический сигнал на докупку при сильной просадке сектора. Это экспериментальный режим и
+            он не влияет на скор скринера.
+          </span>
+        </span>
+      </label>
       <DialogFooter className="sm:col-span-2">
         <Button
           onClick={() => onSubmit(form)}

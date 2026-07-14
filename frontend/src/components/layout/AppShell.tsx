@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
+  Activity,
   BarChart3,
   Calculator,
   Heart,
@@ -22,6 +23,7 @@ const navItems = [
   { to: "/", label: "Скринер", icon: TrendingUp },
   { to: "/favorites", label: "Избранное", icon: Heart },
   { to: "/portfolio", label: "Портфель", icon: BarChart3 },
+  { to: "/radar", label: "Radar", icon: Activity },
   { to: "/calculator", label: "Калькулятор", icon: Calculator },
 ];
 

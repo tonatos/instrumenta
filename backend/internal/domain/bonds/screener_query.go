@@ -21,6 +21,7 @@ type BondListQuery struct {
 	MaxLotPriceRub   *float64
 	CouponTypes      []string
 	RiskLevels       []int
+	Sectors          []string
 	HideDefault      bool
 	HideSubordinated bool
 	Search           string
@@ -69,6 +70,7 @@ func FilterBondList(list []BondRecord, q BondListQuery) []BondRecord {
 	search := strings.ToLower(strings.TrimSpace(q.Search))
 	couponSet := stringSet(q.CouponTypes)
 	riskSet := intSet(q.RiskLevels)
+	sectorSet := stringSet(q.Sectors)
 
 	var out []BondRecord
 	for _, b := range list {
@@ -99,6 +101,9 @@ func FilterBondList(list []BondRecord, q BondListQuery) []BondRecord {
 			continue
 		}
 		if len(riskSet) > 0 && !riskSet[int(b.RiskLevel)] {
+			continue
+		}
+		if len(sectorSet) > 0 && !sectorSet[strings.ToLower(strings.TrimSpace(b.Sector))] {
 			continue
 		}
 		if search != "" && !matchesSearch(b, search) {

@@ -52,3 +52,15 @@ export function buildTradingDisplayPositions(
 
   return [...fromHoldings, ...pendingPlan];
 }
+
+export function resolveVisiblePositions(
+  positions: PortfolioPosition[],
+  isTrading: boolean,
+  bondsByIsin: Map<string, Bond>,
+  tradingAdvice?: { holdings: HoldingView[] },
+): PortfolioPosition[] {
+  if (!isTrading || !tradingAdvice) {
+    return positions;
+  }
+  return buildTradingDisplayPositions(tradingAdvice.holdings, positions, bondsByIsin);
+}

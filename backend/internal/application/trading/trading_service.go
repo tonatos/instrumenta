@@ -7,6 +7,7 @@ import (
 
 	"github.com/tonatos/bond-monitor/backend/internal/application"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	domainNotifications "github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
 	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
 )
@@ -27,6 +28,7 @@ type Service struct {
 func NewService(
 	repo domainPortfolio.Repository,
 	deployRepo trading.DeploySessionRepository,
+	notificationsRepo domainNotifications.Repository,
 	sandboxToken, productionToken string,
 ) *Service {
 	ctx := NewContext(repo, sandboxToken, productionToken)
@@ -35,7 +37,7 @@ func NewService(
 	broker := NewBrokerFacade(sandboxClient, productionClient)
 	policy := trading.DefaultDeploySessionPolicy()
 	deploySessions := NewDeploySessionUseCase(ctx, deployRepo, broker, policy)
-	advise := NewAdviseUseCase(ctx, deploySessions, broker)
+	advise := NewAdviseUseCase(ctx, deploySessions, broker, notificationsRepo)
 	return &Service{
 		ctx:            ctx,
 		sandbox:        NewSandboxUseCase(ctx, broker),

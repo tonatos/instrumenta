@@ -5,6 +5,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { ScreenerPage } from "@/features/screener/ScreenerPage";
 import { FavoritesPage } from "@/features/favorites/FavoritesPage";
 import { PortfolioPage } from "@/features/portfolio/PortfolioPage";
+import { RadarPage } from "@/features/radar/RadarPage";
 import { CalculatorPage } from "@/features/calculator/CalculatorPage";
 import { AuthProvider } from "@/features/auth/AuthContext";
 import { LoginPage } from "@/features/auth/LoginPage";
@@ -33,6 +34,7 @@ export function App() {
                   <Route index element={<ScreenerPage />} />
                   <Route path="favorites" element={<FavoritesPage />} />
                   <Route path="portfolio/:portfolioId?" element={<PortfolioPage />} />
+                  <Route path="radar" element={<RadarPage />} />
                   <Route path="calculator" element={<CalculatorPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>

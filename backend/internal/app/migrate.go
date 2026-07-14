@@ -5,16 +5,63 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
 )
 
 func runMigrations(ctx context.Context, db *persistence.DB) error {
-	path := migrationPath()
+	paths, err := migrationFiles()
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		if err := applyMigrationFile(ctx, db, path); err != nil {
+			return fmt.Errorf("%s: %w", filepath.Base(path), err)
+		}
+	}
+	return nil
+}
+
+func migrationFiles() ([]string, error) {
+	if p := os.Getenv("BOND_MONITOR_MIGRATIONS"); p != "" {
+		info, err := os.Stat(p)
+		if err != nil {
+			return nil, fmt.Errorf("stat migration path %s: %w", p, err)
+		}
+		if info.IsDir() {
+			return listSQLMigrations(p)
+		}
+		return []string{p}, nil
+	}
+	dir := filepath.Join(repoRoot(), "backend", "migrations")
+	return listSQLMigrations(dir)
+}
+
+func listSQLMigrations(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read migrations dir %s: %w", dir, err)
+	}
+	var paths []string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+		paths = append(paths, filepath.Join(dir, entry.Name()))
+	}
+	sort.Strings(paths)
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no SQL migrations in %s", dir)
+	}
+	return paths, nil
+}
+
+func applyMigrationFile(ctx context.Context, db *persistence.DB, path string) error {
 	raw, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("read migration %s: %w", path, err)
+		return fmt.Errorf("read migration: %w", err)
 	}
 	sql := extractGooseUp(string(raw))
 	for _, stmt := range splitSQLStatements(sql) {
@@ -23,14 +70,6 @@ func runMigrations(ctx context.Context, db *persistence.DB) error {
 		}
 	}
 	return nil
-}
-
-func migrationPath() string {
-	if p := os.Getenv("BOND_MONITOR_MIGRATIONS"); p != "" {
-		return p
-	}
-	root := repoRoot()
-	return filepath.Join(root, "backend", "migrations", "001_initial.sql")
 }
 
 func repoRoot() string {

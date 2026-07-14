@@ -41,12 +41,17 @@ func (h *Handler) CreatePortfolio(w http.ResponseWriter, r *http.Request) {
 	if req.APITradeOnly != nil {
 		apiTrade = *req.APITradeOnly
 	}
+	turbo := false
+	if req.TurboEntryEnabled != nil {
+		turbo = *req.TurboEntryEnabled
+	}
 	p, err := h.deps.Portfolios.CreatePortfolio(r.Context(), application.CreatePortfolioParams{
 		Name:                     req.Name,
 		InitialAmountRub:         req.InitialAmountRub,
 		HorizonDate:              shared.DateOnly(horizon),
 		RiskProfile:              ParseRiskProfile(req.RiskProfile),
 		APITradeOnly:             apiTrade,
+		TurboEntryEnabled:        turbo,
 		MaxWeightedDurationYears: req.MaxWeightedDurationYears,
 		TargetDurationYears:      req.TargetDurationYears,
 	})
@@ -92,6 +97,7 @@ func (h *Handler) UpdatePortfolio(w http.ResponseWriter, r *http.Request) {
 		Name:                     req.Name,
 		InitialAmountRub:         req.InitialAmountRub,
 		APITradeOnly:             req.APITradeOnly,
+		TurboEntryEnabled:        req.TurboEntryEnabled,
 		MaxWeightedDurationYears: req.MaxWeightedDurationYears,
 		TargetDurationYears:      req.TargetDurationYears,
 	}

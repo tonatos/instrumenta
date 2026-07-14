@@ -7,6 +7,7 @@ import (
 
 	"github.com/tonatos/bond-monitor/backend/internal/application"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	domainNotifications "github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
 	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
@@ -17,10 +18,11 @@ type AdviseUseCase struct {
 	ctx            *Context
 	deploySessions *DeploySessionUseCase
 	broker         *BrokerFacade
+	notifications  domainNotifications.Repository
 }
 
-func NewAdviseUseCase(ctx *Context, deploySessions *DeploySessionUseCase, broker *BrokerFacade) *AdviseUseCase {
-	return &AdviseUseCase{ctx: ctx, deploySessions: deploySessions, broker: broker}
+func NewAdviseUseCase(ctx *Context, deploySessions *DeploySessionUseCase, broker *BrokerFacade, notifications domainNotifications.Repository) *AdviseUseCase {
+	return &AdviseUseCase{ctx: ctx, deploySessions: deploySessions, broker: broker, notifications: notifications}
 }
 
 func (u *AdviseUseCase) GetAdvice(ctx context.Context, portfolioID string, universe []bonds.BondRecord, keyRate, taxRate float64, today time.Time, durationPolicy *domainPortfolio.DurationPolicy) (application.TradingAdviceResult, error) {
@@ -59,6 +61,11 @@ func (u *AdviseUseCase) BuildAdviceResult(ctx context.Context, p domainPortfolio
 	advice := trading.Advise(p, brokerSnapshot, tinvest.ToBrokerActiveOrders(activeOrders), tinvest.ToBrokerOperations(operations), universe, trading.AdviseParams{
 		KeyRate: keyRate, TaxRate: taxRate, Today: &today, DurationPolicy: policy, ActiveSession: activeSession,
 	})
+	if u.notifications != nil {
+		if recs, err := u.notifications.ListForPortfolio(ctx, p.ID, true); err == nil {
+			advice.Suggestions = append(advice.Suggestions, turboEntrySuggestionsFromNotifications(p.ID, recs)...)
+		}
+	}
 	var deploySession *trading.DeploySession
 	if u.deploySessions != nil && advice.DeploySession != nil {
 		persisted, err := u.deploySessions.SaveSession(ctx, *advice.DeploySession)
@@ -81,6 +88,50 @@ func (u *AdviseUseCase) BuildAdviceResult(ctx context.Context, p domainPortfolio
 		WeightedDurationYears: advice.WeightedDurationYears,
 		DeploySession:         deploySession,
 	}, nil
+}
+
+func turboEntrySuggestionsFromNotifications(portfolioID string, recs []domainNotifications.NotificationRecord) []trading.Suggestion {
+	var out []trading.Suggestion
+	for _, n := range recs {
+		if n.Kind != "turbo_entry" {
+			continue
+		}
+		isin, _ := n.Payload["isin"].(string)
+		name, _ := n.Payload["name"].(string)
+		reason, _ := n.Payload["reason"].(string)
+		if isin == "" || name == "" {
+			continue
+		}
+		lots := 1
+		if v, ok := n.Payload["lots"].(float64); ok && v >= 1 {
+			lots = int(v)
+		}
+		var suggested *float64
+		if v, ok := n.Payload["suggested_price_pct"].(float64); ok {
+			suggested = &v
+		}
+		var market *float64
+		if v, ok := n.Payload["market_price_pct"].(float64); ok {
+			market = &v
+		}
+		var figi *string
+		if v, ok := n.Payload["figi"].(string); ok && v != "" {
+			figi = &v
+		}
+		out = append(out, trading.Suggestion{
+			ID:               trading.StableID(portfolioID, "turbo_entry_buy", isin),
+			Kind:             trading.SuggestionKindBuy,
+			ISIN:             isin,
+			Name:             name,
+			Lots:             lots,
+			FIGI:             figi,
+			SuggestedPricePct: suggested,
+			MarketPricePct:    market,
+			Reason:           reason,
+			Urgency:          trading.SuggestionUrgency(n.Urgency),
+		})
+	}
+	return out
 }
 
 func (u *AdviseUseCase) GetPerformance(ctx context.Context, portfolioID string) (map[string]any, error) {

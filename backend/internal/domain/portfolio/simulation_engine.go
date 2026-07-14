@@ -259,20 +259,6 @@ func RunSimulation(
 	reminded := make(map[string]struct{})
 	isTrading := accountSnapshotMoneyRub != nil
 
-	if !isTrading && len(seedPositions) == 0 {
-		composed, _, composeNotes := AutoCompose(
-			initialCash, universe, p.RiskProfile, horizon, today,
-			keyRate, taxRate, p.APITradeOnly, durationPolicy,
-		)
-		result.Notes = append(result.Notes, composeNotes...)
-		seedPositions = composed
-		spent := 0.0
-		for _, pos := range composed {
-			spent += pos.PurchaseAmountRub
-		}
-		state.Cash = initialCash - spent
-	}
-
 	for _, position := range seedPositions {
 		gen := generationFor(position)
 		entry := state.AddPosition(position, gen)

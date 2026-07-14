@@ -17,6 +17,7 @@ function portfolioFormToUpdateBody(values: Partial<PortfolioFormValues>) {
   if (values.horizon_date !== undefined) body.horizon_date = values.horizon_date;
   if (values.risk_profile !== undefined) body.risk_profile = values.risk_profile;
   if (values.api_trade_only !== undefined) body.api_trade_only = values.api_trade_only;
+  if (values.turbo_entry_enabled !== undefined) body.turbo_entry_enabled = values.turbo_entry_enabled;
   if (values.max_weighted_duration_years !== undefined) {
     body.max_weighted_duration_years = parseDurationLimit(values.max_weighted_duration_years);
   }
@@ -29,6 +30,7 @@ export type PortfolioFormValues = {
   horizon_date: string;
   risk_profile: string;
   api_trade_only: boolean;
+  turbo_entry_enabled: boolean;
   max_weighted_duration_years: string;
 };
 
@@ -38,6 +40,7 @@ export const defaultCreateForm: PortfolioFormValues = {
   horizon_date: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString().slice(0, 10),
   risk_profile: "normal",
   api_trade_only: true,
+  turbo_entry_enabled: false,
   max_weighted_duration_years: "",
 };
 
@@ -65,6 +68,7 @@ export function usePortfolioMutations({
         horizon_date: values.horizon_date,
         risk_profile: values.risk_profile,
         api_trade_only: values.api_trade_only,
+        turbo_entry_enabled: values.turbo_entry_enabled,
         max_weighted_duration_years: parseDurationLimit(values.max_weighted_duration_years),
       }),
     onSuccess: (p) => {

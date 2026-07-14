@@ -147,6 +147,7 @@ type Portfolio struct {
 	HorizonDate              time.Time
 	RiskProfile              RiskProfile
 	APITradeOnly             bool
+	TurboEntryEnabled        bool
 	MaxWeightedDurationYears *float64
 	TargetDurationYears      *float64
 	Positions                []PortfolioPosition
