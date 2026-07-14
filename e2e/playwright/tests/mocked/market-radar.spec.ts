@@ -119,14 +119,14 @@ test.describe("Market Radar page", () => {
     await expect(page.getByTestId("radar-sector-energy")).toBeVisible();
 
     await page.getByTestId("radar-sector-energy").click();
-    await expect(page.getByTestId("radar-anomaly-TEST1")).toBeVisible();
-    await expect(page.getByTestId("radar-anomaly-TEST2")).toHaveCount(0);
+    await expect(page.getByTestId("radar-anomaly-TEST1").filter({ visible: true })).toBeVisible();
+    await expect(page.getByTestId("radar-anomaly-TEST2").filter({ visible: true })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Показать все секторы" }).click();
-    await expect(page.getByTestId("radar-anomaly-TEST2")).toBeVisible();
+    await expect(page.getByTestId("radar-anomaly-TEST2").filter({ visible: true })).toBeVisible();
 
     await page.getByTestId("radar-mine-first-toggle").click();
-    await expect(page.getByTestId("radar-anomaly-TEST1")).toBeVisible();
+    await expect(page.getByTestId("radar-anomaly-TEST1").filter({ visible: true })).toBeVisible();
 
     const openPortfolio = page.getByTestId("radar-open-portfolio-TEST1");
     await expect(openPortfolio).toBeVisible();

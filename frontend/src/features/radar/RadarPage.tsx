@@ -162,7 +162,7 @@ export function RadarPage() {
               setRiskProfile(next);
             }}
           >
-            <SelectTrigger className="h-9 w-[180px]" data-testid="radar-risk-profile">
+            <SelectTrigger className="h-9 w-full sm:w-[180px]" data-testid="radar-risk-profile">
               <SelectValue placeholder="Профиль риска">
                 {RISK_PROFILES.find((p) => p.value === riskProfile)?.label}
               </SelectValue>

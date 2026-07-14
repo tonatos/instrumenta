@@ -63,7 +63,7 @@ export function SectorExposurePanel({
 
   return (
     <div className="rounded-lg border border-border p-3">
-      <div className="mb-2 flex items-center justify-between gap-3">
+      <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div>
           <div className="text-sm font-semibold">Структура по секторам</div>
           <div className="text-xs text-muted-foreground">

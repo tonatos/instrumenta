@@ -20,11 +20,11 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 const navItems = [
-  { to: "/", label: "Скринер", icon: TrendingUp },
-  { to: "/favorites", label: "Избранное", icon: Heart },
-  { to: "/portfolio", label: "Портфель", icon: BarChart3 },
-  { to: "/radar", label: "Radar", icon: Activity },
-  { to: "/calculator", label: "Калькулятор", icon: Calculator },
+  { to: "/", label: "Скринер", mobileLabel: "Скринер", icon: TrendingUp },
+  { to: "/favorites", label: "Избранное", mobileLabel: "Избран.", icon: Heart },
+  { to: "/portfolio", label: "Портфель", mobileLabel: "Портф.", icon: BarChart3 },
+  { to: "/radar", label: "Radar", mobileLabel: "Radar", icon: Activity },
+  { to: "/calculator", label: "Калькулятор", mobileLabel: "Кальк.", icon: Calculator },
 ];
 
 export function AppShell() {

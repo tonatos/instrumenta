@@ -45,7 +45,7 @@ function DipIdeaActions({
         onValueChange={(value) => navigate(portfolioLink(value))}
       >
         <SelectTrigger
-          className="h-8 w-[180px]"
+          className="h-8 w-full sm:w-[180px]"
           data-testid={`radar-open-portfolio-${idea.secid}`}
         >
           <SelectValue placeholder="Открыть в портфеле" />
@@ -124,7 +124,7 @@ export function DipIdeasPanel({
               </Badge>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
               <div>
                 <p className="text-muted-foreground">Δ7д бумаги</p>
                 <p className="font-mono tabular-nums">{formatPct(idea.bond_change_7d_pct, 1)}</p>

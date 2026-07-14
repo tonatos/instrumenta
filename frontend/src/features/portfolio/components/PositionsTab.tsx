@@ -162,18 +162,20 @@ export function PositionsTab({
             <table className="w-full text-xs" data-testid="positions-table">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold">Бумага</th>
+                  <th className="sticky left-0 z-10 bg-muted/95 px-3 py-2 text-left font-semibold shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+                    Бумага
+                  </th>
                   {isTrading && (
-                    <th className="px-3 py-2 text-left font-semibold">Статус</th>
+                    <th className="hidden px-3 py-2 text-left font-semibold md:table-cell">Статус</th>
                   )}
-                  <th className="px-3 py-2 text-left font-semibold">Сектор</th>
-                  <th className="px-3 py-2 text-left font-semibold">Сигнал</th>
+                  <th className="hidden px-3 py-2 text-left font-semibold md:table-cell">Сектор</th>
+                  <th className="hidden px-3 py-2 text-left font-semibold md:table-cell">Сигнал</th>
                   <th className="px-3 py-2 text-right font-semibold">YTM</th>
-                  <th className="px-3 py-2 text-right font-semibold">Скор</th>
+                  <th className="hidden px-3 py-2 text-right font-semibold md:table-cell">Скор</th>
                   <th className="px-3 py-2 text-right font-semibold">Лотов</th>
                   <th className="px-3 py-2 text-right font-semibold">Вложено</th>
-                  <th className="px-3 py-2 text-left font-semibold">Источник</th>
-                  <th className="px-3 py-2 text-left font-semibold">Погашение</th>
+                  <th className="hidden px-3 py-2 text-left font-semibold md:table-cell">Источник</th>
+                  <th className="hidden px-3 py-2 text-left font-semibold lg:table-cell">Погашение</th>
                   {(canSellInTrading || !isTrading) && <th className="w-20 px-2 py-2" />}
                 </tr>
               </thead>
@@ -238,6 +240,15 @@ export function PositionsTab({
                             SELL на бирже
                           </Badge>
                         )}
+                        {signals.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {signals.slice(0, 2).map((k) => (
+                              <Badge key={k} variant="secondary" className="text-[10px] font-normal">
+                                {k === "turbo_entry" ? "Turbo" : k === "sector_stress" ? "Сектор" : "Спред"}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </td>
@@ -270,12 +281,12 @@ export function PositionsTab({
                       </div>
                     </td>
                   )}
-                  <td className="max-w-[160px] px-3 py-2">
+                  <td className="hidden max-w-[160px] px-3 py-2 md:table-cell">
                     <span className={cn("block truncate", !sector && "text-muted-foreground")}>
                       {sectorLabel(sector)}
                     </span>
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="hidden px-3 py-2 md:table-cell">
                     {signals.length > 0 ? (
                       <div className="flex flex-wrap gap-1">
                         {signals.slice(0, 2).map((k) => (

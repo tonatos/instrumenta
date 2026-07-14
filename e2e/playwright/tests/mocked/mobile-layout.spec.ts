@@ -174,4 +174,61 @@ test.describe("Mobile layout", () => {
     await expect(page.getByRole("heading", { name: "Калькулятор" })).toBeVisible();
     await assertNoPageOverflow(page);
   });
+
+  test("radar: anomalies рендерятся без page-level overflow", async ({ page }) => {
+    await mockConfig(page);
+    await page.route("**/api/v1/bonds/**", async (route) => {
+      await route.fulfill({ json: bondsListResponse([]) });
+    });
+    await page.route("**/api/v1/favorites", async (route) => {
+      await route.fulfill({ json: { bonds: [], count: 0 } });
+    });
+    await page.route("**/api/v1/portfolios/", async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ json: [] });
+        return;
+      }
+      await route.continue();
+    });
+    await page.route("**/api/v1/market-radar**", async (route) => {
+      await route.fulfill({
+        json: {
+          scanned_at: "2026-07-14T18:00:00Z",
+          universe_scanned: 100,
+          sectors: [
+            {
+              sector: "energy",
+              change_7d_pct: -10,
+              anomaly_count: 1,
+              dip_idea_count: 0,
+              bond_count: 10,
+            },
+          ],
+          anomalies: [
+            {
+              isin: "RU000A109874",
+              secid: "TEST1",
+              name: "Test Bond",
+              sector: "energy",
+              spread_pp: 18.5,
+              expected_spread_pp: 8.2,
+              delta_pp: 10.3,
+              z_score: 2.4,
+              peers: 8,
+              in_portfolios: [],
+            },
+          ],
+          dip_ideas: [],
+        },
+      });
+    });
+
+    await page.goto("/radar");
+
+    await expect(page.getByTestId("radar-page")).toBeVisible();
+    await expect(
+      page.getByTestId("radar-anomaly-TEST1").filter({ visible: true }),
+    ).toBeVisible();
+    await assertNoPageOverflow(page);
+  });
 });
