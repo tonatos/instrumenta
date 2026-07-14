@@ -19,10 +19,10 @@ import { cn } from "@/lib/utils";
 import { useState } from "react";
 
 const navItems = [
-  { to: "/", label: "Скринер", icon: TrendingUp },
-  { to: "/favorites", label: "Избранное", icon: Heart },
-  { to: "/portfolio", label: "Портфель", icon: BarChart3 },
-  { to: "/calculator", label: "Калькулятор", icon: Calculator },
+  { to: "/", label: "Скринер", mobileLabel: "Скринер", icon: TrendingUp },
+  { to: "/favorites", label: "Избранное", mobileLabel: "Избран.", icon: Heart },
+  { to: "/portfolio", label: "Портфель", mobileLabel: "Портф.", icon: BarChart3 },
+  { to: "/calculator", label: "Калькулятор", mobileLabel: "Кальк.", icon: Calculator },
 ];
 
 export function AppShell() {
@@ -35,7 +35,7 @@ export function AppShell() {
   });
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen overflow-x-hidden bg-background">
       <aside className="hidden w-64 flex-col border-r border-border bg-card md:flex">
         <div className="flex h-16 items-center gap-3 border-b border-border px-6">
           <img src="/favicon.svg" alt="" width={32} height={32} className="shrink-0" />
@@ -89,13 +89,13 @@ export function AppShell() {
         </div>
       </aside>
 
-      <div className="flex flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b border-border px-4 md:hidden">
-          <div className="flex items-center gap-2">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-4 md:hidden">
+          <div className="flex min-w-0 items-center gap-2">
             <img src="/favicon.svg" alt="" width={28} height={28} className="shrink-0" />
-            <p className="font-semibold tracking-tight">Bond Monitor</p>
+            <p className="truncate font-semibold tracking-tight">Bond Monitor</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <Button variant="outline" size="icon" onClick={toggle} aria-label="Тема">
               {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
             </Button>
@@ -105,28 +105,36 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-4 md:p-6">
+        <main className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-4 pb-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:p-6 md:pb-6">
           <Outlet />
         </main>
 
         <nav
-          className="flex border-t border-border bg-card md:hidden"
+          className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-card pb-safe md:hidden"
           aria-label="Мобильная навигация"
         >
-          {navItems.map(({ to, label, icon: Icon }) => (
+          {navItems.map(({ to, label, mobileLabel, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
               end={to === "/"}
+              aria-label={label}
               className={({ isActive }) =>
                 cn(
-                  "flex flex-1 flex-col items-center gap-1 py-2 text-xs",
+                  "flex min-w-0 flex-1 flex-col items-center gap-1 py-2 text-xs",
                   isActive ? "text-primary" : "text-muted-foreground",
                 )
               }
             >
-              <Icon className="h-5 w-5" aria-hidden />
-              {label}
+              <span className="relative">
+                <Icon className="h-5 w-5" aria-hidden />
+                {to === "/favorites" && favorites && favorites.count > 0 && (
+                  <span className="absolute -right-2 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground">
+                    {favorites.count > 99 ? "99+" : favorites.count}
+                  </span>
+                )}
+              </span>
+              <span className="max-w-[4.5rem] truncate text-center">{mobileLabel}</span>
             </NavLink>
           ))}
         </nav>

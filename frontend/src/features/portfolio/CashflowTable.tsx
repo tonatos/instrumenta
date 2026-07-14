@@ -79,9 +79,9 @@ export function CashflowTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Cashflow</h3>
-        <div className="flex overflow-hidden rounded-md border border-border">
+        <div className="flex flex-wrap overflow-hidden rounded-md border border-border">
           <button
             type="button"
             onClick={() => setView("table")}
@@ -117,9 +117,9 @@ export function CashflowTable({
                 <th className="px-3 py-2 text-left font-semibold">Дата</th>
                 <th className="px-3 py-2 text-left font-semibold">Тип</th>
                 <th className="px-3 py-2 text-left font-semibold">Описание</th>
-                <th className="px-3 py-2 text-right font-semibold">Кол-во</th>
+                <th className="hidden px-3 py-2 text-right font-semibold sm:table-cell">Кол-во</th>
                 <th className="px-3 py-2 text-right font-semibold">Сумма</th>
-                <th className="px-3 py-2 text-right font-semibold">Баланс</th>
+                <th className="hidden px-3 py-2 text-right font-semibold sm:table-cell">Баланс</th>
               </tr>
             </thead>
             <tbody>
@@ -141,7 +141,7 @@ export function CashflowTable({
                     <td className="max-w-[200px] truncate px-3 py-2 text-muted-foreground">
                       {row.label}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right text-muted-foreground">
+                    <td className="hidden whitespace-nowrap px-3 py-2 text-right text-muted-foreground sm:table-cell">
                       {row.bonds_count != null && row.bonds_count > 0
                         ? `${row.bonds_count} шт.`
                         : row.lots != null && row.lots > 0
@@ -160,7 +160,7 @@ export function CashflowTable({
                         ? `−${formatRub(Math.abs(row.amount_rub))}`
                         : `+${formatRub(row.amount_rub)}`}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right">
+                    <td className="hidden whitespace-nowrap px-3 py-2 text-right sm:table-cell">
                       {formatRub(row.running_balance)}
                     </td>
                   </tr>

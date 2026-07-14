@@ -65,8 +65,9 @@ export function PortfolioTabs({
 
   return (
     <TabsRoot value={activeTab} onValueChange={setActiveTab}>
-      <TabsList className="w-full sm:w-auto">
-        <TabsTrigger value="positions">
+      <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:overflow-visible">
+        <TabsList className="inline-flex w-max min-w-full sm:w-auto">
+          <TabsTrigger value="positions">
           Позиции
           {positionsBadgeCount > 0 && (
             <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-mono">
@@ -91,8 +92,8 @@ export function PortfolioTabs({
           )}
         </TabsTrigger>
         {isTrading && active.account_id && (
-          <TabsTrigger value="operations">
-            История операций
+          <TabsTrigger value="operations" title="История операций">
+            Операции
             {accountOperationsData && (
               <span className="ml-1.5 rounded-full bg-muted px-1.5 py-0.5 text-xs font-mono">
                 {accountOperationsData.operations.length}
@@ -100,7 +101,8 @@ export function PortfolioTabs({
             )}
           </TabsTrigger>
         )}
-      </TabsList>
+        </TabsList>
+      </div>
 
       <TabsContent value="positions" className="mt-4">
         <PositionsTab

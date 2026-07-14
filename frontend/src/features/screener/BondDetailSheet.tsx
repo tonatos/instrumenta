@@ -46,16 +46,16 @@ function InfoRow({
   tooltip?: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-2 py-1.5 text-sm">
+    <div className="flex flex-col gap-0.5 py-1.5 text-sm sm:flex-row sm:items-start sm:justify-between sm:gap-2">
       <dt className="flex shrink-0 items-center gap-1 text-muted-foreground">
         {label}
         {tooltip && (
-          <Tooltip content={<span className="leading-relaxed">{tooltip}</span>} side="left">
+          <Tooltip content={<span className="leading-relaxed">{tooltip}</span>} side="top">
             <HelpCircle className="h-3.5 w-3.5 cursor-help opacity-60" />
           </Tooltip>
         )}
       </dt>
-      <dd className="text-right font-medium">{value ?? "—"}</dd>
+      <dd className="min-w-0 break-words font-medium sm:text-right">{value ?? "—"}</dd>
     </div>
   );
 }

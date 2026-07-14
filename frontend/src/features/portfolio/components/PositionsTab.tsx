@@ -146,17 +146,21 @@ export function PositionsTab({
           <table className="w-full text-xs" data-testid="positions-table">
             <thead className="bg-muted/50">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold">Бумага</th>
+                <th className="sticky left-0 z-10 bg-muted/95 px-3 py-2 text-left font-semibold shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+                  Бумага
+                </th>
                 {isTrading && (
-                  <th className="px-3 py-2 text-left font-semibold">Статус</th>
+                  <th className="hidden px-3 py-2 text-left font-semibold md:table-cell">Статус</th>
                 )}
                 <th className="px-3 py-2 text-right font-semibold">YTM</th>
-                <th className="px-3 py-2 text-right font-semibold">Скор</th>
+                <th className="hidden px-3 py-2 text-right font-semibold md:table-cell">Скор</th>
                 <th className="px-3 py-2 text-right font-semibold">Лотов</th>
                 <th className="px-3 py-2 text-right font-semibold">Вложено</th>
-                <th className="px-3 py-2 text-left font-semibold">Источник</th>
-                <th className="px-3 py-2 text-left font-semibold">Погашение</th>
-                {(canSellInTrading || !isTrading) && <th className="w-20 px-2 py-2" />}
+                <th className="hidden px-3 py-2 text-left font-semibold md:table-cell">Источник</th>
+                <th className="hidden px-3 py-2 text-left font-semibold lg:table-cell">Погашение</th>
+                {(canSellInTrading || !isTrading) && (
+                  <th className="w-20 px-2 py-2" />
+                )}
               </tr>
             </thead>
             <tbody>
@@ -177,7 +181,7 @@ export function PositionsTab({
                   )}
                   onClick={() => setDetailSecid(detailId)}
                 >
-                  <td className="px-3 py-2">
+                  <td className="sticky left-0 z-[1] bg-background px-3 py-2 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                     <button
                       type="button"
                       className="max-w-[180px] truncate text-left font-medium hover:underline"
@@ -189,9 +193,36 @@ export function PositionsTab({
                       {pos.name}
                     </button>
                     <p className="text-muted-foreground">{detailId}</p>
+                    {isTrading && (
+                      <div className="mt-1 flex flex-wrap items-center gap-1 md:hidden">
+                        <Badge
+                          variant={
+                            status === "active"
+                              ? "default"
+                              : status === "pending"
+                                ? "secondary"
+                                : status === "drift"
+                                  ? "destructive"
+                                  : "outline"
+                          }
+                          className="text-[10px] font-normal"
+                        >
+                          {POSITION_STATUS_LABELS[status] ?? status}
+                        </Badge>
+                        {manualSell && (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] font-normal"
+                            data-testid={`sell-pending-badge-${pos.isin}`}
+                          >
+                            SELL на бирже
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                   </td>
                   {isTrading && (
-                    <td className="px-3 py-2">
+                    <td className="hidden px-3 py-2 md:table-cell">
                       <div className="flex flex-wrap items-center gap-1">
                         <Badge
                           variant={
@@ -226,7 +257,7 @@ export function PositionsTab({
                     {formatPct(bond?.ytm_net)}
                   </td>
                   <td
-                    className="px-3 py-2 text-right"
+                    className="hidden px-3 py-2 text-right md:table-cell"
                     data-testid={`position-score-${pos.isin}`}
                   >
                     <Badge
@@ -244,10 +275,10 @@ export function PositionsTab({
                   <td className="whitespace-nowrap px-3 py-2 text-right">
                     {formatRub(pos.purchase_amount_rub)}
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">
+                  <td className="hidden px-3 py-2 text-muted-foreground md:table-cell">
                     {SOURCE_LABELS[pos.source] ?? pos.source}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                  <td className="hidden whitespace-nowrap px-3 py-2 text-muted-foreground lg:table-cell">
                     <div className="space-y-1">
                       {pos.offer_date ? (
                         <>
@@ -263,7 +294,7 @@ export function PositionsTab({
                           {(pos.offer_window_status === "open" ||
                             pos.put_offer_decision === "exercise" ||
                             pos.put_offer_decision === "hold") && (
-                            <div className="flex flex-wrap gap-1 pt-1">
+                            <div className="hidden flex-wrap gap-1 pt-1 md:flex">
                               {(["exercise", "hold"] as const).map((decision) => (
                                 <Button
                                   key={decision}
@@ -351,7 +382,7 @@ export function PositionsTab({
 
       {!isTrading && (
         <div className="flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-border bg-muted/20 p-3">
-          <div className="min-w-[200px] flex-1">
+          <div className="w-full min-w-0 flex-1 sm:min-w-[200px]">
             <p className="mb-1 text-xs font-medium text-muted-foreground">Добавить бумагу</p>
             <Combobox
               options={bondOptions}

@@ -9,6 +9,8 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import {
+  ChevronDown,
+  ChevronUp,
   Download,
   RefreshCw,
   RotateCcw,
@@ -64,6 +66,18 @@ const RISK_LEVELS = [
 
 const STORAGE_KEY = "screener_column_visibility";
 
+const MOBILE_HIDDEN_COLUMNS: VisibilityState = {
+  duration_years: false,
+  ytm: false,
+  coupon_rate: false,
+  coupon_type: false,
+  risk_level: false,
+  lot_price: false,
+  credit_rating: false,
+  volume_rub: false,
+  maturity_date: false,
+};
+
 function loadColumnVisibility(): VisibilityState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -85,11 +99,30 @@ export function ScreenerPage() {
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
     loadColumnVisibility,
   );
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const queryClient = useQueryClient();
   const { rateScenario } = useRateScenario();
   const [riskProfile, setRiskProfile] = useState<ScreenerRiskProfile>(getScreenerRiskProfile);
 
   useEffect(() => subscribeScreenerRiskProfile(() => setRiskProfile(getScreenerRiskProfile())), []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const syncViewport = () => {
+      const mobile = mq.matches;
+      setIsMobileViewport(mobile);
+      setFiltersExpanded(!mobile);
+      if (mobile) {
+        setColumnVisibility((prev) => ({ ...prev, ...MOBILE_HIDDEN_COLUMNS }));
+      } else {
+        setColumnVisibility(loadColumnVisibility());
+      }
+    };
+    syncViewport();
+    mq.addEventListener("change", syncViewport);
+    return () => mq.removeEventListener("change", syncViewport);
+  }, []);
 
   const { data: config } = useQuery({
     queryKey: ["config"],
@@ -211,6 +244,33 @@ export function ScreenerPage() {
     setHideDefault(true);
     setSearchInput("");
   }, [config]);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (searchInput.trim()) count++;
+    if (filterBy !== "effective") count++;
+    if (maxDays !== "" && maxDays !== (config?.max_days ?? "")) count++;
+    if (minVolume !== "" && minVolume !== (config?.min_volume_rub ?? "")) count++;
+    if (minYtm !== "") count++;
+    if (maxLotPrice !== "" && maxLotPrice !== 0) count++;
+    if (couponTypes.length > 0) count++;
+    if (riskLevels.length > 0) count++;
+    if (hideSubordinated) count++;
+    if (!hideDefault) count++;
+    return count;
+  }, [
+    searchInput,
+    filterBy,
+    maxDays,
+    minVolume,
+    minYtm,
+    maxLotPrice,
+    couponTypes,
+    riskLevels,
+    hideSubordinated,
+    hideDefault,
+    config,
+  ]);
 
   const handleColumnVisibility = useCallback((state: VisibilityState) => {
     setColumnVisibility(state);
@@ -383,6 +443,8 @@ export function ScreenerPage() {
     manualSorting: true,
   });
 
+  const visibleColumnCount = table.getVisibleLeafColumns().length;
+
   const exportCsv = async () => {
     const exportParams = buildScreenerQueryParams({
       filterBy,
@@ -446,14 +508,35 @@ export function ScreenerPage() {
       {/* Filters */}
       <Card>
         <CardHeader className="pb-2 pt-4">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-sm font-semibold">Фильтры</CardTitle>
-            <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 gap-1 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-2 text-left md:pointer-events-none"
+              onClick={() => setFiltersExpanded((v) => !v)}
+              data-testid="screener-filters-toggle"
+              aria-expanded={filtersExpanded}
+            >
+              <CardTitle className="text-sm font-semibold">Фильтры</CardTitle>
+              {!filtersExpanded && activeFilterCount > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {activeFilterCount} активн.
+                </Badge>
+              )}
+              <span className="md:hidden">
+                {filtersExpanded ? (
+                  <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden />
+                ) : (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden />
+                )}
+              </span>
+            </button>
+            <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 shrink-0 gap-1 text-xs">
               <RotateCcw className="h-3.5 w-3.5" />
               Сбросить
             </Button>
           </div>
         </CardHeader>
+        {filtersExpanded && (
         <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {/* Search */}
           <div className="space-y-1 sm:col-span-2 lg:col-span-3">
@@ -510,7 +593,7 @@ export function ScreenerPage() {
                 </button>
               </Tooltip>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               {(["effective", "maturity"] as const).map((v) => (
                 <button
                   key={v}
@@ -523,7 +606,14 @@ export function ScreenerPage() {
                       : "border-border hover:bg-muted/50",
                   )}
                 >
-                  {v === "effective" ? "До оферты/погашения" : "До погашения"}
+                  {v === "effective" ? (
+                    <>
+                      <span className="sm:hidden">Оферта/погаш.</span>
+                      <span className="hidden sm:inline">До оферты/погашения</span>
+                    </>
+                  ) : (
+                    "До погашения"
+                  )}
                 </button>
               ))}
             </div>
@@ -716,6 +806,7 @@ export function ScreenerPage() {
             </label>
           </div>
         </CardContent>
+        )}
       </Card>
 
       {/* Table toolbar */}
@@ -773,6 +864,8 @@ export function ScreenerPage() {
                         className={cn(
                           "whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider",
                           header.column.getCanSort() && "cursor-pointer select-none",
+                          (header.column.id === "favorite" || header.column.id === "name") &&
+                            "sticky left-0 z-10 bg-muted/95 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]",
                         )}
                         onClick={header.column.getToggleSortingHandler()}
                       >
@@ -791,7 +884,14 @@ export function ScreenerPage() {
                     onClick={() => setSelectedSecid(row.original.secid)}
                   >
                     {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="whitespace-nowrap px-4 py-2.5">
+                      <td
+                        key={cell.id}
+                        className={cn(
+                          "whitespace-nowrap px-4 py-2.5",
+                          (cell.column.id === "favorite" || cell.column.id === "name") &&
+                            "sticky left-0 z-[1] bg-background shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]",
+                        )}
+                      >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))}
@@ -812,6 +912,11 @@ export function ScreenerPage() {
                   <span className="text-xs text-muted-foreground">Прокрутите для подгрузки</span>
                 )}
               </div>
+            )}
+            {isMobileViewport && visibleColumnCount > 4 && (
+              <p className="border-t border-border px-4 py-2 text-center text-xs text-muted-foreground md:hidden">
+                Свайп влево для остальных колонок
+              </p>
             )}
           </div>
         )}

@@ -95,8 +95,8 @@ export function AccountOperationsTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold">История операций</h3>
           {!isLoading && operations.length > 0 && (
             <p className="text-xs text-muted-foreground">
@@ -141,8 +141,8 @@ export function AccountOperationsTable({
                 <th className="px-3 py-2 text-right font-semibold">Кол-во</th>
                 <th className="px-3 py-2 text-right font-semibold">Цена</th>
                 <th className="px-3 py-2 text-right font-semibold">Сумма</th>
-                <th className="px-3 py-2 text-right font-semibold">Комиссия</th>
-                <th className="px-3 py-2 text-left font-semibold">Статус</th>
+                <th className="hidden px-3 py-2 text-right font-semibold md:table-cell">Комиссия</th>
+                <th className="hidden px-3 py-2 text-left font-semibold md:table-cell">Статус</th>
               </tr>
             </thead>
             <tbody>
@@ -184,12 +184,12 @@ export function AccountOperationsTable({
                     >
                       {formatPayment(op.payment_rub)}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right text-muted-foreground">
+                    <td className="hidden whitespace-nowrap px-3 py-2 text-right text-muted-foreground md:table-cell">
                       {op.commission_rub != null && op.commission_rub !== 0
                         ? formatRub(op.commission_rub)
                         : "—"}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
+                    <td className="hidden whitespace-nowrap px-3 py-2 text-muted-foreground md:table-cell">
                       {op.state_label}
                     </td>
                   </tr>

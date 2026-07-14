@@ -11,7 +11,10 @@ export default defineConfig({
     baseURL: process.env.BASE_URL || "http://localhost:5173",
     trace: "on-first-retry",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile", use: { ...devices["Pixel 5"] } },
+  ],
   webServer: process.env.CI
     ? undefined
     : [

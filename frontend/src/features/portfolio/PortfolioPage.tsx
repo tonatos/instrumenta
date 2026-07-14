@@ -94,7 +94,7 @@ export function PortfolioPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Портфель</h1>
           <p className="text-sm text-muted-foreground">Планирование и прогноз доходности</p>
@@ -127,7 +127,7 @@ export function PortfolioPage() {
       {isLoading && <Skeleton className="h-12 w-full" />}
 
       {portfolios && portfolios.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 overflow-x-auto pb-1">
+        <div className="min-w-0 flex flex-wrap gap-1.5 overflow-x-auto pb-1">
           {portfolios.map((p) => (
             <button
               key={p.id}
@@ -170,7 +170,7 @@ export function PortfolioPage() {
                     <h2 className="text-xl font-bold tracking-tight">{active.name}</h2>
                     <TradingModeBadge portfolio={active} />
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
                     {portfolioInvestedCapitalRub(active) > active.initial_amount_rub ? (
                       <>
                         <Tooltip content="Начальный бюджет при создании портфеля">
@@ -212,7 +212,7 @@ export function PortfolioPage() {
                     )}
                   </div>
                   {isTrading && active.account_id && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="break-all text-xs text-muted-foreground">
                       Счёт T-Invest: {active.account_id} ({active.account_kind})
                     </p>
                   )}

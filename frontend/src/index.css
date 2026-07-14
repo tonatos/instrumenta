@@ -50,9 +50,18 @@
   * {
     @apply border-border;
   }
+  html,
+  body {
+    @apply overflow-x-hidden;
+  }
+
   body {
     @apply bg-background text-foreground antialiased;
     font-family: "Inter", system-ui, -apple-system, sans-serif;
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
   /* Native date input inherits app colour-scheme so the popup calendar

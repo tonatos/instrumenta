@@ -1,0 +1,13 @@
+---
+description: UI changes must be mobile-friendly
+alwaysApply: true
+---
+
+UI-изменения должны быть mobile-friendly (viewport ≥ 320px, ориентир 375×667):
+
+- Не допускай horizontal overflow на уровне страницы (`html`/`body`); широкий контент скроллится внутри контейнера (`overflow-x-auto` в `main` или обёртке таблицы).
+- Bottom nav и mobile header в `AppShell` — fixed/sticky к viewport; не привязывай их к ширине контента.
+- Таблицы на `<md`: скрывай второстепенные колонки (`hidden md:table-cell`) или card-layout; sticky first column где уместно.
+- Фильтры и формы: vertical stack; тяжёлые панели фильтров — collapsible на mobile.
+- Touch targets ≥ 40px где возможно.
+- Перед завершением UI-задачи проверь на 375px (ручная проверка или e2e project `mobile`).
