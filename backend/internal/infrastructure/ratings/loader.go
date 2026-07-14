@@ -1,99 +1,55 @@
 package ratings
 
 import (
-	"encoding/json"
+	"context"
 	"log"
-	"os"
-	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/paths"
 )
 
-// Loader loads vendored and auto-scraped credit ratings.
+// Loader applies credit ratings from SQLite reference tables.
 type Loader struct {
-	vendoredPath string
-	autoPath     string
+	repo BondReferenceStore
+
+	mu             sync.Mutex
+	cachedPatterns map[string]string
 }
 
-// NewLoader creates a ratings loader.
-func NewLoader() *Loader {
-	cacheDir := paths.CacheDir()
-	return &Loader{
-		vendoredPath: paths.RatingsJSONPath(),
-		autoPath:     filepath.Join(cacheDir, "ratings_auto.json"),
+// NewLoader creates a ratings loader backed by SQLite.
+func NewLoader(repo BondReferenceStore) *Loader {
+	return &Loader{repo: repo}
+}
+
+func (l *Loader) ApplyRatings(ctx context.Context, bs []bonds.BondRecord) []bonds.BondRecord {
+	if l.repo == nil || len(bs) == 0 {
+		return bs
 	}
-}
-
-func (l *Loader) LoadRatings() (map[string]any, error) {
-	data, err := os.ReadFile(l.vendoredPath)
+	isins := make([]string, 0, len(bs))
+	for _, b := range bs {
+		if b.ISIN != "" {
+			isins = append(isins, b.ISIN)
+		}
+	}
+	byISIN, err := l.repo.ListRatingsByISINs(ctx, isins)
 	if err != nil {
-		log.Printf("ratings.json not found at %s", l.vendoredPath)
-		return map[string]any{}, nil
+		log.Printf("ratings: list by isin: %v", err)
+		byISIN = map[string]string{}
 	}
-	var ratings map[string]any
-	if err := json.Unmarshal(data, &ratings); err != nil {
-		return map[string]any{}, err
-	}
-	return ratings, nil
-}
-
-func (l *Loader) LoadAutoRatings() (map[string]any, error) {
-	data, err := os.ReadFile(l.autoPath)
+	patterns, err := l.loadPatterns(ctx)
 	if err != nil {
-		return nil, nil
-	}
-	var envelope map[string]any
-	if err := json.Unmarshal(data, &envelope); err != nil {
-		return nil, nil
-	}
-	if _, ok := envelope["isin_ratings"].(map[string]any); !ok {
-		return nil, nil
-	}
-	return envelope, nil
-}
-
-func (l *Loader) ApplyRatings(bs []bonds.BondRecord, ratings map[string]any, autoRatings map[string]any) []bonds.BondRecord {
-	autoISIN := map[string]string{}
-	if autoRatings != nil {
-		if m, ok := autoRatings["isin_ratings"].(map[string]any); ok {
-			for isin, v := range m {
-				if s, ok := v.(string); ok {
-					autoISIN[isin] = s
-				}
-			}
-		}
-	}
-	vendoredISIN := map[string]string{}
-	vendoredNames := map[string]string{}
-	if ratings != nil {
-		if m, ok := ratings["isin_ratings"].(map[string]any); ok {
-			for isin, v := range m {
-				if s, ok := v.(string); ok {
-					vendoredISIN[isin] = s
-				}
-			}
-		}
-		if m, ok := ratings["name_ratings"].(map[string]any); ok {
-			for name, v := range m {
-				if s, ok := v.(string); ok {
-					vendoredNames[strings.ToLower(name)] = s
-				}
-			}
-		}
+		log.Printf("ratings: list issuer patterns: %v", err)
+		patterns = map[string]string{}
 	}
 	for i := range bs {
-		if rating, ok := autoISIN[bs[i].ISIN]; ok {
-			bs[i].CreditRating = &rating
-			continue
-		}
-		if rating, ok := vendoredISIN[bs[i].ISIN]; ok {
-			bs[i].CreditRating = &rating
+		if rating, ok := byISIN[bs[i].ISIN]; ok {
+			r := rating
+			bs[i].CreditRating = &r
 			continue
 		}
 		nameLower := strings.ToLower(bs[i].Name)
-		for pattern, rating := range vendoredNames {
+		for pattern, rating := range patterns {
 			if strings.Contains(nameLower, pattern) {
 				r := rating
 				bs[i].CreditRating = &r
@@ -102,6 +58,41 @@ func (l *Loader) ApplyRatings(bs []bonds.BondRecord, ratings map[string]any, aut
 		}
 	}
 	return bs
+}
+
+func (l *Loader) RefreshFromSmartLab(ctx context.Context) (int, error) {
+	return RefreshFromSmartLab(ctx, l.repo, nil)
+}
+
+func (l *Loader) MaybeRefreshStale(ctx context.Context) {
+	if !NeedsRatingsRefresh(ctx, l.repo) {
+		return
+	}
+	go func() {
+		if _, err := l.RefreshFromSmartLab(context.Background()); err != nil {
+			log.Printf("ratings: background refresh failed: %v", err)
+		}
+	}()
+}
+
+func (l *Loader) loadPatterns(ctx context.Context) (map[string]string, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.cachedPatterns != nil {
+		return l.cachedPatterns, nil
+	}
+	patterns, err := l.repo.ListIssuerPatterns(ctx)
+	if err != nil {
+		return nil, err
+	}
+	l.cachedPatterns = patterns
+	return patterns, nil
+}
+
+func (l *Loader) InvalidatePatternCache() {
+	l.mu.Lock()
+	l.cachedPatterns = nil
+	l.mu.Unlock()
 }
 
 var _ bonds.RatingsLoader = (*Loader)(nil)

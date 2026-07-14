@@ -15,7 +15,6 @@ services:
       REDIS_URL: "redis://redis:6379/0"
       BOND_MONITOR_REPO_ROOT: "/app"
     volumes:
-      - ./data/ratings.json:/app/data/ratings.json:ro
       - ./cache:/app/cache
     depends_on:
       redis:
@@ -67,7 +66,6 @@ services:
       REDIS_URL: "redis://redis:6379/0"
       BOND_MONITOR_REPO_ROOT: "/app"
     volumes:
-      - ./data/ratings.json:/app/data/ratings.json:ro
       - ./cache:/app/cache
     depends_on:
       redis:

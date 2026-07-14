@@ -9,7 +9,7 @@
 ```
 MOEX ISS ──► infrastructure/moex/ ──┐
 T-Invest  ──► infrastructure/tinvest/ ──┤
-smart-lab ──► infrastructure/ratings/ ──┘
+smart-lab ──► infrastructure/ratings/ ──► SQLite bond_credit_ratings ──┘
                     ▼
          domain/bonds (BondRecord)
                     ▼
@@ -124,7 +124,9 @@ fetch MOEX (unfiltered) → enrich (defaults, T-Invest, ratings, put offers)
 | `LoadBySecid` / `LoadByISINs` | Lookup из universe cache; вне кэша — fetch + score against cached universe |
 | `cloneBondRecord` | Иммутабельность кэша при resolve duration |
 
-**Defaults:** `infrastructure/moex/defaults_loader.go` + `data/defaults.json` → `HasDefault` / `HasTechnicalDefault` в enrich pipeline.
+**Ratings:** smart-lab scrape → `bond_credit_ratings` (ISIN, source=`smartlab`); fallback `issuer_rating_patterns`; manual override `source=manual`. Refresh: `POST /ratings/refresh` + auto if stale >7d.
+
+**Defaults:** MOEX ISS `HASDEFAULT`/`HASTECHNICALDEFAULT` → `bond_default_flags` (source=`moex`, TTL 24h); manual override `source=manual`. Таблицы в `bond_monitor.db`, миграция `004_bond_reference.sql`.
 
 Ликвидность и min-volume: `BondRecord.filter_volume_rub` = `prev_volume_rub` ?? `volume_rub` (вчерашний оборот MOEX предпочтительнее для фильтра и `liquidity_score`).
 

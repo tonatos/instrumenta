@@ -546,9 +546,9 @@ export function ScreenerPage() {
           </div>
         </CardHeader>
         {filtersExpanded && (
-        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
           {/* Search */}
-          <div className="space-y-1 sm:col-span-2 lg:col-span-3">
+          <div className="space-y-1 sm:col-span-2 lg:col-span-6">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -561,7 +561,7 @@ export function ScreenerPage() {
           </div>
 
           {/* Risk profile */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 lg:col-span-2">
             <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               Риск-профиль
               <Tooltip content="Скор и ранжирование рассчитываются под выбранную стратегию: консервативный, нормальный или агрессивный.">
@@ -591,7 +591,7 @@ export function ScreenerPage() {
           </div>
 
           {/* filterBy */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 lg:col-span-2">
             <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               Как считать срок
               <Tooltip content="Определяет, по какой дате рассчитывается YTM и фильтрация по дням: до ближайшей оферты/погашения (effective) или только до даты погашения (maturity).">
@@ -629,7 +629,7 @@ export function ScreenerPage() {
           </div>
 
           {/* Max days */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 lg:col-span-2">
             <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               Макс. дней до погашения
               <Tooltip content="Максимальное количество дней от сегодня до даты погашения (или оферты). Позволяет ограничить горизонт инвестиции.">
@@ -651,7 +651,7 @@ export function ScreenerPage() {
           </div>
 
           {/* Min volume */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 lg:col-span-2">
             <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               Мин. объём торгов, ₽/день
               <Tooltip content="Минимальный объём торгов за предыдущую сессию — по нему же фильтруется скринер. В таблице крупно показан вчерашний объём, мелко — сегодняшний.">
@@ -673,7 +673,7 @@ export function ScreenerPage() {
           </div>
 
           {/* Min YTM */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 lg:col-span-2">
             <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               Мин. YTM нетто, %
               <Tooltip content="Минимальная доходность к погашению после уплаты НДФЛ. Позволяет отфильтровать низкодоходные бумаги.">
@@ -696,7 +696,7 @@ export function ScreenerPage() {
           </div>
 
           {/* Max lot price */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 lg:col-span-2">
             <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               Макс. стоимость лота, ₽
               <Tooltip content="Максимальная стоимость одного лота (цена × номинал × лотность). 0 — без ограничения.">
@@ -718,7 +718,7 @@ export function ScreenerPage() {
           </div>
 
           {/* Coupon type */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 lg:col-span-3">
             <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               Тип купона
               <Tooltip content="Фиксированный — ставка не меняется. Плавающий — привязан к КС/RUONIA. Переменный — объявляется эмитентом.">
@@ -749,7 +749,7 @@ export function ScreenerPage() {
           </div>
 
           {/* Risk level */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 lg:col-span-3">
             <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               Уровень риска
               <Tooltip content="1 — Низкий (ОФЗ, госкорп), 2 — Умеренный (крупные частные), 3 — Высокий (BB и ниже). Можно выбрать несколько.">
@@ -780,7 +780,7 @@ export function ScreenerPage() {
           </div>
 
           {/* Sector */}
-          <div className="space-y-1.5 sm:col-span-2">
+          <div className="space-y-1.5 sm:col-span-2 lg:col-span-6">
             <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
               Сектор
               <Tooltip content="Отрасль эмитента по классификации T-Invest. Можно выбрать несколько.">

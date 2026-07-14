@@ -137,6 +137,23 @@ CREATE TABLE IF NOT EXISTS market_radar_runs (
     universe_count INTEGER NOT NULL,
     payload_json TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS bond_credit_ratings (
+    isin TEXT PRIMARY KEY,
+    rating TEXT NOT NULL,
+    source TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bond_default_flags (
+    isin TEXT PRIMARY KEY,
+    has_default INTEGER NOT NULL DEFAULT 0,
+    has_technical_default INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS issuer_rating_patterns (
+    pattern TEXT PRIMARY KEY,
+    rating TEXT NOT NULL
+);
 `
 	_, err := db.Exec(schema)
 	return err

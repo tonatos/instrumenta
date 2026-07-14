@@ -16,7 +16,9 @@ import (
 	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
 	apptrading "github.com/tonatos/bond-monitor/backend/internal/application/trading"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/notifications"
+	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/moex"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/ratings"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
 	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
 	"github.com/tonatos/bond-monitor/backend/internal/interfaces/config"
@@ -63,10 +65,18 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 	deployRepo := persistence.NewDeploySessionRepository(db)
 	radarRepo := persistence.NewMarketRadarRepository(db.DB)
 
-	bondInner := appbonds.NewService(
+	bondRefRepo := persistence.NewBondReferenceRepository(db.DB)
+	ratingsLoader := ratings.NewLoader(bondRefRepo)
+	defaultFlags := moex.NewDefaultFlagsService(bondRefRepo)
+
+	bondInner := appbonds.NewServiceWithDeps(
 		settings.KeyRate,
 		settings.TaxRateFraction(),
 		settings.TinkoffToken,
+		moex.NewClient(),
+		ratingsLoader,
+		tinvest.NewReadClient(settings.TinkoffToken),
+		defaultFlags,
 	)
 	if logger != nil {
 		logger.Info("warming bond universe cache")
@@ -131,11 +141,16 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 	notificationsRepo := persistence.NewNotificationsRepository(db)
 	spreadRepo := persistence.NewSpreadSnapshotsRepository(db.DB)
 	radarRepo := persistence.NewMarketRadarRepository(db.DB)
+	bondRefRepo := persistence.NewBondReferenceRepository(db.DB)
 	tradingCtx := apptrading.NewContext(portfolioRepo, settings.TTradingTokenSandbox, settings.TTradingTokenProduction)
-	bondSvc := appbonds.NewService(
+	bondSvc := appbonds.NewServiceWithDeps(
 		settings.KeyRate,
 		settings.TaxRateFraction(),
 		settings.TinkoffToken,
+		moex.NewClient(),
+		ratings.NewLoader(bondRefRepo),
+		tinvest.NewReadClient(settings.TinkoffToken),
+		moex.NewDefaultFlagsService(bondRefRepo),
 	)
 
 	ledger := notifications.NewLedgerRepository(settings.NotifierLedgerPath)

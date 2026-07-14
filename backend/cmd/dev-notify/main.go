@@ -15,7 +15,9 @@ import (
 	devnotify "github.com/tonatos/bond-monitor/backend/internal/dev/notifications"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/notifications"
+	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/moex"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/ratings"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
 	"github.com/tonatos/bond-monitor/backend/internal/interfaces/config"
 	applogging "github.com/tonatos/bond-monitor/backend/internal/interfaces/logging"
@@ -178,10 +180,15 @@ func resolveHoldingISIN(ctx context.Context, settings config.Settings, portfolio
 		settings.TTradingTokenSandbox,
 		settings.TTradingTokenProduction,
 	)
-	bondSvc := appbonds.NewService(
+	bondRefRepo := persistence.NewBondReferenceRepository(db.DB)
+	bondSvc := appbonds.NewServiceWithDeps(
 		settings.KeyRate,
 		settings.TaxRateFraction(),
 		settings.TinkoffToken,
+		moex.NewClient(),
+		ratings.NewLoader(bondRefRepo),
+		tinvest.NewReadClient(settings.TinkoffToken),
+		moex.NewDefaultFlagsService(bondRefRepo),
 	)
 
 	p, err := tradingCtx.GetTradingPortfolio(ctx, portfolioID)

@@ -1,6 +1,9 @@
 package bonds
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // MOEXClient fetches bond market data from MOEX ISS.
 type MOEXClient interface {
@@ -13,9 +16,16 @@ type MOEXClient interface {
 
 // RatingsLoader loads and applies credit ratings.
 type RatingsLoader interface {
-	LoadRatings() (map[string]any, error)
-	LoadAutoRatings() (map[string]any, error)
-	ApplyRatings(bonds []BondRecord, ratings map[string]any, autoRatings map[string]any) []BondRecord
+	ApplyRatings(ctx context.Context, bonds []BondRecord) []BondRecord
+	RefreshFromSmartLab(ctx context.Context) (int, error)
+	MaybeRefreshStale(ctx context.Context)
+}
+
+// DefaultFlagsApplier sets HasDefault / HasTechnicalDefault on bonds.
+type DefaultFlagsApplier interface {
+	Apply(ctx context.Context, bonds []BondRecord) []BondRecord
+	RefreshIfStale(ctx context.Context, bonds []BondRecord) error
+	InvalidateCache()
 }
 
 // CouponPayment is one coupon from T-Invest schedule.

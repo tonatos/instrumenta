@@ -100,7 +100,7 @@ backend/
 frontend/src/               # React + Tailwind + shadcn-style UI
   features/radar/           # Market Radar (/radar)
 e2e/playwright/             # Webapp e2e tests
-data/ratings.json           # Vendored credit ratings (read-only)
+**Ratings / defaults:** SQLite `bond_credit_ratings`, `bond_default_flags` (smart-lab + MOEX ISS); seed patterns in migration `004`.
 cache/                      # MOEX cache, SQLite DB, notifier ledger
 ```
 

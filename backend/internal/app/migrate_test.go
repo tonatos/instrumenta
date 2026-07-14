@@ -23,7 +23,7 @@ func TestRunMigrationsAppliesAllSQLFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, table := range []string{"portfolios", "spread_snapshots", "market_radar_runs"} {
+	for _, table := range []string{"portfolios", "spread_snapshots", "market_radar_runs", "bond_credit_ratings", "bond_default_flags", "issuer_rating_patterns"} {
 		var name string
 		err := db.QueryRowContext(context.Background(),
 			"SELECT name FROM sqlite_master WHERE type='table' AND name=?",

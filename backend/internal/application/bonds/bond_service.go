@@ -1,12 +1,13 @@
 package bonds
 
 import (
+	"context"
+
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/screening"
 	infraBonds "github.com/tonatos/bond-monitor/backend/internal/infrastructure/bonds"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/moex"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/ratings"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
 )
 
@@ -24,32 +25,29 @@ type Service struct {
 	moex     bonds.MOEXClient
 	ratings  bonds.RatingsLoader
 	enricher bonds.Enricher
-	defaults *moex.DefaultsLoader
+	defaults bonds.DefaultFlagsApplier
 }
 
 // NewService creates a BondService with default infrastructure adapters.
 func NewService(keyRate, taxRate float64, tinkoffToken string) *Service {
 	return &Service{
 		keyRate: keyRate, taxRate: taxRate, token: tinkoffToken,
-		moex: moex.NewClient(), ratings: ratings.NewLoader(),
+		moex:     moex.NewClient(),
 		enricher: tinvest.NewReadClient(tinkoffToken),
-		defaults: moex.NewDefaultsLoader(),
 	}
 }
 
 // NewServiceWithDeps creates a BondService with injected ports (for tests).
 func NewServiceWithDeps(
 	keyRate, taxRate float64,
+	token string,
 	moexClient bonds.MOEXClient,
 	ratingsLoader bonds.RatingsLoader,
 	enricher bonds.Enricher,
-	defaults *moex.DefaultsLoader,
+	defaults bonds.DefaultFlagsApplier,
 ) *Service {
-	if defaults == nil {
-		defaults = moex.NewDefaultsLoader()
-	}
 	return &Service{
-		keyRate: keyRate, taxRate: taxRate,
+		keyRate: keyRate, taxRate: taxRate, token: token,
 		moex: moexClient, ratings: ratingsLoader, enricher: enricher, defaults: defaults,
 	}
 }
@@ -62,21 +60,28 @@ func (s *Service) universeCacheKey() infraBonds.CacheKey {
 	}
 }
 
-func (s *Service) enrichAndScore(bs []bonds.BondRecord) ([]bonds.BondRecord, string) {
+func (s *Service) enrichAndScore(ctx context.Context, bs []bonds.BondRecord) ([]bonds.BondRecord, string) {
 	source := "MOEX ISS API"
 	bs = s.enricher.EnrichBonds(bs)
 	if s.token != "" {
 		source += " + T-Invest API"
 	}
-	bs = s.defaults.Apply(bs)
-	r, _ := s.ratings.LoadRatings()
-	auto, _ := s.ratings.LoadAutoRatings()
-	bs = s.ratings.ApplyRatings(bs, r, auto)
+	if s.defaults != nil {
+		_ = s.defaults.RefreshIfStale(ctx, bs)
+		bs = s.defaults.Apply(ctx, bs)
+	}
+	if s.ratings != nil {
+		bs = s.ratings.ApplyRatings(ctx, bs)
+	}
 	bs = screening.ScoreBondsAllProfiles(bs, s.keyRate, s.taxRate)
 	return bs, source
 }
 
 func (s *Service) LoadUniverse() LoadResult {
+	ctx := context.Background()
+	if s.ratings != nil {
+		s.ratings.MaybeRefreshStale(ctx)
+	}
 	key := s.universeCacheKey()
 	if cached, source, ok := infraBonds.Get(key); ok {
 		return LoadResult{Bonds: cloneList(cached), Source: source}
@@ -85,9 +90,22 @@ func (s *Service) LoadUniverse() LoadResult {
 	if err != nil {
 		return LoadResult{}
 	}
-	bs, source := s.enrichAndScore(bs)
+	bs, source := s.enrichAndScore(ctx, bs)
 	infraBonds.Put(key, bs, source)
 	return LoadResult{Bonds: cloneList(bs), Source: source}
+}
+
+// RefreshRatings scrapes smart-lab and stores ISIN ratings in SQLite.
+func (s *Service) RefreshRatings(ctx context.Context) (int, error) {
+	if s.ratings == nil {
+		return 0, nil
+	}
+	count, err := s.ratings.RefreshFromSmartLab(ctx)
+	if err != nil {
+		return count, err
+	}
+	InvalidateAllBondCaches()
+	return count, nil
 }
 
 // ListBonds filters, sorts, and paginates the enriched universe.
@@ -148,7 +166,7 @@ func (s *Service) LoadByISINs(isins []string, policy portfolio.DurationPolicy, r
 	}
 	if len(missing) > 0 {
 		fetched, _ := s.moex.FetchBondsByISINs(missing)
-		scored := s.scoreAgainstCachedUniverse(fetched)
+		scored := s.enrichFetchedBonds(fetched)
 		found = append(found, scored...)
 	}
 	_ = policy
@@ -168,7 +186,7 @@ func (s *Service) LoadBySecid(secid string, policy portfolio.DurationPolicy, ris
 	if bond == nil {
 		return nil
 	}
-	scored := s.scoreAgainstCachedUniverse([]bonds.BondRecord{*bond})
+	scored := s.enrichFetchedBonds([]bonds.BondRecord{*bond})
 	if len(scored) == 0 {
 		return nil
 	}
@@ -179,30 +197,16 @@ func (s *Service) LoadBySecid(secid string, policy portfolio.DurationPolicy, ris
 	return &cp
 }
 
+func (s *Service) enrichFetchedBonds(bs []bonds.BondRecord) []bonds.BondRecord {
+	if len(bs) == 0 {
+		return nil
+	}
+	enriched, _ := s.enrichAndScore(context.Background(), bs)
+	return enriched
+}
+
 func (s *Service) scoreAgainstCachedUniverse(bs []bonds.BondRecord) []bonds.BondRecord {
-	universe := s.LoadUniverse()
-	merged := append([]bonds.BondRecord{}, universe.Bonds...)
-	seen := make(map[string]struct{})
-	for _, b := range universe.Bonds {
-		seen[b.Secid] = struct{}{}
-	}
-	for _, b := range bs {
-		if _, ok := seen[b.Secid]; !ok {
-			merged = append(merged, b)
-		}
-	}
-	scored := screening.ScoreBondsAllProfiles(merged, s.keyRate, s.taxRate)
-	bySecid := make(map[string]bonds.BondRecord, len(scored))
-	for _, b := range scored {
-		bySecid[b.Secid] = b
-	}
-	var result []bonds.BondRecord
-	for _, b := range bs {
-		if scored, ok := bySecid[b.Secid]; ok {
-			result = append(result, scored)
-		}
-	}
-	return result
+	return s.enrichFetchedBonds(bs)
 }
 
 func (s *Service) GetCouponSchedule(figi string) []bonds.CouponPayment {
@@ -211,6 +215,14 @@ func (s *Service) GetCouponSchedule(figi string) []bonds.CouponPayment {
 
 func (s *Service) IsCacheFresh() bool {
 	return s.moex.IsCacheFresh()
+}
+
+func (s *Service) InvalidateCaches() {
+	InvalidateAllBondCaches()
+	s.moex.InvalidateCache()
+	if s.defaults != nil {
+		s.defaults.InvalidateCache()
+	}
 }
 
 func cloneList(bs []bonds.BondRecord) []bonds.BondRecord {

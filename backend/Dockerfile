@@ -7,7 +7,6 @@ WORKDIR /src/backend
 RUN go mod download
 
 COPY backend/ ./
-COPY data/ratings.json /src/data/ratings.json
 
 RUN CGO_ENABLED=0 go build -o /out/api ./cmd/api
 RUN CGO_ENABLED=0 go build -o /out/notifier ./cmd/notifier
@@ -21,7 +20,6 @@ WORKDIR /app
 
 COPY --from=builder /out/api /app/api
 COPY --from=builder /out/notifier /app/notifier
-COPY --from=builder /src/data/ratings.json /app/data/ratings.json
 COPY --from=builder /src/backend/migrations /app/backend/migrations
 
 ENV BOND_MONITOR_REPO_ROOT=/app

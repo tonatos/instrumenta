@@ -66,13 +66,12 @@ func (s *BondService) GetCouponSchedule(ctx context.Context, figi string) ([]map
 }
 
 func (s *BondService) RefreshRatings(ctx context.Context) (int, error) {
-	_ = ctx
-	return 0, nil
+	return s.inner.RefreshRatings(ctx)
 }
 
 func (s *BondService) InvalidateCaches(ctx context.Context) error {
 	_ = ctx
-	appbonds.InvalidateAllBondCaches()
+	s.inner.InvalidateCaches()
 	tinvest.InvalidateBondsCache()
 	return nil
 }
