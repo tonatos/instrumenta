@@ -309,19 +309,11 @@ func (h *Handler) GetPlan(w http.ResponseWriter, r *http.Request) {
 	}
 	today := time.Now()
 	var plan portfolio.PortfolioPlan
-	if p.IsTrading() {
-		plan, err = h.deps.Trading.BuildTradingPlan(
-			r.Context(), id, universe.Bonds,
-			h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(),
-			today, durationPolicy,
-		)
-	} else {
-		plan, err = h.deps.Portfolios.BuildPortfolioPlan(
-			r.Context(), id, universe.Bonds,
-			h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(),
-			today, durationPolicy,
-		)
-	}
+	plan, err = h.deps.Portfolios.BuildPortfolioPlan(
+		r.Context(), id, universe.Bonds,
+		h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(),
+		today, durationPolicy,
+	)
 	if err != nil {
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return

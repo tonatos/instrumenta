@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
 	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
@@ -150,10 +151,11 @@ func (u *OrderUseCase) CancelOrder(ctx context.Context, portfolioID, orderID str
 type AttachUseCase struct {
 	ctx    *Context
 	broker *BrokerFacade
+	plans  *appportfolio.PlanUseCase
 }
 
-func NewAttachUseCase(ctx *Context, broker *BrokerFacade) *AttachUseCase {
-	return &AttachUseCase{ctx: ctx, broker: broker}
+func NewAttachUseCase(ctx *Context, broker *BrokerFacade, plans *appportfolio.PlanUseCase) *AttachUseCase {
+	return &AttachUseCase{ctx: ctx, broker: broker, plans: plans}
 }
 
 func (u *AttachUseCase) GetAccountPreview(ctx context.Context, portfolioID, accountID string, kind trading.AccountKind, universe []bonds.BondRecord) (map[string]any, error) {
@@ -204,8 +206,7 @@ func (u *AttachUseCase) AttachAccount(ctx context.Context, portfolioID, accountI
 		return domainPortfolio.Portfolio{}, err
 	}
 	brokerSnapshot := tinvest.ToBrokerSnapshot(snapshot)
-	validation := trading.ValidateAttachSoft(brokerSnapshot, *p, universe)
-	p.InitialAmountRub = float64(validation.EffectiveInitialAmountRub)
+	_ = trading.ValidateAttachSoft(brokerSnapshot, *p, universe)
 	for i := range p.Positions {
 		if p.Positions[i].FIGI == nil || *p.Positions[i].FIGI == "" {
 			figi, err := u.broker.ResolveFIGIForISIN(kind, p.Positions[i].ISIN)
@@ -214,7 +215,12 @@ func (u *AttachUseCase) AttachAccount(ctx context.Context, portfolioID, accountI
 			}
 		}
 	}
-	plan := BuildTradingPlan(*p, brokerSnapshot, universe, keyRate, taxRate, today, nil)
+	ops, err := u.broker.GetAccountOperations(kind, accountID, OperationsFromDate(today))
+	if err != nil {
+		return domainPortfolio.Portfolio{}, err
+	}
+	policy := domainPortfolio.DurationPolicyForPortfolio(*p, domainPortfolio.RateScenarioHold)
+	plan := u.plans.BuildForTrading(*p, brokerSnapshot, tinvest.ToBrokerOperations(ops), universe, today, keyRate, taxRate, policy)
 	nowISO := time.Now().UTC().Format(time.RFC3339)
 	p.Mode = domainPortfolio.PortfolioModeTrading
 	p.AccountID = &accountID
@@ -224,7 +230,7 @@ func (u *AttachUseCase) AttachAccount(ctx context.Context, portfolioID, accountI
 		ExpectedXIRRPct:           plan.EffectiveAnnualReturnPct,
 		ExpectedTotalNetProfitRub: plan.TotalNetProfitRub,
 		ExpectedFinalValueRub:     plan.FinalPortfolioValueRub,
-		FrozenInitialAmountRub:    p.InitialAmountRub,
+		FrozenInitialAmountRub:    plan.InvestedCapitalRub,
 		HorizonDate:               p.HorizonDate,
 		CreatedAt:                 nowISO,
 	}

@@ -269,8 +269,9 @@ func PortfolioToResponse(p portfolio.Portfolio, today time.Time) PortfolioRespon
 }
 
 func PlanToResponse(plan portfolio.PortfolioPlan) PlanResponse {
+	fromDate := portfolio.CashflowDisplayFromDate(plan.Portfolio)
 	cashflow := make([]map[string]any, 0)
-	for _, row := range portfolio.CashflowRowsWithBalance(plan.Events, plan.InitialCashRub) {
+	for _, row := range portfolio.CashflowRowsFromDate(plan.Events, plan.InitialCashRub, fromDate) {
 		cashflow = append(cashflow, map[string]any{
 			"date":              row.Date,
 			"amount_rub":        row.AmountRub,
@@ -337,6 +338,11 @@ func PlanToResponse(plan portfolio.PortfolioPlan) PlanResponse {
 			"put_offer_decision":         string(item.Position.PutOfferDecision),
 		})
 	}
+	var cashflowFrom *string
+	if !fromDate.IsZero() {
+		s := shared.FormatISODate(fromDate)
+		cashflowFrom = &s
+	}
 	return PlanResponse{
 		TotalNetProfitRub:         plan.TotalNetProfitRub,
 		TotalNetProfitWithHeldRub: plan.TotalNetProfitWithHeldRub,
@@ -349,6 +355,7 @@ func PlanToResponse(plan portfolio.PortfolioPlan) PlanResponse {
 		WeightedDurationYears:     plan.WeightedDurationYears,
 		Notes:                     emptySlice(plan.Notes),
 		Cashflow:                  emptySlice(cashflow),
+		CashflowFromDate:          cashflowFrom,
 		ValueTimeline:             valueTimeline,
 		HeldPositions:             held,
 		Slots:                     slots,

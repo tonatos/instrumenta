@@ -220,6 +220,7 @@ export interface PlanResponse {
   expected_xirr_pct: number | null;
   weighted_duration_years: number | null;
   notes: string[];
+  cashflow_from_date?: string | null;
   cashflow: Array<{
     date: string;
     amount_rub: number;

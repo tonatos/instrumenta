@@ -344,9 +344,10 @@ func BuildReinvestSuggestions(
 	policy portfolio.BondSelectionPolicy,
 	planning portfolio.PlanningPolicy,
 	durationPolicy portfolio.DurationPolicy,
+	planSlots []portfolio.ReinvestmentSlot,
 ) []Suggestion {
 	return buildReinvestSuggestionsForPositions(
-		p, positions, universe, today, keyRate, taxRate, policy, planning, durationPolicy, true,
+		p, positions, universe, today, keyRate, taxRate, policy, planning, durationPolicy, planSlots, true,
 	)
 }
 
@@ -360,10 +361,30 @@ func BuildReinvestWatchSuggestions(
 	policy portfolio.BondSelectionPolicy,
 	planning portfolio.PlanningPolicy,
 	durationPolicy portfolio.DurationPolicy,
+	planSlots []portfolio.ReinvestmentSlot,
 ) []Suggestion {
 	return buildReinvestSuggestionsForPositions(
-		p, positions, universe, today, keyRate, taxRate, policy, planning, durationPolicy, false,
+		p, positions, universe, today, keyRate, taxRate, policy, planning, durationPolicy, planSlots, false,
 	)
+}
+
+func reinvestBudgetForPosition(planSlots []portfolio.ReinvestmentSlot, isin string, endDate time.Time) *float64 {
+	for _, slot := range planSlots {
+		if slot.SourcePositionISIN == nil || *slot.SourcePositionISIN != isin {
+			continue
+		}
+		if slot.TriggerDate.Equal(endDate) {
+			v := slot.ExpectedCashRub
+			return &v
+		}
+	}
+	for _, slot := range planSlots {
+		if slot.SourcePositionISIN != nil && *slot.SourcePositionISIN == isin {
+			v := slot.ExpectedCashRub
+			return &v
+		}
+	}
+	return nil
 }
 
 func buildReinvestSuggestionsForPositions(
@@ -375,6 +396,7 @@ func buildReinvestSuggestionsForPositions(
 	policy portfolio.BondSelectionPolicy,
 	planning portfolio.PlanningPolicy,
 	durationPolicy portfolio.DurationPolicy,
+	planSlots []portfolio.ReinvestmentSlot,
 	actionableOnly bool,
 ) []Suggestion {
 	var suggestions []Suggestion
@@ -396,6 +418,9 @@ func buildReinvestSuggestionsForPositions(
 			continue
 		}
 		expectedCash := position.FaceValue * float64(position.BondsCount())
+		if budget := reinvestBudgetForPosition(planSlots, position.ISIN, *end); budget != nil {
+			expectedCash = *budget
+		}
 		reinvestDate := shared.AddDays(*end, planning.ReinvestmentGapDays)
 		if reinvestDate.After(horizon) {
 			continue
@@ -487,10 +512,7 @@ func ValidateAttachSoft(snapshot BrokerSnapshot, p portfolio.Portfolio, universe
 		warnings = append(warnings, "На счёте уже есть облигации — рекомендации строятся от фактических позиций.")
 	}
 	deployed := holdingsDeployedValue(holdings, universeByISIN)
-	effective := p.InitialAmountRub
-	if v := float64(snapshot.MoneyRub) + deployed; v > effective {
-		effective = v
-	}
+	effective := float64(snapshot.MoneyRub) + deployed
 	return AttachPreviewValidation{
 		CanAttach: true, Warnings: warnings, EffectiveInitialAmountRub: effective,
 	}
@@ -506,6 +528,7 @@ type AdviseParams struct {
 	DurationPolicy    portfolio.DurationPolicy
 	RiskPolicy        portfolio.RiskMonitorPolicy
 	ActiveSession     *DeploySession
+	PlanSlots         []portfolio.ReinvestmentSlot
 }
 
 // Advise builds the full trading advisory response.
@@ -557,17 +580,17 @@ func Advise(
 		} else {
 			buySuggestions = BuildBuySuggestions(p, holdings, universe, available, today, params.KeyRate, params.TaxRate, durationPolicy)
 			reinvestSuggestions = BuildReinvestSuggestions(
-				p, positions, universe, today, params.KeyRate, params.TaxRate, selectionPolicy, planningPolicy, durationPolicy,
+				p, positions, universe, today, params.KeyRate, params.TaxRate, selectionPolicy, planningPolicy, durationPolicy, params.PlanSlots,
 			)
 		}
 	} else {
 		buySuggestions = BuildBuySuggestions(p, holdings, universe, available, today, params.KeyRate, params.TaxRate, durationPolicy)
 		reinvestSuggestions = BuildReinvestSuggestions(
-			p, positions, universe, today, params.KeyRate, params.TaxRate, selectionPolicy, planningPolicy, durationPolicy,
+			p, positions, universe, today, params.KeyRate, params.TaxRate, selectionPolicy, planningPolicy, durationPolicy, params.PlanSlots,
 		)
 	}
 	reinvestWatch := BuildReinvestWatchSuggestions(
-		p, positions, universe, today, params.KeyRate, params.TaxRate, selectionPolicy, planningPolicy, durationPolicy,
+		p, positions, universe, today, params.KeyRate, params.TaxRate, selectionPolicy, planningPolicy, durationPolicy, params.PlanSlots,
 	)
 	notifPolicy := notifications.NotificationPolicy{IncludePutOfferWatchInAlerts: true}
 	alertSuggestions := AlertsToSuggestions(notifications.CollectAlerts(notifications.AlertParams{

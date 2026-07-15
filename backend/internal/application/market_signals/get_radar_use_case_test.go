@@ -40,7 +40,7 @@ func TestGetRadarUseCaseOverlaysPortfolios(t *testing.T) {
 	}
 
 	portfolioRepo := persistence.NewPortfolioRepository(db)
-	portfolioSvc := appportfolio.NewService(portfolioRepo)
+	portfolioSvc := appportfolio.NewService(portfolioRepo, nil)
 	horizon := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	_, err = portfolioRepo.Save(ctx, portfolio.Portfolio{
 		ID: "p1", Name: "Test", CreatedAt: time.Now().UTC().Format(time.RFC3339),

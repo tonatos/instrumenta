@@ -17,6 +17,7 @@ import type {
 } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   DialogClose,
   DialogContent,
@@ -154,8 +155,10 @@ function SlotCard({
           )}
         </div>
         <div className="text-right">
-          <p className="text-sm font-semibold">{formatRub(slot.expected_cash_rub)}</p>
-          <p className="text-xs text-muted-foreground">освобождается</p>
+          <Tooltip content="Доступный кэш на дату реинвеста по плану (операции + прогноз)">
+            <p className="cursor-help text-sm font-semibold">{formatRub(slot.expected_cash_rub)}</p>
+          </Tooltip>
+          <p className="text-xs text-muted-foreground">доступно на дату</p>
         </div>
       </div>
 
@@ -346,6 +349,7 @@ export function ReinvestmentSlots({
       }
       queryClient.invalidateQueries({ queryKey: ["portfolios"] });
       queryClient.invalidateQueries({ queryKey: ["plan", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["trading-state", portfolioId] });
     },
     onError: (error, variables) => {
       const message =
@@ -368,6 +372,7 @@ export function ReinvestmentSlots({
       setResetDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["portfolios"] });
       queryClient.invalidateQueries({ queryKey: ["plan", portfolioId] });
+      queryClient.invalidateQueries({ queryKey: ["trading-state", portfolioId] });
     },
   });
 

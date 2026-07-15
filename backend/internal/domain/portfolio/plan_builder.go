@@ -11,29 +11,6 @@ import (
 
 const maxPlanXIRRPct = 200.0
 
-var onAccountSources = map[PositionSourceType]bool{
-	PositionSourceInitial: true,
-	PositionSourceAdopted: true,
-}
-
-func planInitialCash(p Portfolio, accountMoneyRub *float64) float64 {
-	if accountMoneyRub != nil {
-		return *accountMoneyRub
-	}
-	return p.InitialAmountRub
-}
-
-func investedCapitalBaseline(p Portfolio, accountMoneyRub *float64) float64 {
-	if accountMoneyRub == nil {
-		return p.InitialAmountRub
-	}
-	deployed := 0.0
-	for _, position := range OpenPositions(p.Positions) {
-		deployed += PositionCostBasis(position)
-	}
-	return deployed + *accountMoneyRub
-}
-
 type cashflowFlow struct {
 	date   time.Time
 	amount float64
@@ -46,6 +23,9 @@ func planXIRRCAGRFallback(finalValue, invested float64, horizonDays int) *float6
 	growth := finalValue / invested
 	annualReturn := math.Pow(growth, 365.0/float64(horizonDays)) - 1
 	v := round2(annualReturn * 100)
+	if math.Abs(v) > maxPlanXIRRPct {
+		return nil
+	}
 	return &v
 }
 
@@ -53,7 +33,7 @@ func calculatePlanExpectedXIRR(
 	plan *PortfolioPlan,
 	today time.Time,
 	investedBaseline float64,
-	accountMoneyRub *float64,
+	planCtx PlanContext,
 	horizonDays int,
 ) *float64 {
 	horizon := plan.Portfolio.HorizonDate
@@ -61,22 +41,8 @@ func calculatePlanExpectedXIRR(
 		return nil
 	}
 	var cashflow []cashflowFlow
-	if accountMoneyRub != nil {
-		deployedOutflow := 0.0
-		for _, position := range OpenPositions(plan.Portfolio.Positions) {
-			if !onAccountSources[position.Source] {
-				continue
-			}
-			cost := PositionCostBasis(position)
-			if cost > 0 && !position.PurchaseDate.After(horizon) {
-				cashflow = append(cashflow, cashflowFlow{position.PurchaseDate, -cost})
-				deployedOutflow += cost
-			}
-		}
-		cashGap := investedBaseline - deployedOutflow
-		if cashGap > 0 {
-			cashflow = append(cashflow, cashflowFlow{today, -cashGap})
-		}
+	if planCtx.IsTrading() {
+		cashflow = append(cashflow, cashflowFlow{today, -investedBaseline})
 	} else {
 		cashflow = append(cashflow, cashflowFlow{today, -investedBaseline})
 	}
@@ -141,39 +107,40 @@ func BuildPlan(
 	universe []bonds.BondRecord,
 	today time.Time,
 	keyRate, taxRate float64,
-	accountSnapshotMoneyRub *float64,
-	assumeBestPutOutcome bool,
+	planCtx PlanContext,
 	durationPolicy DurationPolicy,
 ) PortfolioPlan {
 	horizon := p.HorizonDate
-	initialCash := planInitialCash(p, accountSnapshotMoneyRub)
+	ephemeral := p
+	ephemeral.Positions = planCtx.Positions
 	sim := RunSimulation(
-		p, universe, today, horizon, keyRate, taxRate, initialCash,
-		accountSnapshotMoneyRub, assumeBestPutOutcome, durationPolicy,
+		ephemeral, universe, today, horizon, keyRate, taxRate, planCtx.forwardInitialCash(),
+		planCtx, durationPolicy,
 	)
-	plan := PortfolioPlan{Portfolio: p, InitialCashRub: sim.InitialCashRub}
-	plan.Events = MergeCashflowEvents(sim.Events)
+	plan := PortfolioPlan{Portfolio: ephemeral, InitialCashRub: planCtx.journalInitialCash()}
+	plan.Events = JoinCashflowJournals(planCtx.HistoricalEvents, MergeCashflowEvents(sim.Events))
 	plan.AllPositions = sim.AllPositions
 	plan.HeldPositions = sim.HeldPositions
 	plan.UpcomingPutOffers = sim.UpcomingPutOffers
 	plan.Notes = append([]string(nil), sim.Notes...)
 	plan.ResolvedSlots = MergeReinvestmentSlots(sim.ResolvedSlots)
 
+	journalInitial := planCtx.journalInitialCash()
 	for i := range plan.ResolvedSlots {
 		plan.ResolvedSlots[i].ExpectedCashRub = RunningCashBeforePurchase(
-			plan.Events, plan.ResolvedSlots[i].PurchaseDate(), plan.InitialCashRub,
+			plan.Events, plan.ResolvedSlots[i].PurchaseDate(), journalInitial,
 		)
 	}
 	for i, slot := range plan.ResolvedSlots {
-		plan.ResolvedSlots[i] = EnrichReinvestmentSlot(slot, p, universe, keyRate, taxRate)
+		plan.ResolvedSlots[i] = EnrichReinvestmentSlot(slot, ephemeral, universe, keyRate, taxRate)
 	}
 
 	universeByISIN := make(map[string]bonds.BondRecord)
 	for _, b := range universe {
 		universeByISIN[b.ISIN] = b
 	}
-	finalizePlanTotals(&plan, universeByISIN, today, taxRate, accountSnapshotMoneyRub, durationPolicy)
-	buildValueTimeline(&plan, today, assumeBestPutOutcome, accountSnapshotMoneyRub)
+	finalizePlanTotals(&plan, universeByISIN, today, taxRate, planCtx, durationPolicy)
+	buildValueTimeline(&plan, today, planCtx)
 	if PruneStaleSlotOverrides(&p, plan.ResolvedSlots) {
 		p.Touch()
 	}
@@ -204,26 +171,29 @@ func finalizePlanTotals(
 	universeByISIN map[string]bonds.BondRecord,
 	today time.Time,
 	taxRate float64,
-	accountMoneyRub *float64,
+	planCtx PlanContext,
 	durationPolicy DurationPolicy,
 ) {
 	p := plan.Portfolio
-	cash := planInitialCash(p, accountMoneyRub)
-	initialSpent := 0.0
-	if accountMoneyRub != nil {
+	cash := planCtx.journalInitialCash()
+	totalInvested := 0.0
+	if !planCtx.IsTrading() {
 		for _, position := range OpenPositions(p.Positions) {
-			if onAccountSources[position.Source] && !position.PurchaseDate.After(p.HorizonDate) {
-				initialSpent += position.PurchaseAmountRub
+			if position.Source == PositionSourceInitial && !position.PurchaseDate.After(today) {
+				totalInvested += position.PurchaseAmountRub
 			}
 		}
+	} else {
+		totalInvested = planCtx.InvestedCapitalRub
 	}
-	totalInvested := initialSpent
 	totalCouponNet, totalRedemption := 0.0, 0.0
 	for _, event := range plan.Events {
 		cash += event.AmountRub
 		switch event.Kind {
 		case "purchase":
-			totalInvested += -event.AmountRub
+			if !planCtx.IsTrading() {
+				totalInvested += -event.AmountRub
+			}
 		case "coupon":
 			totalCouponNet += event.AmountRub
 		case "maturity", "put_offer":
@@ -247,7 +217,7 @@ func finalizePlanTotals(
 		heldValue += h.EstimatedValueRub
 	}
 	finalValue := cash + heldValue
-	investedBaseline := investedCapitalBaseline(p, accountMoneyRub)
+	investedBaseline := planCtx.investedBaseline()
 
 	plan.TotalInvestedRub = round2(totalInvested)
 	plan.TotalCouponNetRub = round2(totalCouponNet)
@@ -283,7 +253,7 @@ func finalizePlanTotals(
 		horizonDays = 0
 	}
 	plan.HorizonDays = horizonDays
-	plan.EffectiveAnnualReturnPct = calculatePlanExpectedXIRR(plan, today, investedBaseline, accountMoneyRub, horizonDays)
+	plan.EffectiveAnnualReturnPct = calculatePlanExpectedXIRR(plan, today, investedBaseline, planCtx, horizonDays)
 }
 
 func positionRedemptionGross(position PortfolioPosition, isPut bool) float64 {
@@ -348,16 +318,16 @@ func positionMarketValueAt(
 func buildValueTimeline(
 	plan *PortfolioPlan,
 	today time.Time,
-	assumeBestPutOutcome bool,
-	accountMoneyRub *float64,
+	planCtx PlanContext,
 ) {
 	p := plan.Portfolio
 	horizon := p.HorizonDate
+	assumeBestPutOutcome := planCtx.AssumeBestPutOutcome
 	if today.After(horizon) {
 		plan.ValueTimeline = nil
 		return
 	}
-	initialCash := planInitialCash(p, accountMoneyRub)
+	initialCash := planCtx.journalInitialCash()
 	heldByID := make(map[int64]HeldPositionAtHorizon)
 	for _, h := range plan.HeldPositions {
 		heldByID[h.Position.ID] = h

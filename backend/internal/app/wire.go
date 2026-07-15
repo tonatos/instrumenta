@@ -83,7 +83,6 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 	}
 	universe := bondInner.LoadUniverse()
 	logger.Info("bond cache ready", "universe", len(universe.Bonds))
-	portfolioInner := appportfolio.NewService(portfolioRepo)
 	tradingInner := apptrading.NewService(
 		portfolioRepo,
 		deployRepo,
@@ -91,6 +90,7 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 		settings.TTradingTokenSandbox,
 		settings.TTradingTokenProduction,
 	)
+	portfolioInner := appportfolio.NewService(portfolioRepo, tradingInner.PlanUseCase())
 
 	jwtManager := auth.NewJWTManager(settings.AuthSecret, settings.AuthEnabled())
 	var consumer application.NotificationConsumer

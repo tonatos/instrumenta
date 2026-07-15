@@ -49,6 +49,15 @@ func sortedJournal(events []CashflowEvent) []CashflowEvent {
 	return out
 }
 
+// JoinCashflowJournals merges historical and projected journal segments in sort order.
+func JoinCashflowJournals(segments ...[]CashflowEvent) []CashflowEvent {
+	var combined []CashflowEvent
+	for _, seg := range segments {
+		combined = append(combined, seg...)
+	}
+	return sortedJournal(combined)
+}
+
 func RunningCashBeforePurchase(events []CashflowEvent, purchaseDate time.Time, initialCash float64) float64 {
 	cash := initialCash
 	for _, event := range sortedJournal(events) {
@@ -89,9 +98,46 @@ type CashflowRow struct {
 }
 
 func CashflowRowsWithBalance(events []CashflowEvent, initialCash float64) []CashflowRow {
+	return CashflowRowsFromDate(events, initialCash, time.Time{})
+}
+
+// CashflowDisplayFromDate returns the first day to include in plan cashflow UI.
+// Trading: account attach date; simulation: portfolio creation date.
+func CashflowDisplayFromDate(p Portfolio) time.Time {
+	if p.IsTrading() && p.TradingStartedAt != nil {
+		if t, ok := parsePortfolioTimestamp(*p.TradingStartedAt); ok {
+			return t
+		}
+	}
+	if t, ok := parsePortfolioTimestamp(p.CreatedAt); ok {
+		return t
+	}
+	return time.Time{}
+}
+
+func parsePortfolioTimestamp(raw string) (time.Time, bool) {
+	if raw == "" {
+		return time.Time{}, false
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05Z07:00", "2006-01-02"} {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return shared.DateOnly(t), true
+		}
+	}
+	return time.Time{}, false
+}
+
+// CashflowRowsFromDate builds display rows from fromDate inclusive; balance starts at cash on that date.
+func CashflowRowsFromDate(events []CashflowEvent, initialCash float64, fromDate time.Time) []CashflowRow {
 	running := initialCash
+	if !fromDate.IsZero() {
+		running = CashOnHandBeforeDate(events, fromDate, initialCash)
+	}
 	var rows []CashflowRow
 	for _, event := range sortedJournal(events) {
+		if !fromDate.IsZero() && event.Date.Before(fromDate) {
+			continue
+		}
 		running += event.AmountRub
 		rows = append(rows, CashflowRow{
 			Date:            shared.FormatISODate(event.Date),

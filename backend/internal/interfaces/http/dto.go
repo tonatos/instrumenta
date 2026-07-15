@@ -197,6 +197,7 @@ type PlanResponse struct {
 	WeightedDurationYears      *float64         `json:"weighted_duration_years"`
 	Notes                      []string         `json:"notes"`
 	Cashflow                   []map[string]any `json:"cashflow"`
+	CashflowFromDate           *string          `json:"cashflow_from_date"`
 	ValueTimeline              []map[string]any `json:"value_timeline"`
 	HeldPositions              []map[string]any `json:"held_positions"`
 	Slots                      []map[string]any `json:"slots"`

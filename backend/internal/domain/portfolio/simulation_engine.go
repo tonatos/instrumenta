@@ -228,8 +228,7 @@ func RunSimulation(
 	universe []bonds.BondRecord,
 	today, horizon time.Time,
 	keyRate, taxRate, initialCash float64,
-	accountSnapshotMoneyRub *float64,
-	assumeBestPutOutcome bool,
+	planCtx PlanContext,
 	durationPolicy DurationPolicy,
 ) SimulationResult {
 	universeByISIN := make(map[string]bonds.BondRecord)
@@ -257,7 +256,8 @@ func RunSimulation(
 	seq, journalSeq := 0, 0
 	scheduledDeploy := make(map[string]struct{})
 	reminded := make(map[string]struct{})
-	isTrading := accountSnapshotMoneyRub != nil
+	isTrading := planCtx.IsTrading()
+	assumeBestPutOutcome := planCtx.AssumeBestPutOutcome
 
 	for _, position := range seedPositions {
 		gen := generationFor(position)
@@ -289,6 +289,9 @@ func RunSimulation(
 		scheduled := heap.Pop(&queue).(ScheduledEvent)
 		event := scheduled.Event
 		if event.Date.After(horizon) {
+			continue
+		}
+		if isTrading && event.Date.Before(today) {
 			continue
 		}
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/tonatos/bond-monitor/backend/internal/application"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
 	domainNotifications "github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
 	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
@@ -22,6 +23,7 @@ type Service struct {
 	deploySessions *DeploySessionUseCase
 	orders         *OrderUseCase
 	sell           *SellPositionUseCase
+	plans          *appportfolio.PlanUseCase
 }
 
 // NewService wires trading use cases behind application.TradingService.
@@ -36,17 +38,19 @@ func NewService(
 	productionClient := tradingClient(productionToken, trading.AccountKindProduction)
 	broker := NewBrokerFacade(sandboxClient, productionClient)
 	policy := trading.DefaultDeploySessionPolicy()
+	planUC := NewPlanUseCase(repo, broker)
 	deploySessions := NewDeploySessionUseCase(ctx, deployRepo, broker, policy)
 	advise := NewAdviseUseCase(ctx, deploySessions, broker, notificationsRepo)
 	return &Service{
 		ctx:            ctx,
 		sandbox:        NewSandboxUseCase(ctx, broker),
-		attach:         NewAttachUseCase(ctx, broker),
+		attach:         NewAttachUseCase(ctx, broker, planUC),
 		advise:         advise,
-		tradingState:   NewTradingStateUseCase(ctx, advise, broker),
+		tradingState:   NewTradingStateUseCase(ctx, advise, broker, planUC),
 		deploySessions: deploySessions,
 		orders:         NewOrderUseCase(ctx, broker, deploySessions),
 		sell:           NewSellPositionUseCase(ctx, broker),
+		plans:          planUC,
 	}
 }
 
@@ -120,18 +124,12 @@ func (s *Service) GetTradingState(ctx context.Context, portfolioID string, unive
 }
 
 func (s *Service) BuildTradingPlan(ctx context.Context, portfolioID string, universe []bonds.BondRecord, keyRate, taxRate float64, today time.Time, durationPolicy domainPortfolio.DurationPolicy) (domainPortfolio.PortfolioPlan, error) {
-	p, err := s.ctx.GetTradingPortfolio(ctx, portfolioID)
-	if err != nil {
-		return domainPortfolio.PortfolioPlan{}, mapTradingErr(err)
-	}
-	kind := *p.AccountKind
-	accountID := *p.AccountID
-	snapshot, err := s.orders.broker.GetAccountSnapshot(kind, accountID)
-	if err != nil {
-		return domainPortfolio.PortfolioPlan{}, err
-	}
-	brokerSnapshot := toBrokerSnapshot(snapshot)
-	return BuildTradingPlan(p, brokerSnapshot, universe, keyRate, taxRate, today, &durationPolicy), nil
+	return s.plans.Build(ctx, portfolioID, universe, today, keyRate, taxRate, false, &durationPolicy)
+}
+
+// PlanUseCase exposes the unified plan builder for portfolio service wiring.
+func (s *Service) PlanUseCase() *appportfolio.PlanUseCase {
+	return s.plans
 }
 
 func (s *Service) CreateDeploySession(ctx context.Context, portfolioID string, universe []bonds.BondRecord, keyRate, taxRate float64, today time.Time) (trading.DeploySession, error) {

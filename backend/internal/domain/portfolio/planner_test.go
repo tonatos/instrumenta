@@ -7,6 +7,7 @@ import (
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
 )
 
 func TestValidateReplacementBondRejectsMaturityBeforePurchase(t *testing.T) {
@@ -92,8 +93,14 @@ func TestSameDayMaturityBeforeDeployPurchase(t *testing.T) {
 
 func TestAA19dfdLivePlanBalance(t *testing.T) {
 	p := aa19dfdLivePortfolio()
+	today := shared.MustParseDate("2026-07-10")
 	cash := p.CashBalanceRub
-	plan := portfolio.BuildPlan(p, aa19dfdLiveUniverse(), shared.MustParseDate("2026-07-10"), 16, 0.13, &cash, false, portfolio.DefaultDurationPolicy)
+	historical, _, _ := trading.ReconcileCashToBroker(nil, today, cash)
+	plan := portfolio.BuildPlan(p, aa19dfdLiveUniverse(), today, 16, 0.13, portfolio.PlanContext{
+		Mode: portfolio.PlanModeTrading, Positions: p.Positions, HistoricalEvents: historical,
+		BrokerCashRub: cash, InvestedCapitalRub: portfolio.InvestedCapitalFromPositions(p.Positions, shared.Rub(cash)),
+		AssumeBestPutOutcome: false,
+	}, portfolio.DefaultDurationPolicy)
 	rows := portfolio.CashflowRowsWithBalance(plan.Events, plan.InitialCashRub)
 	for _, row := range rows {
 		if row.BalanceAfterRub < -0.01 {
@@ -102,11 +109,87 @@ func TestAA19dfdLivePlanBalance(t *testing.T) {
 	}
 }
 
+func TestAA19dfdFirstReinvestSlotBudgetAndOverride(t *testing.T) {
+	const sourceISIN = "RU000A100PB0"
+	const targetISIN = "RU000A109TG2" // iКарРус1P4
+
+	p := aa19dfdLivePortfolio()
+	today := shared.MustParseDate("2026-07-10")
+	cash := p.CashBalanceRub
+	historical, _, _ := trading.ReconcileCashToBroker(nil, today, cash)
+	planCtx := portfolio.PlanContext{
+		Mode: portfolio.PlanModeTrading, Positions: p.Positions, HistoricalEvents: historical,
+		BrokerCashRub: cash, InvestedCapitalRub: portfolio.InvestedCapitalFromPositions(p.Positions, shared.Rub(cash)),
+		AssumeBestPutOutcome: false,
+	}
+	universe := aa19dfdLiveUniverse()
+
+	plan := portfolio.BuildPlan(p, universe, today, 16, 0.13, planCtx, portfolio.DefaultDurationPolicy)
+	slot := findReinvestSlot(plan.ResolvedSlots, sourceISIN)
+	if slot == nil {
+		t.Fatal("expected reinvest slot for ЖКХРСЯ")
+	}
+	if slot.ExpectedCashRub <= 0 {
+		t.Fatalf("expected positive slot budget, got %.2f", slot.ExpectedCashRub)
+	}
+	if reason := portfolio.ValidateSlotReplacement(p, universe, *slot, targetISIN); reason != nil {
+		t.Fatalf("iКарРус1P4 override should pass: %s", *reason)
+	}
+
+	// Same PlanContext as GET /plan and POST /slots/override (trading, assumeBestPutOutcome=false).
+	validationPlan := portfolio.BuildPlan(p, universe, today, 16, 0.13, planCtx, portfolio.DefaultDurationPolicy)
+	validationSlot := findReinvestSlot(validationPlan.ResolvedSlots, sourceISIN)
+	if validationSlot == nil {
+		t.Fatal("validation plan missing slot")
+	}
+	if validationSlot.ExpectedCashRub != slot.ExpectedCashRub {
+		t.Fatalf("plan vs override budget mismatch: %.2f vs %.2f",
+			slot.ExpectedCashRub, validationSlot.ExpectedCashRub)
+	}
+
+	// Regression: old simulation path with InitialAmountRub produced negative budget.
+	simCtx := portfolio.NewSimulationPlanContext(p, true)
+	simPlan := portfolio.BuildPlan(p, universe, today, 16, 0.13, simCtx, portfolio.DefaultDurationPolicy)
+	simSlot := findReinvestSlot(simPlan.ResolvedSlots, sourceISIN)
+	if simSlot != nil && simSlot.ExpectedCashRub >= 0 {
+		t.Fatalf("expected negative budget on legacy simulation path, got %.2f", simSlot.ExpectedCashRub)
+	}
+}
+
+func TestAA19dfdTradingInvestedCapitalNotInflated(t *testing.T) {
+	p := aa19dfdLivePortfolio()
+	today := shared.MustParseDate("2026-07-10")
+	cash := p.CashBalanceRub
+	historical, _, _ := trading.ReconcileCashToBroker(nil, today, cash)
+	invested := portfolio.InvestedCapitalFromPositions(p.Positions, shared.Rub(cash))
+	plan := portfolio.BuildPlan(p, aa19dfdLiveUniverse(), today, 16, 0.13, portfolio.PlanContext{
+		Mode: portfolio.PlanModeTrading, Positions: p.Positions, HistoricalEvents: historical,
+		BrokerCashRub: cash, InvestedCapitalRub: invested, AssumeBestPutOutcome: false,
+	}, portfolio.DefaultDurationPolicy)
+	if plan.InvestedCapitalRub > 280_000 {
+		t.Fatalf("invested capital inflated to %.2f (double-count regression)", plan.InvestedCapitalRub)
+	}
+	if plan.InvestedCapitalRub < invested-1 || plan.InvestedCapitalRub > invested+1 {
+		t.Fatalf("plan invested %.2f != baseline %.2f", plan.InvestedCapitalRub, invested)
+	}
+	if plan.EffectiveAnnualReturnPct != nil && *plan.EffectiveAnnualReturnPct < -50 {
+		t.Fatalf("forecast XIRR unexpectedly negative: %.2f", *plan.EffectiveAnnualReturnPct)
+	}
+}
+
+func findReinvestSlot(slots []portfolio.ReinvestmentSlot, sourceISIN string) *portfolio.ReinvestmentSlot {
+	for i := range slots {
+		if slots[i].SourcePositionISIN != nil && *slots[i].SourcePositionISIN == sourceISIN {
+			return &slots[i]
+		}
+	}
+	return nil
+}
+
 func TestAA19dfdTradingCashflowNonNegative(t *testing.T) {
 	p := aa19dfdPortfolio()
 	p.Mode = portfolio.PortfolioModeTrading
-	cash := p.CashBalanceRub
-	plan := portfolio.BuildPlan(p, aa19dfdUniverse(), shared.MustParseDate("2026-07-10"), 16, 0.13, &cash, false, portfolio.DefaultDurationPolicy)
+	plan := portfolio.BuildPlan(p, aa19dfdUniverse(), shared.MustParseDate("2026-07-10"), 16, 0.13, portfolio.NewSimulationPlanContext(p, false), portfolio.DefaultDurationPolicy)
 	rows := portfolio.CashflowRowsWithBalance(plan.Events, plan.InitialCashRub)
 	for _, row := range rows {
 		if row.BalanceAfterRub < -0.01 {
@@ -152,7 +235,7 @@ func TestEmptySimulationPortfolioPlanHasNoPhantomCompose(t *testing.T) {
 		APITradeOnly:     true,
 	}
 
-	plan := portfolio.BuildPlan(p, universe, today, 16, 0.13, nil, true, portfolio.DefaultDurationPolicy)
+	plan := portfolio.BuildPlan(p, universe, today, 16, 0.13, portfolio.NewSimulationPlanContext(p, true), portfolio.DefaultDurationPolicy)
 
 	if len(plan.Events) != 0 {
 		t.Fatalf("expected no cashflow events, got %d", len(plan.Events))

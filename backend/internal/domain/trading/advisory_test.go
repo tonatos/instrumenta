@@ -345,7 +345,7 @@ func TestValidateAttachSoftHandlesMissingPricePerLot(t *testing.T) {
 	})
 	p := testutil.MakePortfolio(func(p *portfolio.Portfolio) { p.InitialAmountRub = 100_000 })
 	v := trading.ValidateAttachSoft(snapshot, p, []bonds.BondRecord{bond})
-	if !v.CanAttach || v.EffectiveInitialAmountRub != 100_000 {
+	if !v.CanAttach || v.EffectiveInitialAmountRub != 20_000 {
 		t.Fatalf("unexpected validation: %+v", v)
 	}
 }

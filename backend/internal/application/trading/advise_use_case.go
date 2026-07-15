@@ -44,10 +44,10 @@ func (u *AdviseUseCase) GetAdvice(ctx context.Context, portfolioID string, unive
 	if err != nil {
 		return application.TradingAdviceResult{}, err
 	}
-	return u.BuildAdviceResult(ctx, p, universe, snapshot, ops, orders, keyRate, taxRate, today, durationPolicy)
+	return u.BuildAdviceResult(ctx, p, universe, snapshot, ops, orders, keyRate, taxRate, today, durationPolicy, nil)
 }
 
-func (u *AdviseUseCase) BuildAdviceResult(ctx context.Context, p domainPortfolio.Portfolio, universe []bonds.BondRecord, snapshot trading.InfraAccountSnapshot, operations []trading.InfraOperationRecord, activeOrders []trading.InfraOrderState, keyRate, taxRate float64, today time.Time, durationPolicy *domainPortfolio.DurationPolicy) (application.TradingAdviceResult, error) {
+func (u *AdviseUseCase) BuildAdviceResult(ctx context.Context, p domainPortfolio.Portfolio, universe []bonds.BondRecord, snapshot trading.InfraAccountSnapshot, operations []trading.InfraOperationRecord, activeOrders []trading.InfraOrderState, keyRate, taxRate float64, today time.Time, durationPolicy *domainPortfolio.DurationPolicy, planSlots []domainPortfolio.ReinvestmentSlot) (application.TradingAdviceResult, error) {
 	brokerSnapshot := tinvest.ToBrokerSnapshot(snapshot)
 	policy := durationPolicyOrDefault(p, durationPolicy)
 	var activeSession *trading.DeploySession
@@ -59,7 +59,7 @@ func (u *AdviseUseCase) BuildAdviceResult(ctx context.Context, p domainPortfolio
 		activeSession = session
 	}
 	advice := trading.Advise(p, brokerSnapshot, tinvest.ToBrokerActiveOrders(activeOrders), tinvest.ToBrokerOperations(operations), universe, trading.AdviseParams{
-		KeyRate: keyRate, TaxRate: taxRate, Today: &today, DurationPolicy: policy, ActiveSession: activeSession,
+		KeyRate: keyRate, TaxRate: taxRate, Today: &today, DurationPolicy: policy, ActiveSession: activeSession, PlanSlots: planSlots,
 	})
 	if u.notifications != nil {
 		if recs, err := u.notifications.ListForPortfolio(ctx, p.ID, true); err == nil {

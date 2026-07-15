@@ -24,3 +24,12 @@ func InvestedCapitalFromSnapshot(p Portfolio, moneyRub shared.Rub) float64 {
 	v := float64(moneyRub)
 	return InvestedCapitalRub(p, &v)
 }
+
+// InvestedCapitalFromPositions sums open position cost basis plus broker cash.
+func InvestedCapitalFromPositions(positions []PortfolioPosition, moneyRub shared.Rub) float64 {
+	deployed := 0.0
+	for _, position := range OpenPositions(positions) {
+		deployed += PositionCostBasis(position)
+	}
+	return round2(deployed + float64(moneyRub))
+}

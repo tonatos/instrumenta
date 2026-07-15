@@ -209,7 +209,7 @@ func BuildDeploySessionPlan(
 
 	buySuggestions := BuildBuySuggestions(p, holdings, universe, availableCash, today, keyRate, taxRate, durationPolicy)
 	reinvestSuggestions := BuildReinvestSuggestions(
-		p, positions, universe, today, keyRate, taxRate, selectionPolicy, planningPolicy, durationPolicy,
+		p, positions, universe, today, keyRate, taxRate, selectionPolicy, planningPolicy, durationPolicy, nil,
 	)
 	var items []DeploySessionItem
 	for _, s := range append(buySuggestions, reinvestSuggestions...) {

@@ -171,7 +171,13 @@ export function PortfolioPage() {
                     <TradingModeBadge portfolio={active} />
                   </div>
                   <div className="flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
-                    {portfolioInvestedCapitalRub(active) > active.initial_amount_rub ? (
+                    {isTrading ? (
+                      <Tooltip content="Вложенный капитал по операциям счёта и текущим позициям">
+                        <span className="cursor-help font-semibold text-foreground">
+                          капитал {formatRub(portfolioInvestedCapitalRub(active))}
+                        </span>
+                      </Tooltip>
+                    ) : portfolioInvestedCapitalRub(active) > active.initial_amount_rub ? (
                       <>
                         <Tooltip content="Начальный бюджет при создании портфеля">
                           <span className="cursor-help font-medium text-foreground">
@@ -230,12 +236,13 @@ export function PortfolioPage() {
                       <DialogHeader>
                         <DialogTitle>Редактировать портфель</DialogTitle>
                         <DialogDescription>
-                          Изменение бюджета не влияет на существующие позиции. Смена
-                          горизонта пересчитывает прогноз реинвестиций, не меняя уже
-                          купленные бумаги на счёте.
+                          {isTrading
+                            ? "В trading-режиме капитал считается по операциям счёта. Смена горизонта пересчитывает прогноз реинвестиций."
+                            : "Изменение бюджета не влияет на существующие позиции. Смена горизонта пересчитывает прогноз реинвестиций, не меняя уже купленные бумаги на счёте."}
                         </DialogDescription>
                       </DialogHeader>
                       <PortfolioForm
+                        hideInitialBudget={isTrading}
                         initial={{
                           name: active.name,
                           initial_amount_rub: active.initial_amount_rub,

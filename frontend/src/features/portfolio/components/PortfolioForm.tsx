@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { todayIsoDate } from "@/lib/utils";
+import { cn, todayIsoDate } from "@/lib/utils";
 import type { PortfolioFormValues } from "@/features/portfolio/hooks/usePortfolioMutations";
 
 export function PortfolioForm({
@@ -12,11 +12,13 @@ export function PortfolioForm({
   onSubmit,
   isPending,
   submitLabel,
+  hideInitialBudget = false,
 }: {
   initial: PortfolioFormValues;
   onSubmit: (values: PortfolioFormValues) => void;
   isPending: boolean;
   submitLabel: string;
+  hideInitialBudget?: boolean;
 }) {
   const [form, setForm] = useState(initial);
 
@@ -31,6 +33,7 @@ export function PortfolioForm({
           autoFocus
         />
       </label>
+      {!hideInitialBudget && (
       <label className="space-y-1.5 text-sm">
         <span className="font-medium text-muted-foreground">Начальный бюджет, ₽</span>
         <Input
@@ -41,7 +44,8 @@ export function PortfolioForm({
           onChange={(e) => setForm({ ...form, initial_amount_rub: Number(e.target.value) })}
         />
       </label>
-      <label className="space-y-1.5 text-sm">
+      )}
+      <label className={cn("space-y-1.5 text-sm", hideInitialBudget && "sm:col-span-2")}>
         <span className="font-medium text-muted-foreground">Горизонт инвестирования</span>
         <DatePicker
           value={form.horizon_date}

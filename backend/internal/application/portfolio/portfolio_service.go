@@ -17,11 +17,12 @@ const unsetValue unset = 0
 
 // Service provides CRUD and planning operations for portfolios.
 type Service struct {
-	repo domain.Repository
+	repo  domain.Repository
+	plans *PlanUseCase
 }
 
-func NewService(repo domain.Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo domain.Repository, plans *PlanUseCase) *Service {
+	return &Service{repo: repo, plans: plans}
 }
 
 func (s *Service) ListPortfolios(ctx context.Context) ([]domain.Portfolio, error) {
@@ -70,21 +71,11 @@ func (s *Service) AutoComposePortfolio(ctx context.Context, portfolioID string, 
 }
 
 func (s *Service) BuildPortfolioPlan(ctx context.Context, portfolioID string, universe []bonds.BondRecord, keyRate, taxRate float64, today time.Time, accountSnapshotMoneyRub *float64, assumeBestPutOutcome bool, durationPolicy *domain.DurationPolicy) (domain.PortfolioPlan, error) {
-	p, err := s.repo.GetByID(ctx, portfolioID)
-	if err != nil || p == nil {
-		return domain.PortfolioPlan{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
+	if s.plans == nil {
+		return domain.PortfolioPlan{}, fmt.Errorf("plan use case not configured")
 	}
-	if p.IsTrading() && accountSnapshotMoneyRub == nil {
-		v := p.CashBalanceRub
-		accountSnapshotMoneyRub = &v
-		assumeBestPutOutcome = false
-	}
-	policy := durationPolicyOrDefault(*p, durationPolicy)
-	plan := domain.BuildPlan(*p, universe, today, keyRate, taxRate, accountSnapshotMoneyRub, assumeBestPutOutcome, policy)
-	if _, err := s.repo.Save(ctx, *p); err != nil {
-		return domain.PortfolioPlan{}, err
-	}
-	return plan, nil
+	_ = accountSnapshotMoneyRub
+	return s.plans.Build(ctx, portfolioID, universe, today, keyRate, taxRate, assumeBestPutOutcome, durationPolicy)
 }
 
 func (s *Service) UpdatePortfolioFields(ctx context.Context, portfolioID string, name *string, initialAmountRub *float64, horizonDate *time.Time, riskProfile *domain.RiskProfile, apiTradeOnly *bool, turboEntryEnabled *bool, maxWeightedDurationYears, targetDurationYears any) (domain.Portfolio, error) {
@@ -210,8 +201,15 @@ func (s *Service) SetSlotOverride(ctx context.Context, portfolioID, sourcePositi
 	if err != nil || p == nil {
 		return domain.Portfolio{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
 	}
+	if s.plans == nil {
+		return domain.Portfolio{}, fmt.Errorf("plan use case not configured")
+	}
 	policy := durationPolicyOrDefault(*p, durationPolicy)
-	plan := domain.BuildPlan(*p, universe, today, keyRate, taxRate, nil, true, policy)
+	plan, err := s.plans.PlanForSlotValidation(ctx, *p, universe, today, keyRate, taxRate, policy)
+	if err != nil {
+		return domain.Portfolio{}, err
+	}
+	p = &plan.Portfolio
 	var slotContext *domain.ReinvestmentSlot
 	for i := range plan.ResolvedSlots {
 		if plan.ResolvedSlots[i].SourcePositionISIN != nil && *plan.ResolvedSlots[i].SourcePositionISIN == sourcePositionISIN {

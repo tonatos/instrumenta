@@ -195,6 +195,7 @@ export function PortfolioTabs({
           <CashflowTable
             cashflow={plan.cashflow}
             initialCash={plan.initial_cash_rub}
+            cashflowFromDate={plan.cashflow_from_date}
           />
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">
