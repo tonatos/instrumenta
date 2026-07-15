@@ -67,6 +67,7 @@ type PortfolioPlan struct {
 	EffectiveAnnualReturnPct     *float64
 	WeightedDurationYears        *float64
 	HorizonDays                  int
+	AsOf                         time.Time
 	InitialCashRub               float64
 	ValueTimeline                []PortfolioValuePoint
 }

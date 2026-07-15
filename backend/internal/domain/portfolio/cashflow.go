@@ -101,30 +101,30 @@ func CashflowRowsWithBalance(events []CashflowEvent, initialCash float64) []Cash
 	return CashflowRowsFromDate(events, initialCash, time.Time{})
 }
 
-// CashflowDisplayFromDate returns the first day to include in plan cashflow UI.
-// Trading: account attach date; simulation: portfolio creation date.
-func CashflowDisplayFromDate(p Portfolio) time.Time {
-	if p.IsTrading() && p.TradingStartedAt != nil {
-		if t, ok := parsePortfolioTimestamp(*p.TradingStartedAt); ok {
-			return t
+// CashflowProjectedRowsFromToday returns forward-looking plan rows (projected events from as-of date).
+func CashflowProjectedRowsFromToday(events []CashflowEvent, initialCash float64, today time.Time) []CashflowRow {
+	today = shared.DateOnly(today)
+	if today.IsZero() {
+		return CashflowRowsWithBalance(events, initialCash)
+	}
+	running := CashOnHandBeforeDate(events, today, initialCash)
+	var rows []CashflowRow
+	for _, event := range sortedJournal(events) {
+		if event.Date.Before(today) || !event.IsProjected {
+			continue
 		}
+		running += event.AmountRub
+		rows = append(rows, CashflowRow{
+			Date:            shared.FormatISODate(event.Date),
+			AmountRub:       event.AmountRub,
+			Kind:            event.Kind,
+			Label:           event.Description,
+			Lots:            event.Lots,
+			BondsCount:      event.BondsCount,
+			BalanceAfterRub: round2(running),
+		})
 	}
-	if t, ok := parsePortfolioTimestamp(p.CreatedAt); ok {
-		return t
-	}
-	return time.Time{}
-}
-
-func parsePortfolioTimestamp(raw string) (time.Time, bool) {
-	if raw == "" {
-		return time.Time{}, false
-	}
-	for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05Z07:00", "2006-01-02"} {
-		if t, err := time.Parse(layout, raw); err == nil {
-			return shared.DateOnly(t), true
-		}
-	}
-	return time.Time{}, false
+	return rows
 }
 
 // CashflowRowsFromDate builds display rows from fromDate inclusive; balance starts at cash on that date.

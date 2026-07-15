@@ -323,7 +323,6 @@ test.describe("Советы по торговле", () => {
     await gotoPortfolio(page, PORTFOLIO_ID);
 
     await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText(/старт.*100/)).toBeVisible();
     await expect(page.getByText(/капитал.*200/)).toBeVisible();
     await expect(page.getByText(/Свободный кэш.*рекомендуем.*Тестовая облигация 2.*Тестовая облигация 3/i)).toBeVisible();
     await expect(page.getByText("Покупки")).toBeVisible();

@@ -59,10 +59,12 @@ export function CashflowTable({
   cashflow,
   initialCash,
   cashflowFromDate,
+  isTrading = false,
 }: {
   cashflow: PlanResponse["cashflow"];
   initialCash: number;
   cashflowFromDate?: string | null;
+  isTrading?: boolean;
 }) {
   const [view, setView] = useState<"table" | "chart">("table");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -123,7 +125,8 @@ export function CashflowTable({
           <h3 className="text-sm font-semibold">Cashflow</h3>
           {cashflowFromDate && (
             <p className="text-xs text-muted-foreground">
-              С {formatDate(cashflowFromDate)} (открытие / привязка счёта)
+              Прогноз с {formatDate(cashflowFromDate)}
+              {isTrading ? ". Факт — вкладка «Операции»" : ""}
             </p>
           )}
         </div>

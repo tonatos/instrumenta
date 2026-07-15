@@ -25,7 +25,7 @@ import { PortfolioValueChart } from "@/features/portfolio/PortfolioValueChart";
 import { TradingActionQueue } from "@/features/portfolio/trading/TradingActionQueue";
 import { NotificationsPanel } from "@/features/portfolio/NotificationsPanel";
 import { TradingModeBadge, TradingModeWizard } from "@/features/portfolio/TradingModeWizard";
-import { portfolioInvestedCapitalRub, portfolioPath } from "@/features/portfolio/utils";
+import { portfolioFreeCashRub, portfolioInvestedCapitalRub, portfolioPath } from "@/features/portfolio/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -172,9 +172,12 @@ export function PortfolioPage() {
                   </div>
                   <div className="flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
                     {isTrading ? (
-                      <Tooltip content="Вложенный капитал по операциям счёта и текущим позициям">
+                      <Tooltip content="Вложенный капитал: стоимость позиций на счёте (по цене покупки) плюс свободный кэш брокера">
                         <span className="cursor-help font-semibold text-foreground">
-                          капитал {formatRub(portfolioInvestedCapitalRub(active))}
+                          капитал{" "}
+                          {formatRub(
+                            portfolioInvestedCapitalRub(active, plan ?? null),
+                          )}
                         </span>
                       </Tooltip>
                     ) : portfolioInvestedCapitalRub(active) > active.initial_amount_rub ? (
@@ -200,7 +203,7 @@ export function PortfolioPage() {
                     <span>до {formatDate(active.horizon_date)}</span>
                     <span>·</span>
                     <span>{RISK_LABELS[active.risk_profile] ?? active.risk_profile}</span>
-                    {active.cash_balance_rub > 0 && (
+                    {portfolioFreeCashRub(active, tradingAdvice ?? null) > 0 && (
                       <>
                         <span>·</span>
                         <Tooltip
@@ -211,7 +214,10 @@ export function PortfolioPage() {
                           }
                         >
                           <span className="cursor-help text-amber-600 dark:text-amber-400">
-                            свободно {formatRub(active.cash_balance_rub)}
+                            свободно{" "}
+                            {formatRub(
+                              portfolioFreeCashRub(active, tradingAdvice ?? null),
+                            )}
                           </span>
                         </Tooltip>
                       </>

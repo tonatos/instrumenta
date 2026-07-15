@@ -8,16 +8,20 @@ import (
 	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
 )
 
-func TestCashflowRowsFromDateSkipsEarlierEvents(t *testing.T) {
-	from := shared.MustParseDate("2026-07-10")
+func TestCashflowProjectedRowsFromTodaySkipsHistory(t *testing.T) {
+	today := shared.MustParseDate("2026-07-15")
 	events := []portfolio.CashflowEvent{
 		{Date: shared.MustParseDate("2026-07-01"), Kind: "deposit", AmountRub: 20_000, JournalSeq: 1},
 		{Date: shared.MustParseDate("2026-07-07"), Kind: "purchase", AmountRub: -5_000, JournalSeq: 2},
-		{Date: shared.MustParseDate("2026-07-14"), Kind: "coupon", AmountRub: 200, JournalSeq: 3},
+		{Date: shared.MustParseDate("2026-07-15"), Kind: "reconciliation", AmountRub: -100, JournalSeq: 3},
+		{
+			Date: shared.MustParseDate("2026-08-01"), Kind: "coupon", AmountRub: 200,
+			IsProjected: true, JournalSeq: 4,
+		},
 	}
-	rows := portfolio.CashflowRowsFromDate(events, 0, from)
+	rows := portfolio.CashflowProjectedRowsFromToday(events, 0, today)
 	if len(rows) != 1 {
-		t.Fatalf("expected 1 row from attach date, got %d", len(rows))
+		t.Fatalf("expected 1 projected row, got %d", len(rows))
 	}
 	if rows[0].Kind != "coupon" {
 		t.Fatalf("expected coupon, got %s", rows[0].Kind)
@@ -27,27 +31,19 @@ func TestCashflowRowsFromDateSkipsEarlierEvents(t *testing.T) {
 	}
 }
 
-func TestCashflowDisplayFromDateTradingUsesAttach(t *testing.T) {
-	started := "2026-05-28T10:17:50+00:00"
-	created := "2026-01-01T08:00:00+00:00"
-	p := portfolio.Portfolio{
-		Mode: portfolio.PortfolioModeTrading, CreatedAt: created, TradingStartedAt: &started,
+func TestCashflowRowsFromDateSkipsEarlierEvents(t *testing.T) {
+	from := shared.MustParseDate("2026-07-10")
+	events := []portfolio.CashflowEvent{
+		{Date: shared.MustParseDate("2026-07-01"), Kind: "deposit", AmountRub: 20_000, JournalSeq: 1},
+		{Date: shared.MustParseDate("2026-07-07"), Kind: "purchase", AmountRub: -5_000, JournalSeq: 2},
+		{Date: shared.MustParseDate("2026-07-14"), Kind: "coupon", AmountRub: 200, JournalSeq: 3},
 	}
-	got := portfolio.CashflowDisplayFromDate(p)
-	want := shared.MustParseDate("2026-05-28")
-	if !got.Equal(want) {
-		t.Fatalf("got %v, want %v", got, want)
+	rows := portfolio.CashflowRowsFromDate(events, 0, from)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row from date, got %d", len(rows))
 	}
-}
-
-func TestCashflowDisplayFromDateSimulationUsesCreated(t *testing.T) {
-	p := portfolio.Portfolio{
-		Mode: portfolio.PortfolioModeSimulation, CreatedAt: "2026-03-15T12:00:00Z",
-	}
-	got := portfolio.CashflowDisplayFromDate(p)
-	want := shared.MustParseDate("2026-03-15")
-	if !got.Equal(want) {
-		t.Fatalf("got %v, want %v", got, want)
+	if rows[0].Kind != "coupon" {
+		t.Fatalf("expected coupon, got %s", rows[0].Kind)
 	}
 }
 

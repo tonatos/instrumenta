@@ -253,6 +253,7 @@ func finalizePlanTotals(
 		horizonDays = 0
 	}
 	plan.HorizonDays = horizonDays
+	plan.AsOf = today
 	plan.EffectiveAnnualReturnPct = calculatePlanExpectedXIRR(plan, today, investedBaseline, planCtx, horizonDays)
 }
 

@@ -196,6 +196,7 @@ export function PortfolioTabs({
             cashflow={plan.cashflow}
             initialCash={plan.initial_cash_rub}
             cashflowFromDate={plan.cashflow_from_date}
+            isTrading={isTrading}
           />
         ) : (
           <p className="py-8 text-center text-sm text-muted-foreground">
