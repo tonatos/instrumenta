@@ -35,6 +35,7 @@ type cacheBundle struct {
 	SavedDate   time.Time
 	Bonds       map[string]map[string]any
 	PrevVolumes map[string]float64
+	Offers      map[string][]bonds.OfferWindowData
 }
 
 // NewClient creates a MOEX ISS client.
@@ -55,7 +56,7 @@ func (c *Client) FetchAllBondsUnfiltered() ([]bonds.BondRecord, error) {
 	}
 	var result []bonds.BondRecord
 	for isin, raw := range bundle.Bonds {
-		if bond := buildBondRecord(isin, raw, today, prevVolumePtr(bundle.PrevVolumes[isin])); bond != nil {
+		if bond := buildBondRecord(isin, raw, today, prevVolumePtr(bundle.PrevVolumes[isin]), bundle.Offers[isin]); bond != nil {
 			result = append(result, *bond)
 		}
 	}
@@ -73,7 +74,7 @@ func (c *Client) FetchBondBySecid(secid string) (*bonds.BondRecord, error) {
 	}
 	for isin, raw := range bundle.Bonds {
 		if v, _ := raw["SECID"].(string); v == secid {
-			return buildBondRecord(isin, raw, today, prevVolumePtr(bundle.PrevVolumes[isin])), nil
+			return buildBondRecord(isin, raw, today, prevVolumePtr(bundle.PrevVolumes[isin]), bundle.Offers[isin]), nil
 		}
 	}
 	return nil, nil
@@ -94,7 +95,7 @@ func (c *Client) FetchBondsByISINs(isins map[string]struct{}) ([]bonds.BondRecor
 		if !ok {
 			continue
 		}
-		if bond := buildBondRecord(isin, raw, today, prevVolumePtr(bundle.PrevVolumes[isin])); bond != nil {
+		if bond := buildBondRecord(isin, raw, today, prevVolumePtr(bundle.PrevVolumes[isin]), bundle.Offers[isin]); bond != nil {
 			result = append(result, *bond)
 		}
 	}
@@ -122,7 +123,14 @@ func (c *Client) loadOrFetchBundle() (*cacheBundle, error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.saveDiskCache(merged, stale)
+	offers, offerErr := c.fetchUpcomingOffers(time.Now())
+	if offerErr != nil {
+		log.Printf("MOEX offers fetch failed: %v", offerErr)
+		if stale != nil && len(stale.Offers) > 0 {
+			offers = stale.Offers
+		}
+	}
+	return c.saveDiskCache(merged, offers, stale)
 }
 
 func (c *Client) readDiskCache(allowStale bool) *cacheBundle {
@@ -142,16 +150,27 @@ func (c *Client) readDiskCache(allowStale bool) *cacheBundle {
 	if err := gob.NewDecoder(f).Decode(&bundle); err != nil {
 		return nil
 	}
+	// Legacy caches without Offers must be refreshed so put-offer windows appear.
+	if bundle.Offers == nil && !allowStale {
+		return nil
+	}
 	return &bundle
 }
 
-func (c *Client) saveDiskCache(merged map[string]map[string]any, old *cacheBundle) (*cacheBundle, error) {
+func (c *Client) saveDiskCache(
+	merged map[string]map[string]any,
+	offers map[string][]bonds.OfferWindowData,
+	old *cacheBundle,
+) (*cacheBundle, error) {
 	today := time.Now().Truncate(24 * time.Hour)
 	prev := prevVolumesFromBundle(old, today)
 	if len(prev) == 0 {
 		prev = c.fetchPrevVolumesFromHistory(merged)
 	}
-	bundle := &cacheBundle{SavedDate: today, Bonds: merged, PrevVolumes: prev}
+	if offers == nil {
+		offers = map[string][]bonds.OfferWindowData{}
+	}
+	bundle := &cacheBundle{SavedDate: today, Bonds: merged, PrevVolumes: prev, Offers: offers}
 	if err := os.MkdirAll(c.cacheDir, 0o755); err != nil {
 		return bundle, nil
 	}
@@ -198,6 +217,67 @@ func (c *Client) fetchFromMOEX() (map[string]map[string]any, error) {
 		return nil, err
 	}
 	return mergeRows(secs, mdata), nil
+}
+
+// fetchUpcomingOffers loads put-offer submission windows from MOEX bondization.
+func (c *Client) fetchUpcomingOffers(asOf time.Time) (map[string][]bonds.OfferWindowData, error) {
+	asOf = time.Date(asOf.Year(), asOf.Month(), asOf.Day(), 0, 0, 0, 0, time.UTC)
+	out := make(map[string][]bonds.OfferWindowData)
+	for start := 0; ; start += 100 {
+		u := issBase + "/statistics/engines/stock/markets/bonds/bondization.json"
+		q := url.Values{
+			"iss.meta": {"off"},
+			"iss.only": {"offers"},
+			"from":     {asOf.Format("2006-01-02")},
+			"start":    {fmt.Sprintf("%d", start)},
+			"limit":    {"100"},
+		}
+		resp, err := c.httpClient.Get(u + "?" + q.Encode())
+		if err != nil {
+			return out, err
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return out, err
+		}
+		var data map[string]json.RawMessage
+		if err := json.Unmarshal(body, &data); err != nil {
+			return out, err
+		}
+		rows, err := parseBlock(data["offers"])
+		if err != nil {
+			return out, err
+		}
+		if len(rows) == 0 {
+			break
+		}
+		for _, row := range rows {
+			isin := strVal(row["isin"])
+			if isin == "" {
+				continue
+			}
+			patch := offerWindowFromMOEXRow(row)
+			if patch.OfferDate == nil {
+				continue
+			}
+			out[isin] = append(out[isin], patch)
+		}
+		if len(rows) < 100 {
+			break
+		}
+	}
+	log.Printf("Loaded put-offer schedules from MOEX bondization for %d ISINs", len(out))
+	return out, nil
+}
+
+func offerWindowFromMOEXRow(row map[string]any) bonds.OfferWindowData {
+	return bonds.OfferWindowData{
+		OfferDate:       parseDate(row["offerdate"]),
+		SubmissionStart: parseDate(row["offerdatestart"]),
+		SubmissionEnd:   parseDate(row["offerdateend"]),
+		PricePct:        parseFloat(row["price"]),
+	}
 }
 
 func parseBlock(raw json.RawMessage) ([]map[string]any, error) {
@@ -258,7 +338,13 @@ func mergeRows(secs, mdata []map[string]any) map[string]map[string]any {
 	return byISIN
 }
 
-func buildBondRecord(isin string, raw map[string]any, today time.Time, prevVolume *float64) *bonds.BondRecord {
+func buildBondRecord(
+	isin string,
+	raw map[string]any,
+	today time.Time,
+	prevVolume *float64,
+	offers []bonds.OfferWindowData,
+) *bonds.BondRecord {
 	if faceUnit, _ := raw["FACEUNIT"].(string); faceUnit != "" && faceUnit != "SUR" {
 		return nil
 	}
@@ -325,6 +411,9 @@ func buildBondRecord(isin string, raw map[string]any, today time.Time, prevVolum
 	}
 	bond.CouponValue = parseFloat(raw["COUPONVALUE"])
 	bond.NextCouponDate = parseDate(raw["NEXTCOUPON"])
+	if selected := bonds.SelectOfferWindow(offers, offer, today); selected != nil {
+		bonds.ApplyOfferWindow(bond, *selected)
+	}
 	return bond
 }
 

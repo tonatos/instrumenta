@@ -13,6 +13,21 @@ tasks:
     cmds:
       - npm run dev
 
+  run:landing:
+    desc: Run marketing landing (independent of frontend)
+    dir: ./landing
+    cmds:
+      - npm install
+      - npm run dev
+
+  test:landing:
+    desc: Landing e2e (Playwright)
+    dir: ./landing
+    cmds:
+      - npm install
+      - npx playwright install chromium
+      - npm run test:e2e
+
   run:notifier:
     desc: Run notification worker locally
     dotenv: [.env]

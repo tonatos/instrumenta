@@ -361,14 +361,14 @@ export function BondDetailSheet({
                   tooltip="Дата исполнения пут-оферты — когда поступят деньги, если вы подали заявку в окне приёма."
                 />
                 <InfoRow
-                  label="Окно подачи"
-                  value={
-                    bond.offer_submission_start || bond.offer_submission_end
-                      ? `${formatDate(bond.offer_submission_start)} — ${formatDate(bond.offer_submission_end)}`
-                      : bond.offer_date
-                        ? "ещё не объявлено"
-                        : "—"
-                  }
+                    label="Окно подачи"
+                    value={
+                      bond.offer_submission_start && bond.offer_submission_end
+                        ? `${formatDate(bond.offer_submission_start)} — ${formatDate(bond.offer_submission_end)}`
+                        : bond.offer_date
+                          ? "ещё не объявлено"
+                          : "—"
+                    }
                   tooltip="Период, когда можно подать заявку эмитенту на досрочный выкуп."
                 />
                 <InfoRow

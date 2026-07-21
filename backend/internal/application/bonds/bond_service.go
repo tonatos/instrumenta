@@ -220,6 +220,7 @@ func (s *Service) IsCacheFresh() bool {
 func (s *Service) InvalidateCaches() {
 	InvalidateAllBondCaches()
 	s.moex.InvalidateCache()
+	tinvest.InvalidateBondsCache()
 	if s.defaults != nil {
 		s.defaults.InvalidateCache()
 	}

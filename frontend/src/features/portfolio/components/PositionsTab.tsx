@@ -340,6 +340,12 @@ export function PositionsTab({
                                 pos.offer_window_status}
                             </Badge>
                           )}
+                          {pos.offer_submission_start && pos.offer_submission_end && (
+                            <div className="text-[10px] text-muted-foreground">
+                              {formatDate(pos.offer_submission_start)} —{" "}
+                              {formatDate(pos.offer_submission_end)}
+                            </div>
+                          )}
                           {(pos.offer_window_status === "open" ||
                             pos.put_offer_decision === "exercise" ||
                             pos.put_offer_decision === "hold") && (
