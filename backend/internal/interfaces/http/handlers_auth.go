@@ -88,20 +88,11 @@ func (h *Handler) TelegramCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, frontendErrorURL(frontendCallback, "auth_failed", err.Error()), http.StatusFound)
 		return
 	}
+	if h.deps.Users != nil {
+		_ = h.deps.Users.Upsert(r.Context(), user.TelegramID, user.DisplayName)
+	}
 	redirectTo := fmt.Sprintf("%s#access_token=%s", frontendCallback, url.QueryEscape(token))
 	http.Redirect(w, r, redirectTo, http.StatusFound)
-}
-
-func (h *Handler) AuthMe(w http.ResponseWriter, r *http.Request) {
-	user, ok := auth.UserFromContext(r.Context())
-	if !ok || user == nil {
-		WriteUnauthorized(w, "")
-		return
-	}
-	WriteJSON(w, http.StatusOK, AuthMeResponse{
-		TelegramID:  user.TelegramID,
-		DisplayName: user.DisplayName,
-	})
 }
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {

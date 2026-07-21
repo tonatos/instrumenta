@@ -8,6 +8,12 @@ import (
 
 func (h *Handler) ListNotifications(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if h.deps.Portfolios != nil {
+		if p, err := h.deps.Portfolios.GetPortfolio(r.Context(), portfolioID); err != nil || p == nil {
+			WriteNotFound(w, "Portfolio not found")
+			return
+		}
+	}
 	unreadOnly := r.URL.Query().Get("unread_only") == "true"
 	records, err := h.deps.Notifications.ListForPortfolio(r.Context(), portfolioID, unreadOnly)
 	if err != nil {
@@ -32,6 +38,12 @@ func (h *Handler) MarkNotificationRead(w http.ResponseWriter, r *http.Request) {
 		WriteNotFound(w, "Notification not found")
 		return
 	}
+	if h.deps.Portfolios != nil {
+		if p, err := h.deps.Portfolios.GetPortfolio(r.Context(), record.PortfolioID); err != nil || p == nil {
+			WriteNotFound(w, "Notification not found")
+			return
+		}
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -45,6 +57,12 @@ func (h *Handler) DismissNotification(w http.ResponseWriter, r *http.Request) {
 	if record == nil {
 		WriteNotFound(w, "Notification not found")
 		return
+	}
+	if h.deps.Portfolios != nil {
+		if p, err := h.deps.Portfolios.GetPortfolio(r.Context(), record.PortfolioID); err != nil || p == nil {
+			WriteNotFound(w, "Notification not found")
+			return
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

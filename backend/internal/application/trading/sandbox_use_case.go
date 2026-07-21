@@ -7,6 +7,7 @@ import (
 	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
 )
 
 // SandboxUseCase manages sandbox accounts.
@@ -20,13 +21,20 @@ func NewSandboxUseCase(ctx *Context, broker *BrokerFacade) *SandboxUseCase {
 }
 
 func (u *SandboxUseCase) ListAccounts(ctx context.Context, kind trading.AccountKind) ([]map[string]any, error) {
-	accounts, err := u.broker.ListAccounts(kind)
+	accounts, err := u.broker.ListAccounts(ctx, kind)
 	if err != nil {
 		return nil, err
 	}
-	all, err := u.ctx.Repo().ListAll(ctx)
-	if err != nil {
-		return nil, err
+	owner, ok := auth.OwnerTelegramID(ctx)
+	var all []domainPortfolio.Portfolio
+	var listErr error
+	if ok {
+		all, listErr = u.ctx.Repo().ListByOwner(ctx, owner)
+	} else {
+		all, listErr = u.ctx.Repo().ListAll(ctx)
+	}
+	if listErr != nil {
+		return nil, listErr
 	}
 	linked := map[string]domainPortfolio.Portfolio{}
 	for _, p := range all {
@@ -47,7 +55,7 @@ func (u *SandboxUseCase) ListAccounts(ctx context.Context, kind trading.AccountK
 	return result, nil
 }
 
-func (u *SandboxUseCase) CreateSandboxAccount(initialAmountRub float64, name string) (map[string]any, error) {
+func (u *SandboxUseCase) CreateSandboxAccount(ctx context.Context, initialAmountRub float64, name string) (map[string]any, error) {
 	if initialAmountRub <= 0 {
 		return nil, fmt.Errorf("amount must be positive")
 	}
@@ -55,11 +63,11 @@ func (u *SandboxUseCase) CreateSandboxAccount(initialAmountRub float64, name str
 	if accountName == "" {
 		accountName = "bond-monitor"
 	}
-	accountID, err := u.broker.OpenSandboxAccount(accountName)
+	accountID, err := u.broker.OpenSandboxAccount(ctx, accountName)
 	if err != nil {
 		return nil, err
 	}
-	balance, err := u.broker.SandboxPayIn(accountID, shared.Rub(initialAmountRub))
+	balance, err := u.broker.SandboxPayIn(ctx, accountID, shared.Rub(initialAmountRub))
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +87,7 @@ func (u *SandboxUseCase) DeleteSandboxAccount(ctx context.Context, accountID str
 			return nil, err
 		}
 	}
-	if err := u.broker.CloseSandboxAccount(accountID); err != nil {
+	if err := u.broker.CloseSandboxAccount(ctx, accountID); err != nil {
 		return nil, err
 	}
 	result := map[string]any{"account_id": accountID}
@@ -100,7 +108,7 @@ func (u *SandboxUseCase) SandboxPayInForPortfolio(ctx context.Context, portfolio
 	if amountRub <= 0 {
 		return nil, fmt.Errorf("Сумма пополнения должна быть больше нуля")
 	}
-	balance, err := u.broker.SandboxPayIn(*p.AccountID, shared.Rub(amountRub))
+	balance, err := u.broker.SandboxPayIn(ctx, *p.AccountID, shared.Rub(amountRub))
 	if err != nil {
 		return nil, err
 	}

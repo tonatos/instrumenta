@@ -26,12 +26,12 @@ func (a *BrokerPlanAdapter) GetTradingSnapshot(ctx context.Context, p domainPort
 	}
 	kind := *p.AccountKind
 	accountID := *p.AccountID
-	snapshot, err := a.broker.GetAccountSnapshot(kind, accountID)
+	snapshot, err := a.broker.GetAccountSnapshot(ctx, kind, accountID)
 	if err != nil {
 		return trading.BrokerSnapshot{}, nil, err
 	}
 	today := time.Now()
-	ops, err := a.broker.GetAccountOperations(kind, accountID, OperationsFromDate(today))
+	ops, err := a.broker.GetAccountOperations(ctx, kind, accountID, OperationsFromDate(today))
 	if err != nil {
 		return trading.BrokerSnapshot{}, nil, err
 	}

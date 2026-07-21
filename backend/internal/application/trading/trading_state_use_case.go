@@ -32,15 +32,15 @@ func (u *TradingStateUseCase) GetTradingState(ctx context.Context, portfolioID s
 	}
 	kind := *p.AccountKind
 	accountID := *p.AccountID
-	snapshot, err := u.broker.GetAccountSnapshot(kind, accountID)
+	snapshot, err := u.broker.GetAccountSnapshot(ctx, kind, accountID)
 	if err != nil {
 		return application.TradingStateResult{}, err
 	}
-	ops, err := u.broker.GetAccountOperations(kind, accountID, OperationsFromDate(today))
+	ops, err := u.broker.GetAccountOperations(ctx, kind, accountID, OperationsFromDate(today))
 	if err != nil {
 		return application.TradingStateResult{}, err
 	}
-	orders, err := u.broker.GetActiveOrders(kind, accountID)
+	orders, err := u.broker.GetActiveOrders(ctx, kind, accountID)
 	if err != nil {
 		return application.TradingStateResult{}, err
 	}

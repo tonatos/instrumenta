@@ -31,12 +31,10 @@ func NewService(
 	repo domainPortfolio.Repository,
 	deployRepo trading.DeploySessionRepository,
 	notificationsRepo domainNotifications.Repository,
-	sandboxToken, productionToken string,
+	tokens TokenSource,
 ) *Service {
-	ctx := NewContext(repo, sandboxToken, productionToken)
-	sandboxClient := tradingClient(sandboxToken, trading.AccountKindSandbox)
-	productionClient := tradingClient(productionToken, trading.AccountKindProduction)
-	broker := NewBrokerFacade(sandboxClient, productionClient)
+	ctx := NewContext(repo, tokens)
+	broker := NewBrokerFacade(tokens)
 	policy := trading.DefaultDeploySessionPolicy()
 	planUC := NewPlanUseCase(repo, broker)
 	deploySessions := NewDeploySessionUseCase(ctx, deployRepo, broker, policy)
@@ -54,25 +52,16 @@ func NewService(
 	}
 }
 
-func tradingClient(token string, kind trading.AccountKind) trading.BrokerClient {
-	if token == "" {
-		return nil
-	}
-	// SDK client is wired in infrastructure/tinvest; import lazily via package function.
-	return newBrokerClient(token, kind)
-}
-
 func (s *Service) ListAccounts(ctx context.Context, kind trading.AccountKind) ([]map[string]any, error) {
 	return s.sandbox.ListAccounts(ctx, kind)
 }
 
 func (s *Service) CreateSandboxAccount(ctx context.Context, initialAmountRub float64, name *string) (map[string]any, error) {
-	_ = ctx
 	accountName := ""
 	if name != nil {
 		accountName = *name
 	}
-	return s.sandbox.CreateSandboxAccount(initialAmountRub, accountName)
+	return s.sandbox.CreateSandboxAccount(ctx, initialAmountRub, accountName)
 }
 
 func (s *Service) DeleteSandboxAccount(ctx context.Context, accountID string) (map[string]any, error) {
@@ -222,6 +211,9 @@ func mapAttachErr(err error) error {
 	if err == nil {
 		return nil
 	}
+	if errors.Is(err, ErrBrokerCredentialsRequired) {
+		return application.ErrBrokerCredentialsRequired
+	}
 	if err.Error() == "portfolio not found" {
 		return application.ErrPortfolioNotFound
 	}
@@ -231,6 +223,9 @@ func mapAttachErr(err error) error {
 func mapDeployErr(err error) error {
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, ErrBrokerCredentialsRequired) {
+		return application.ErrBrokerCredentialsRequired
 	}
 	var conflict DeploySessionConflictError
 	if errors.As(err, &conflict) {

@@ -143,6 +143,7 @@ type Portfolio struct {
 	Name                     string
 	CreatedAt                string
 	UpdatedAt                string
+	OwnerTelegramID          int64
 	InitialAmountRub         float64
 	HorizonDate              time.Time
 	RiskProfile              RiskProfile
@@ -158,7 +159,7 @@ type Portfolio struct {
 	AccountKind              *AccountKind
 	AccountLabel             *string
 	TradingStartedAt         *string
-	FrozenForecast             *FrozenForecast
+	FrozenForecast           *FrozenForecast
 	RiskBaselines            map[string]RiskSnapshot
 }
 

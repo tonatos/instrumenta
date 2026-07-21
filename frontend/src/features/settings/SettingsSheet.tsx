@@ -1,5 +1,6 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { api } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -102,6 +103,11 @@ export function SettingsSheet({ open, onOpenChange }: SettingsSheetProps) {
             Параметры задаются через переменные окружения (.env). Перезапустите API после изменений.
           </p>
           <div className="flex flex-col gap-2">
+            <Button variant="outline" asChild>
+              <Link to="/account" onClick={() => onOpenChange(false)}>
+                Брокерские ключи
+              </Link>
+            </Button>
             <Button variant="outline" onClick={() => api.refreshBonds().then(() => refetch())}>
               Обновить данные MOEX
             </Button>

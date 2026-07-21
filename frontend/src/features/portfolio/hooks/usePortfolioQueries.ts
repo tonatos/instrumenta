@@ -74,6 +74,16 @@ export function usePortfolioQueries() {
     staleTime: STALE.config,
   });
 
+  const { data: me, isSuccess: meLoaded } = useQuery({
+    queryKey: ["auth-me"],
+    queryFn: () => api.getMe(),
+    staleTime: STALE.config,
+  });
+
+  const sandboxConfigured = Boolean(me?.credentials?.sandbox);
+  const productionConfigured = Boolean(me?.credentials?.production);
+  const tradingCredentialsLoaded = meLoaded;
+
   const portfolioRiskProfile = (active?.risk_profile ?? "normal") as BondRiskProfile;
 
   const portfolioReady = Boolean(active);
@@ -170,6 +180,9 @@ export function usePortfolioQueries() {
     portfolios,
     isLoading,
     config,
+    sandboxConfigured,
+    productionConfigured,
+    tradingCredentialsLoaded,
     bondsList,
     activeId,
     active,

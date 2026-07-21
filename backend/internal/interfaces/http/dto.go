@@ -19,8 +19,9 @@ type ConfigResponse struct {
 }
 
 type AuthMeResponse struct {
-	TelegramID  int64  `json:"telegram_id"`
-	DisplayName string `json:"display_name"`
+	TelegramID  int64                     `json:"telegram_id"`
+	DisplayName string                    `json:"display_name"`
+	Credentials AuthMeCredentialsResponse `json:"credentials"`
 }
 
 type BondResponse struct {

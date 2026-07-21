@@ -32,6 +32,21 @@ smart-lab ──► infrastructure/ratings/ ──► SQLite bond_credit_ratings
                         frontend/ (React)
 ```
 
+### Multi-tenant (пользователи и ключи)
+
+| Компонент | Поведение |
+|-----------|----------|
+| Identity | Telegram OIDC → JWT `sub` = telegram_id; при `AUTH_DISABLED` — `DEV_TELEGRAM_ID` |
+| Ownership | `portfolios.owner_telegram_id`, favorites PK `(owner, isin)` |
+| Broker keys | `broker_credentials` envelope AES-GCM + `BROKER_KEK`; API `PUT/DELETE /me/broker-credentials/{kind}` |
+| Enrich | `TINKOFF_TOKEN` остаётся process env |
+| Trading | `TokenFor(owner, kind)`; env `T_TRADING_TOKEN_*` только как fallback при `AUTH_DISABLED` |
+| UI | `/account` — ключи + trust copy; wizard без ключей → «Настроить ключи» |
+| Notifier | scan с токеном владельца; Telegram на `owner_telegram_id` |
+| Isolation | чужой `portfolio_id` → 404; тесты `isolation_test.go`, e2e tenant |
+
+`ALLOWED_TELEGRAM_IDS` пустой = любой Telegram-user (SaaS). Миграция `005_multi_tenant.sql` + `EnsureMultiTenantSchema`.
+
 ### DDD-слои (`backend/internal/`)
 
 | Слой | Путь | Ответственность |

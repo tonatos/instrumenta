@@ -2,6 +2,7 @@ package trading
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"time"
 
@@ -32,15 +33,15 @@ func (u *AdviseUseCase) GetAdvice(ctx context.Context, portfolioID string, unive
 	}
 	kind := *p.AccountKind
 	accountID := *p.AccountID
-	snapshot, err := u.broker.GetAccountSnapshot(kind, accountID)
+	snapshot, err := u.broker.GetAccountSnapshot(ctx, kind, accountID)
 	if err != nil {
 		return application.TradingAdviceResult{}, err
 	}
-	ops, err := u.broker.GetAccountOperations(kind, accountID, OperationsFromDate(today))
+	ops, err := u.broker.GetAccountOperations(ctx, kind, accountID, OperationsFromDate(today))
 	if err != nil {
 		return application.TradingAdviceResult{}, err
 	}
-	orders, err := u.broker.GetActiveOrders(kind, accountID)
+	orders, err := u.broker.GetActiveOrders(ctx, kind, accountID)
 	if err != nil {
 		return application.TradingAdviceResult{}, err
 	}
@@ -142,11 +143,11 @@ func (u *AdviseUseCase) GetPerformance(ctx context.Context, portfolioID string) 
 	kind := *p.AccountKind
 	accountID := *p.AccountID
 	today := time.Now()
-	snapshot, err := u.broker.GetAccountSnapshot(kind, accountID)
+	snapshot, err := u.broker.GetAccountSnapshot(ctx, kind, accountID)
 	if err != nil {
 		return nil, err
 	}
-	ops, err := u.broker.GetAccountOperations(kind, accountID, OperationsFromDate(today))
+	ops, err := u.broker.GetAccountOperations(ctx, kind, accountID, OperationsFromDate(today))
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +173,7 @@ func (u *AdviseUseCase) GetAccountOperations(ctx context.Context, portfolioID st
 	kind := *p.AccountKind
 	accountID := *p.AccountID
 	today := time.Now()
-	ops, err := u.broker.GetAccountOperations(kind, accountID, OperationsFromDate(today))
+	ops, err := u.broker.GetAccountOperations(ctx, kind, accountID, OperationsFromDate(today))
 	if err != nil {
 		return nil, err
 	}
@@ -198,6 +199,9 @@ func cashflowEventsToMaps(events []domainPortfolio.CashflowEvent) []map[string]a
 func mapTradingErr(err error) error {
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, ErrBrokerCredentialsRequired) {
+		return application.ErrBrokerCredentialsRequired
 	}
 	if err.Error() == "portfolio not found" || err.Error() == "portfolio is not in trading mode" {
 		return application.ErrPortfolioNotFound

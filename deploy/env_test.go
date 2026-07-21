@@ -7,25 +7,28 @@ import (
 
 func TestRenderEnv(t *testing.T) {
 	inv := Inventory{
-		Domain:                  "bond.example.com",
-		ImageTag:                "main",
-		TLSCaddyDataDir:         "/opt/tls/caddy",
-		TLSCaddyConfigDir:       "/opt/tls/caddy-config",
-		TinkoffToken:            "t.test-token",
-		TTradingTokenProduction: "t.prod-token",
-		KeyRate:                 14.5,
-		TaxRate:                 18,
-		MaxDays:                 120,
-		MinVolumeRub:            500000,
-		LogLevel:                "INFO",
-		AuthDisabled:            false,
-		AuthSecret:              "secret-value",
+		Domain:                   "bond.example.com",
+		ImageTag:                 "main",
+		TLSCaddyDataDir:          "/opt/tls/caddy",
+		TLSCaddyConfigDir:        "/opt/tls/caddy-config",
+		TinkoffToken:             "t.test-token",
+		TTradingTokenProduction:  "t.prod-token",
+		BrokerKEK:                "test-broker-kek-material",
+		KeyRate:                  14.5,
+		TaxRate:                  18,
+		MaxDays:                  120,
+		MinVolumeRub:             500000,
+		LogLevel:                 "INFO",
+		AuthDisabled:             false,
+		AuthSecret:               "secret-value",
 		TelegramOIDCClientID:     "oidc-id",
 		TelegramOIDCClientSecret: "oidc-secret",
 		AllowedTelegramIDs:       "123,456",
-		NotifierScanIntervalSec: 3600,
-		TelegramBotToken:        "bot-token",
-		TelegramNotifyUserID:    139693774,
+		DevTelegramID:            1,
+		TenantBackfillTelegramID: 139693774,
+		NotifierScanIntervalSec:  3600,
+		TelegramBotToken:         "bot-token",
+		TelegramNotifyUserID:     139693774,
 	}
 
 	out, err := renderEnv(inv)
@@ -38,6 +41,7 @@ func TestRenderEnv(t *testing.T) {
 		"IMAGE_TAG=main",
 		"TINKOFF_TOKEN=t.test-token",
 		"T_TRADING_TOKEN_PRODUCTION=t.prod-token",
+		"BROKER_KEK=test-broker-kek-material",
 		"KEY_RATE=14.5",
 		"TAX_RATE=18",
 		"AUTH_DISABLED=false",
@@ -45,11 +49,29 @@ func TestRenderEnv(t *testing.T) {
 		"PUBLIC_APP_URL=https://bond.example.com",
 		"TELEGRAM_BOT_TOKEN=bot-token",
 		"ALLOWED_TELEGRAM_IDS=123,456",
+		"DEV_TELEGRAM_ID=1",
+		"TENANT_BACKFILL_TELEGRAM_ID=139693774",
 		"NOTIFIER_SCAN_INTERVAL_SEC=3600",
 	}
 	for _, want := range checks {
 		if !strings.Contains(out, want) {
 			t.Fatalf("renderEnv missing %q\noutput:\n%s", want, out)
 		}
+	}
+}
+
+func TestValidateRequiresBrokerKEKWhenAuthEnabled(t *testing.T) {
+	inv := Inventory{Host: "1.2.3.4", Domain: "example.com", AuthDisabled: false}
+	if err := inv.validate(); err == nil {
+		t.Fatal("expected broker_kek required")
+	}
+	inv.BrokerKEK = "kek"
+	if err := inv.validate(); err != nil {
+		t.Fatalf("unexpected: %v", err)
+	}
+	inv.AuthDisabled = true
+	inv.BrokerKEK = ""
+	if err := inv.validate(); err != nil {
+		t.Fatalf("auth disabled should allow empty kek: %v", err)
 	}
 }

@@ -27,15 +27,33 @@ var authExcludedPaths = map[string]bool{
 
 // JWTManager issues and validates access tokens.
 type JWTManager struct {
-	secret      []byte
-	authEnabled bool
+	secret         []byte
+	authEnabled    bool
+	devTelegramID  int64
+	devDisplayName string
 }
 
 func NewJWTManager(secret string, authEnabled bool) *JWTManager {
 	if secret == "" {
 		secret = "insecure-dev-secret-change-me"
 	}
-	return &JWTManager{secret: []byte(secret), authEnabled: authEnabled}
+	return &JWTManager{
+		secret:         []byte(secret),
+		authEnabled:    authEnabled,
+		devTelegramID:  1,
+		devDisplayName: "Dev User",
+	}
+}
+
+// WithDevUser configures the synthetic user injected when auth is disabled.
+func (m *JWTManager) WithDevUser(telegramID int64, displayName string) *JWTManager {
+	if telegramID != 0 {
+		m.devTelegramID = telegramID
+	}
+	if displayName != "" {
+		m.devDisplayName = displayName
+	}
+	return m
 }
 
 func (m *JWTManager) CreateAccessToken(user User) (string, error) {
@@ -76,8 +94,15 @@ func (m *JWTManager) ParseToken(tokenString string) (*User, error) {
 
 func (m *JWTManager) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !m.authEnabled || isExcludedPath(r.URL.Path) {
+		if isExcludedPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
+			return
+		}
+		if !m.authEnabled {
+			user := &User{TelegramID: m.devTelegramID, DisplayName: m.devDisplayName}
+			ctx := context.WithValue(r.Context(), userContextKey, user)
+			ctx = WithOwnerTelegramID(ctx, user.TelegramID)
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 		token := bearerToken(r)
@@ -91,6 +116,7 @@ func (m *JWTManager) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		ctx := context.WithValue(r.Context(), userContextKey, user)
+		ctx = WithOwnerTelegramID(ctx, user.TelegramID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

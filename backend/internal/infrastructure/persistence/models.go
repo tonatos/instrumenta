@@ -9,6 +9,7 @@ type portfolioRow struct {
 	Name             string         `db:"name"`
 	CreatedAt        string         `db:"created_at"`
 	UpdatedAt        string         `db:"updated_at"`
+	OwnerTelegramID  int64          `db:"owner_telegram_id"`
 	InitialAmountRub float64        `db:"initial_amount_rub"`
 	HorizonDate      string         `db:"horizon_date"`
 	RiskProfile      string         `db:"risk_profile"`

@@ -31,7 +31,8 @@ func TestPortfolioRepositoryCRUD(t *testing.T) {
 	horizon := time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC)
 	created, err := repo.Save(ctx, portfolio.Portfolio{
 		ID: "p1", Name: "Test", CreatedAt: time.Now().UTC().Format(time.RFC3339),
-		UpdatedAt: time.Now().UTC().Format(time.RFC3339), InitialAmountRub: 100_000,
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339), OwnerTelegramID: 7,
+		InitialAmountRub: 100_000,
 		HorizonDate: horizon, RiskProfile: portfolio.RiskProfileNormal,
 		CashBalanceRub: 100_000, Mode: portfolio.PortfolioModeSimulation,
 		RiskBaselines: map[string]portfolio.RiskSnapshot{},
@@ -76,15 +77,20 @@ func TestFavoritesRepository(t *testing.T) {
 	defer db.Close()
 	repo := persistence.NewFavoritesRepository(db)
 	ctx := context.Background()
+	const owner int64 = 42
 
-	if err := repo.Add(ctx, "RU000A0JX0J2"); err != nil {
+	if err := repo.Add(ctx, owner, "RU000A0JX0J2"); err != nil {
 		t.Fatalf("add: %v", err)
 	}
-	isins, err := repo.ListISINs(ctx)
+	isins, err := repo.ListISINs(ctx, owner)
 	if err != nil || len(isins) != 1 {
 		t.Fatalf("list: %v %+v", err, isins)
 	}
-	removed, err := repo.SyncVisible(ctx, map[string]struct{}{})
+	other, err := repo.ListISINs(ctx, 99)
+	if err != nil || len(other) != 0 {
+		t.Fatalf("other owner should be empty: %v %+v", err, other)
+	}
+	removed, err := repo.SyncVisible(ctx, owner, map[string]struct{}{})
 	if err != nil || len(removed) != 1 {
 		t.Fatalf("sync visible: %v %+v", err, removed)
 	}

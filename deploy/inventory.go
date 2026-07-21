@@ -30,8 +30,10 @@ type Inventory struct {
 	TLSCaddyConfigDir string `yaml:"tls_caddy_config_dir"`
 
 	TinkoffToken            string  `yaml:"tinkoff_token"`
+	// TTradingToken* are AUTH_DISABLED / emergency fallback only; prod users use /account.
 	TTradingTokenSandbox    string  `yaml:"t_trading_token_sandbox"`
 	TTradingTokenProduction string  `yaml:"t_trading_token_production"`
+	BrokerKEK               string  `yaml:"broker_kek"`
 	KeyRate                 float64 `yaml:"key_rate"`
 	TaxRate                 float64 `yaml:"tax_rate"`
 	MaxDays                 int     `yaml:"max_days"`
@@ -43,8 +45,10 @@ type Inventory struct {
 	TelegramOIDCClientID     string `yaml:"telegram_oidc_client_id"`
 	TelegramOIDCClientSecret string `yaml:"telegram_oidc_client_secret"`
 	AllowedTelegramIDs       string `yaml:"allowed_telegram_ids"`
+	DevTelegramID            int64  `yaml:"dev_telegram_id"`
+	TenantBackfillTelegramID int64  `yaml:"tenant_backfill_telegram_id"`
 
-	NotifierScanIntervalSec int `yaml:"notifier_scan_interval_sec"`
+	NotifierScanIntervalSec int    `yaml:"notifier_scan_interval_sec"`
 	TelegramBotToken        string `yaml:"telegram_bot_token"`
 	TelegramNotifyUserID    int    `yaml:"telegram_notify_user_id"`
 
@@ -130,6 +134,9 @@ func (inv *Inventory) applyDefaults() {
 	if inv.NotifierScanIntervalSec == 0 {
 		inv.NotifierScanIntervalSec = 3600
 	}
+	if inv.DevTelegramID == 0 {
+		inv.DevTelegramID = 1
+	}
 }
 
 func (inv Inventory) validate() error {
@@ -138,6 +145,8 @@ func (inv Inventory) validate() error {
 		return fmt.Errorf("inventory: host is required")
 	case strings.TrimSpace(inv.Domain) == "":
 		return fmt.Errorf("inventory: domain is required")
+	case !inv.AuthDisabled && strings.TrimSpace(inv.BrokerKEK) == "":
+		return fmt.Errorf("inventory: broker_kek is required when auth_disabled is false")
 	default:
 		return nil
 	}

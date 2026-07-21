@@ -18,6 +18,9 @@ func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request) {
 	}
 	accounts, err := h.deps.Trading.ListAccounts(r.Context(), trading.AccountKind(kind))
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -35,6 +38,9 @@ func (h *Handler) CreateSandboxAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	account, err := h.deps.Trading.CreateSandboxAccount(r.Context(), req.InitialAmountRub, req.Name)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -65,6 +71,9 @@ func (h *Handler) AccountPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	preview, err := h.deps.Trading.GetAccountPreview(r.Context(), portfolioID, accountID, trading.AccountKind(kind), universe.Bonds)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -96,6 +105,9 @@ func (h *Handler) ClearAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	preview, err := h.deps.Trading.ClearAccountForAttach(r.Context(), portfolioID, req.AccountID, trading.AccountKind(req.Kind), req.PayInRub, universe.Bonds)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -128,6 +140,9 @@ func (h *Handler) AttachAccount(w http.ResponseWriter, r *http.Request) {
 		h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(), time.Now(),
 	)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -159,6 +174,9 @@ func (h *Handler) SandboxPayIn(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.deps.Trading.SandboxPayIn(r.Context(), portfolioID, req.AmountRub)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -188,6 +206,9 @@ func (h *Handler) GetAdvice(w http.ResponseWriter, r *http.Request) {
 		time.Now(), durationPolicy,
 	)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -217,6 +238,9 @@ func (h *Handler) GetTradingState(w http.ResponseWriter, r *http.Request) {
 		time.Now(), durationPolicy,
 	)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -265,6 +289,9 @@ func (h *Handler) GetActiveDeploySession(w http.ResponseWriter, r *http.Request)
 	portfolioID := chi.URLParam(r, "portfolio_id")
 	session, err := h.deps.Trading.GetActiveDeploySession(r.Context(), portfolioID)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -382,6 +409,9 @@ func (h *Handler) PreviewOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.deps.Trading.PreviewOrder(r.Context(), portfolioID, universe.Bonds, req.ISIN, req.Direction, req.Lots, req.PricePct, req.FIGI)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -406,6 +436,9 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.deps.Trading.PlaceOrder(r.Context(), portfolioID, universe.Bonds, req.ISIN, req.Direction, req.Lots, req.PricePct, req.FIGI, req.SuggestionID)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -445,6 +478,9 @@ func (h *Handler) SellPositionPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.deps.Trading.PreviewSellPosition(r.Context(), portfolioID, isin, universe.Bonds, req.Lots, req.PricePct, time.Now())
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -465,6 +501,9 @@ func (h *Handler) SellQuote(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.deps.Trading.GetSellQuote(r.Context(), portfolioID, isin, universe.Bonds)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -479,6 +518,9 @@ func (h *Handler) Performance(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
 	result, err := h.deps.Trading.GetPerformance(r.Context(), portfolioID)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return
@@ -498,6 +540,9 @@ func (h *Handler) AccountOperations(w http.ResponseWriter, r *http.Request) {
 	}
 	operations, err := h.deps.Trading.GetAccountOperations(r.Context(), portfolioID)
 	if err != nil {
+		if WriteAppError(w, err) {
+			return
+		}
 		if errors.Is(err, application.ErrPortfolioNotFound) {
 			WriteNotFound(w, "Portfolio not found")
 			return

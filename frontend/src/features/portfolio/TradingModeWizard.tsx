@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -267,7 +268,16 @@ export function TradingModeWizard({
     );
   }
 
-  if (!canAttach) return null;
+  if (!canAttach) {
+    return (
+      <Button size="sm" className="min-h-10 gap-1.5" asChild>
+        <Link to="/account">
+          <Wifi className="h-4 w-4" />
+          Настроить ключи
+        </Link>
+      </Button>
+    );
+  }
 
   return (
     <>

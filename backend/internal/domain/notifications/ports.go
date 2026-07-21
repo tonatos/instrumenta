@@ -79,4 +79,5 @@ type LedgerRepository interface {
 type TelegramNotifier interface {
 	Configured() bool
 	SendMessage(text string) bool
+	SendToChat(chatID int64, text string) bool
 }

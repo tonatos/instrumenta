@@ -7,6 +7,7 @@ import {
   makeAdvice,
   makeEmptyPlan,
   makeTradingPortfolio,
+  mockAuthMe,
   mockTradingPortfolioRoutes,
 } from "./fixtures";
 
@@ -148,6 +149,7 @@ test.describe("Бюджет API-запросов", () => {
         },
       });
     });
+    await mockAuthMe(page, { sandbox: true });
     await page.route("**/api/v1/bonds/**", async (route) => {
       await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });
     });

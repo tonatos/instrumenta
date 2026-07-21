@@ -58,7 +58,7 @@ func (u *SellPositionUseCase) PreviewSellPosition(ctx context.Context, portfolio
 	}
 	kind := *p.AccountKind
 	accountID := *p.AccountID
-	snapshot, err := u.broker.GetAccountSnapshot(kind, accountID)
+	snapshot, err := u.broker.GetAccountSnapshot(ctx, kind, accountID)
 	if err != nil {
 		return SellPositionPreviewResult{}, err
 	}
@@ -85,7 +85,7 @@ func (u *SellPositionUseCase) PreviewSellPosition(ctx context.Context, portfolio
 	}
 	if figi != "" {
 		instrumentUID := positionInstrumentUID(brokerSnapshot, figi)
-		preview, err := u.broker.PreviewOrderPrice(kind, accountID, figi, instrumentUID, trading.OrderDirectionSell, shared.Lots(lots), shared.PriceUnitPct(pricePct))
+		preview, err := u.broker.PreviewOrderPrice(ctx, kind, accountID, figi, instrumentUID, trading.OrderDirectionSell, shared.Lots(lots), shared.PriceUnitPct(pricePct))
 		if err == nil {
 			result.PreviewSource = "broker"
 			result.BrokerCleanAmountRub = rubPtr(preview.CleanAmountRub)
@@ -104,7 +104,7 @@ func (u *SellPositionUseCase) GetSellQuote(ctx context.Context, portfolioID, isi
 	}
 	kind := *p.AccountKind
 	accountID := *p.AccountID
-	snapshot, err := u.broker.GetAccountSnapshot(kind, accountID)
+	snapshot, err := u.broker.GetAccountSnapshot(ctx, kind, accountID)
 	if err != nil {
 		return SellQuoteResult{}, err
 	}

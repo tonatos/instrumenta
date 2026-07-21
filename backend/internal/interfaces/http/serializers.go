@@ -369,8 +369,9 @@ func ConfigToResponse(settings config.Settings) ConfigResponse {
 		MaxDays:                settings.MaxDays,
 		MinVolumeRub:           settings.MinVolumeRub,
 		TinkoffConfigured:      settings.TinkoffToken != "",
-		SandboxConfigured:      settings.TTradingTokenSandbox != "",
-		ProductionConfigured:   settings.TTradingTokenProduction != "",
+		// Deprecated: trading flags are per-user via GET /auth/me credentials.
+		SandboxConfigured:      false,
+		ProductionConfigured:   false,
 		AuthEnabled:            settings.AuthEnabled(),
 		TelegramOIDCConfigured: settings.TelegramOIDCConfigured(),
 	}

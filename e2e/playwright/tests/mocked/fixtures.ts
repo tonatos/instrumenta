@@ -44,6 +44,33 @@ export async function mockConfig(page: Page): Promise<void> {
   await page.route("**/api/v1/config/", async (route) => {
     await route.fulfill({ json: MOCK_CONFIG });
   });
+  await mockAuthMe(page, {
+    sandbox: MOCK_CONFIG.sandbox_configured,
+    production: MOCK_CONFIG.production_configured,
+  });
+}
+
+export async function mockAuthMe(
+  page: Page,
+  flags: { sandbox?: boolean; production?: boolean } = {},
+): Promise<void> {
+  await page.unroute("**/api/v1/auth/me").catch(() => undefined);
+  const credentials: Record<string, { fingerprint: string; updated_at: string }> = {};
+  if (flags.sandbox) {
+    credentials.sandbox = { fingerprint: "mocksand", updated_at: "2026-01-01T00:00:00Z" };
+  }
+  if (flags.production) {
+    credentials.production = { fingerprint: "mockprod", updated_at: "2026-01-01T00:00:00Z" };
+  }
+  await page.route("**/api/v1/auth/me", async (route) => {
+    await route.fulfill({
+      json: {
+        telegram_id: 1,
+        display_name: "E2E User",
+        credentials,
+      },
+    });
+  });
 }
 
 export async function mockBondsEmpty(page: Page): Promise<void> {

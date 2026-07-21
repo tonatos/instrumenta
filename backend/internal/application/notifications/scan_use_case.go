@@ -50,10 +50,12 @@ func (s *ScanUseCase) Run(ctx context.Context, today time.Time) (int, error) {
 	}
 	delivered := 0
 	names := map[string]string{}
+	owners := map[string]int64{}
 	for _, p := range portfolios {
 		if p.Mode != domainPortfolio.PortfolioModeTrading || p.AccountID == nil || p.AccountKind == nil {
 			continue
 		}
+		owners[p.ID] = p.OwnerTelegramID
 		count, err := s.scanPortfolio(ctx, p, today, names)
 		if err != nil {
 			if s.logger != nil {
@@ -63,7 +65,7 @@ func (s *ScanUseCase) Run(ctx context.Context, today time.Time) (int, error) {
 		}
 		delivered += count
 	}
-	_ = s.deliver.RetryPending(ctx, names)
+	_ = s.deliver.RetryPending(ctx, names, owners)
 	if s.radarScan != nil {
 		if err := s.radarScan.Run(ctx, today); err != nil && s.logger != nil {
 			s.logger.Warn("market radar scan failed", "error", err)
@@ -76,9 +78,12 @@ func (s *ScanUseCase) scanPortfolio(ctx context.Context, p domainPortfolio.Portf
 	names[p.ID] = p.Name
 	kind := *p.AccountKind
 	accountID := *p.AccountID
-	token, err := s.tradingCtx.Token(kind)
+	token, err := s.tradingCtx.TokenFor(ctx, p.OwnerTelegramID, kind)
 	if err != nil {
-		return 0, err
+		if s.logger != nil {
+			s.logger.Warn("skip portfolio: no broker credentials", "portfolio_id", p.ID, "owner", p.OwnerTelegramID, "error", err)
+		}
+		return 0, nil
 	}
 	client := tinvest.NewSDKClient(token, kind)
 	snapshot, err := client.GetAccountSnapshot(kind, accountID)
@@ -295,7 +300,7 @@ func (s *ScanUseCase) scanPortfolio(ctx context.Context, p domainPortfolio.Portf
 	})
 	alerts = append(alerts, temporalAlerts...)
 	for _, alert := range alerts {
-		if err := s.deliver.ProcessAlert(ctx, alert, p.Name); err != nil {
+		if err := s.deliver.ProcessAlert(ctx, alert, p.Name, p.OwnerTelegramID); err != nil {
 			return len(alerts), err
 		}
 	}

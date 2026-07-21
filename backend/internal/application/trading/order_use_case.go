@@ -62,7 +62,7 @@ func (u *OrderUseCase) PreviewOrder(ctx context.Context, portfolioID string, uni
 	}
 	kind := *p.AccountKind
 	accountID := *p.AccountID
-	snapshot, err := u.broker.GetAccountSnapshot(kind, accountID)
+	snapshot, err := u.broker.GetAccountSnapshot(ctx, kind, accountID)
 	if err != nil {
 		return OrderPreviewResult{}, err
 	}
@@ -96,7 +96,7 @@ func (u *OrderUseCase) PreviewOrder(ctx context.Context, portfolioID string, uni
 		orderFIGI = bond.FIGI
 	}
 	if orderFIGI != "" {
-		preview, err := u.broker.PreviewOrderPrice(kind, accountID, orderFIGI, "", direction, shared.Lots(lots), shared.PriceUnitPct(pricePct))
+		preview, err := u.broker.PreviewOrderPrice(ctx, kind, accountID, orderFIGI, "", direction, shared.Lots(lots), shared.PriceUnitPct(pricePct))
 		if err == nil {
 			result.PreviewSource = "broker"
 			result.BrokerCleanAmountRub = rubPtr(preview.CleanAmountRub)
@@ -115,12 +115,12 @@ func (u *OrderUseCase) PlaceOrder(ctx context.Context, portfolioID string, unive
 	}
 	kind := *p.AccountKind
 	accountID := *p.AccountID
-	trade, err := u.broker.EnsureOrderInstrument(kind, derefString(figi), "", isin, direction)
+	trade, err := u.broker.EnsureOrderInstrument(ctx, kind, derefString(figi), "", isin, direction)
 	if err != nil {
 		return PlaceOrderResult{}, err
 	}
-	requestUID := u.broker.MakeRequestUID(kind, accountID, trade.FIGI, string(direction), lots, suggestionID, time.Now().UTC().Format(time.RFC3339))
-	result, err := u.broker.PostLimitOrder(kind, accountID, trade.FIGI, trade.InstrumentUID, direction, shared.Lots(lots), shared.PriceUnitPct(pricePct), requestUID)
+	requestUID := u.broker.MakeRequestUID(ctx, kind, accountID, trade.FIGI, string(direction), lots, suggestionID, time.Now().UTC().Format(time.RFC3339))
+	result, err := u.broker.PostLimitOrder(ctx, kind, accountID, trade.FIGI, trade.InstrumentUID, direction, shared.Lots(lots), shared.PriceUnitPct(pricePct), requestUID)
 	if err != nil {
 		return PlaceOrderResult{}, err
 	}
@@ -144,7 +144,7 @@ func (u *OrderUseCase) CancelOrder(ctx context.Context, portfolioID, orderID str
 	if err != nil {
 		return err
 	}
-	return u.broker.CancelOrder(*p.AccountKind, *p.AccountID, orderID)
+	return u.broker.CancelOrder(ctx, *p.AccountKind, *p.AccountID, orderID)
 }
 
 // AttachUseCase handles broker account attach/detach.
@@ -163,7 +163,7 @@ func (u *AttachUseCase) GetAccountPreview(ctx context.Context, portfolioID, acco
 	if err != nil || p == nil {
 		return nil, fmt.Errorf("portfolio not found")
 	}
-	snapshot, err := u.broker.GetAccountSnapshot(kind, accountID)
+	snapshot, err := u.broker.GetAccountSnapshot(ctx, kind, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +201,7 @@ func (u *AttachUseCase) AttachAccount(ctx context.Context, portfolioID, accountI
 	if linked != nil {
 		return domainPortfolio.Portfolio{}, fmt.Errorf("Счёт уже привязан к портфелю «%s»", linked.Name)
 	}
-	snapshot, err := u.broker.GetAccountSnapshot(kind, accountID)
+	snapshot, err := u.broker.GetAccountSnapshot(ctx, kind, accountID)
 	if err != nil {
 		return domainPortfolio.Portfolio{}, err
 	}
@@ -209,13 +209,13 @@ func (u *AttachUseCase) AttachAccount(ctx context.Context, portfolioID, accountI
 	_ = trading.ValidateAttachSoft(brokerSnapshot, *p, universe)
 	for i := range p.Positions {
 		if p.Positions[i].FIGI == nil || *p.Positions[i].FIGI == "" {
-			figi, err := u.broker.ResolveFIGIForISIN(kind, p.Positions[i].ISIN)
+			figi, err := u.broker.ResolveFIGIForISIN(ctx, kind, p.Positions[i].ISIN)
 			if err == nil && figi != "" {
 				p.Positions[i].FIGI = &figi
 			}
 		}
 	}
-	ops, err := u.broker.GetAccountOperations(kind, accountID, OperationsFromDate(today))
+	ops, err := u.broker.GetAccountOperations(ctx, kind, accountID, OperationsFromDate(today))
 	if err != nil {
 		return domainPortfolio.Portfolio{}, err
 	}
@@ -255,7 +255,7 @@ func (u *AttachUseCase) ClearAccountForAttach(ctx context.Context, portfolioID, 
 	if err != nil || p == nil {
 		return nil, fmt.Errorf("portfolio not found")
 	}
-	snapshot, err := u.broker.GetAccountSnapshot(kind, accountID)
+	snapshot, err := u.broker.GetAccountSnapshot(ctx, kind, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -265,16 +265,16 @@ func (u *AttachUseCase) ClearAccountForAttach(ctx context.Context, portfolioID, 
 		payIn = *payInRub
 	}
 	if len(snapshot.BondPositions) > 0 || len(snapshot.OtherInstruments) > 0 {
-		_ = u.broker.CloseSandboxAccount(activeAccountID)
-		newID, err := u.broker.OpenSandboxAccount("bond-monitor-cleared")
+		_ = u.broker.CloseSandboxAccount(ctx, activeAccountID)
+		newID, err := u.broker.OpenSandboxAccount(ctx, "bond-monitor-cleared")
 		if err != nil {
 			return nil, err
 		}
-		if _, err := u.broker.SandboxPayIn(newID, shared.Rub(payIn)); err != nil {
+		if _, err := u.broker.SandboxPayIn(ctx, newID, shared.Rub(payIn)); err != nil {
 			return nil, err
 		}
 		activeAccountID = newID
-		snapshot, err = u.broker.GetAccountSnapshot(kind, activeAccountID)
+		snapshot, err = u.broker.GetAccountSnapshot(ctx, kind, activeAccountID)
 		if err != nil {
 			return nil, err
 		}

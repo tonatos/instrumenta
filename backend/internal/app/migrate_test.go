@@ -19,7 +19,7 @@ func TestRunMigrationsAppliesAllSQLFiles(t *testing.T) {
 	}
 	defer db.Close()
 
-	if err := runMigrations(context.Background(), db); err != nil {
+	if err := runMigrations(context.Background(), db, 1); err != nil {
 		t.Fatal(err)
 	}
 

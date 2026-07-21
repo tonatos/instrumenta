@@ -10,10 +10,11 @@ import (
 	domain "github.com/tonatos/bond-monitor/backend/internal/domain/market_signals"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
 )
 
 func TestGetRadarUseCaseOverlaysPortfolios(t *testing.T) {
-	ctx := context.Background()
+	ctx := auth.WithOwnerTelegramID(context.Background(), 42)
 	db, err := persistence.Open("file:memdb1?mode=memory&cache=shared")
 	if err != nil {
 		t.Fatal(err)
@@ -44,11 +45,12 @@ func TestGetRadarUseCaseOverlaysPortfolios(t *testing.T) {
 	horizon := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	_, err = portfolioRepo.Save(ctx, portfolio.Portfolio{
 		ID: "p1", Name: "Test", CreatedAt: time.Now().UTC().Format(time.RFC3339),
-		UpdatedAt: time.Now().UTC().Format(time.RFC3339), InitialAmountRub: 100_000,
-		HorizonDate: horizon, RiskProfile: portfolio.RiskProfileNormal,
+		UpdatedAt: time.Now().UTC().Format(time.RFC3339), OwnerTelegramID: 42,
+		InitialAmountRub: 100_000,
+		HorizonDate:      horizon, RiskProfile: portfolio.RiskProfileNormal,
 		CashBalanceRub: 100_000, Mode: portfolio.PortfolioModeSimulation,
-		RiskBaselines: map[string]portfolio.RiskSnapshot{},
-		Positions: []portfolio.PortfolioPosition{{ISIN: "RU000A1", Name: "Bond A"}},
+		RiskBaselines:  map[string]portfolio.RiskSnapshot{},
+		Positions:      []portfolio.PortfolioPosition{{ISIN: "RU000A1", Name: "Bond A"}},
 	})
 	if err != nil {
 		t.Fatal(err)

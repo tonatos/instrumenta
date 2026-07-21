@@ -27,6 +27,10 @@ type Settings struct {
 	AuthSecret   string
 	PublicAppURL string
 
+	DevTelegramID            int64
+	TenantBackfillTelegramID int64
+	BrokerKEK                string
+
 	TelegramOIDCClientID     string
 	TelegramOIDCClientSecret string
 	TelegramOIDCRedirectURI  string
@@ -103,6 +107,10 @@ func Load() Settings {
 		AuthSecret:   strings.TrimSpace(os.Getenv("AUTH_SECRET")),
 		PublicAppURL: strings.TrimSpace(envString("PUBLIC_APP_URL", "http://localhost:5173")),
 
+		DevTelegramID:            envInt64("DEV_TELEGRAM_ID", 1),
+		TenantBackfillTelegramID: envInt64("TENANT_BACKFILL_TELEGRAM_ID", 0),
+		BrokerKEK:                strings.TrimSpace(os.Getenv("BROKER_KEK")),
+
 		TelegramOIDCClientID:     strings.TrimSpace(os.Getenv("TELEGRAM_OIDC_CLIENT_ID")),
 		TelegramOIDCClientSecret: strings.TrimSpace(os.Getenv("TELEGRAM_OIDC_CLIENT_SECRET")),
 		TelegramOIDCRedirectURI:  strings.TrimSpace(os.Getenv("TELEGRAM_OIDC_REDIRECT_URI")),
@@ -148,6 +156,23 @@ func (s Settings) TelegramOIDCConfigured() bool {
 
 func (s Settings) TaxRateFraction() float64 {
 	return s.TaxRate / 100.0
+}
+
+// TenantBackfillID resolves the telegram id used to own pre-multi-tenant rows.
+func (s Settings) TenantBackfillID() int64 {
+	if s.TenantBackfillTelegramID != 0 {
+		return s.TenantBackfillTelegramID
+	}
+	if s.TelegramNotifyUserID != 0 {
+		return s.TelegramNotifyUserID
+	}
+	if len(s.AllowedTelegramIDs) == 1 {
+		return s.AllowedTelegramIDs[0]
+	}
+	if s.DevTelegramID != 0 {
+		return s.DevTelegramID
+	}
+	return 1
 }
 
 func envString(key, fallback string) string {

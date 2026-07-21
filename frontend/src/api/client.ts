@@ -87,7 +87,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (res.status === 401 && !path.startsWith("/auth/")) {
       notifyUnauthorized();
     }
-    throw parseErrorMessage(text, res.status);
+    const err = parseErrorMessage(text, res.status);
+    if (
+      typeof window !== "undefined" &&
+      err.extra?.code === "broker_credentials_required" &&
+      !window.location.pathname.startsWith("/account")
+    ) {
+      window.location.assign("/account");
+    }
+    throw err;
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -123,6 +131,14 @@ export const api = {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     }),
   logout: () => request<{ status: string }>("/auth/logout", { method: "POST" }),
+
+  putBrokerCredential: (kind: "sandbox" | "production", token: string) =>
+    request<{ fingerprint: string; updated_at: string }>(`/me/broker-credentials/${kind}`, {
+      method: "PUT",
+      body: JSON.stringify({ token }),
+    }),
+  deleteBrokerCredential: (kind: "sandbox" | "production") =>
+    request<void>(`/me/broker-credentials/${kind}`, { method: "DELETE" }),
 
   getBonds: (params: BondListParams = {}, riskProfile: BondRiskProfile = "normal") => {
     const path = `/bonds/${buildBondsQuery(params)}`;

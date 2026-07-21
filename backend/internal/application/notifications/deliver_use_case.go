@@ -23,7 +23,7 @@ func NewDeliverUseCase(ledger *notifications.LedgerRepository, bus *notification
 	return &DeliverUseCase{ledger: ledger, bus: bus, telegram: telegram, repo: repo, policy: domain.DefaultNotificationPolicy}
 }
 
-func (d *DeliverUseCase) ProcessAlert(ctx context.Context, alert domain.Alert, portfolioName string) error {
+func (d *DeliverUseCase) ProcessAlert(ctx context.Context, alert domain.Alert, portfolioName string, ownerTelegramID int64) error {
 	fingerprint := domain.AlertFingerprint(alert)
 	if _, err := d.ledger.EnsureDetected(fingerprint, alert); err != nil {
 		return err
@@ -31,11 +31,11 @@ func (d *DeliverUseCase) ProcessAlert(ctx context.Context, alert domain.Alert, p
 	if err := d.publishBus(ctx, fingerprint, alert); err != nil {
 		return err
 	}
-	d.sendTelegramIfNeeded(fingerprint, alert, portfolioName)
+	d.sendTelegramIfNeeded(fingerprint, alert, portfolioName, ownerTelegramID)
 	return nil
 }
 
-func (d *DeliverUseCase) RetryPending(ctx context.Context, portfolioNames map[string]string) error {
+func (d *DeliverUseCase) RetryPending(ctx context.Context, portfolioNames map[string]string, ownerByPortfolio map[string]int64) error {
 	pendingBus, err := d.ledger.ListPendingBus()
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func (d *DeliverUseCase) RetryPending(ctx context.Context, portfolioNames map[st
 		if name == "" {
 			name = alert.PortfolioID
 		}
-		d.sendTelegramIfNeeded(entry.Fingerprint, alert, name)
+		d.sendTelegramIfNeeded(entry.Fingerprint, alert, name, ownerByPortfolio[alert.PortfolioID])
 	}
 	return nil
 }
@@ -89,7 +89,7 @@ func (d *DeliverUseCase) publishBus(ctx context.Context, fingerprint string, ale
 	return nil
 }
 
-func (d *DeliverUseCase) sendTelegramIfNeeded(fingerprint string, alert domain.Alert, portfolioName string) {
+func (d *DeliverUseCase) sendTelegramIfNeeded(fingerprint string, alert domain.Alert, portfolioName string, ownerTelegramID int64) {
 	if d.telegram == nil || !d.telegram.Configured() || !domain.TelegramAllowedForAlert(alert, d.policy) {
 		return
 	}
@@ -106,7 +106,13 @@ func (d *DeliverUseCase) sendTelegramIfNeeded(fingerprint string, alert domain.A
 		prefix = "🔴"
 	}
 	text := prefix + " " + portfolioName + "\n" + alert.Name + " (" + alert.ISIN + ")\n" + alert.Reason
-	if d.telegram.SendMessage(text) {
+	sent := false
+	if ownerTelegramID != 0 {
+		sent = d.telegram.SendToChat(ownerTelegramID, text)
+	} else {
+		sent = d.telegram.SendMessage(text)
+	}
+	if sent {
 		_, _ = d.ledger.MarkTelegramSent(fingerprint, time.Now().UTC())
 	}
 }

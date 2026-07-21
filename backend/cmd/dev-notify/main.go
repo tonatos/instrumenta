@@ -19,6 +19,7 @@ import (
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/ratings"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
+	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
 	"github.com/tonatos/bond-monitor/backend/internal/interfaces/config"
 	applogging "github.com/tonatos/bond-monitor/backend/internal/interfaces/logging"
 )
@@ -177,8 +178,11 @@ func resolveHoldingISIN(ctx context.Context, settings config.Settings, portfolio
 
 	tradingCtx := apptrading.NewContext(
 		persistence.NewPortfolioRepository(db),
-		settings.TTradingTokenSandbox,
-		settings.TTradingTokenProduction,
+		&apptrading.CredentialTokenSource{
+			SandboxEnvToken:    settings.TTradingTokenSandbox,
+			ProductionEnvToken: settings.TTradingTokenProduction,
+			AllowEnvFallback:   true,
+		},
 	)
 	bondRefRepo := persistence.NewBondReferenceRepository(db.DB)
 	bondSvc := appbonds.NewServiceWithDeps(
@@ -191,11 +195,15 @@ func resolveHoldingISIN(ctx context.Context, settings config.Settings, portfolio
 		moex.NewDefaultFlagsService(bondRefRepo),
 	)
 
+	ctx = auth.WithOwnerTelegramID(ctx, settings.TenantBackfillID())
+	if settings.DevTelegramID != 0 {
+		ctx = auth.WithOwnerTelegramID(ctx, settings.DevTelegramID)
+	}
 	p, err := tradingCtx.GetTradingPortfolio(ctx, portfolioID)
 	if err != nil {
 		return "", err
 	}
-	token, err := tradingCtx.Token(*p.AccountKind)
+	token, err := tradingCtx.TokenFor(ctx, p.OwnerTelegramID, *p.AccountKind)
 	if err != nil {
 		return "", err
 	}

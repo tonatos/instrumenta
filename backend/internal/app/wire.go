@@ -15,8 +15,9 @@ import (
 	appnotifications "github.com/tonatos/bond-monitor/backend/internal/application/notifications"
 	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
 	apptrading "github.com/tonatos/bond-monitor/backend/internal/application/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/notifications"
+	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/crypto"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/moex"
+	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/notifications"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/ratings"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
@@ -30,6 +31,33 @@ type App struct {
 	Deps     httpapi.Deps
 	DB       *persistence.DB
 	Consumer application.NotificationConsumer
+}
+
+func buildTokenSource(settings config.Settings, credRepo *persistence.BrokerCredentialsRepository) *apptrading.CredentialTokenSource {
+	return &apptrading.CredentialTokenSource{
+		Repo:               credRepo,
+		SandboxEnvToken:    settings.TTradingTokenSandbox,
+		ProductionEnvToken: settings.TTradingTokenProduction,
+		AllowEnvFallback:   !settings.AuthEnabled(),
+	}
+}
+
+func buildCredentialRepo(settings config.Settings, db *persistence.DB) (*persistence.BrokerCredentialsRepository, error) {
+	kekRaw := settings.BrokerKEK
+	if kekRaw == "" {
+		if settings.AuthEnabled() {
+			return nil, fmt.Errorf("BROKER_KEK is required when auth is enabled")
+		}
+		kekRaw = settings.AuthSecret
+		if kekRaw == "" {
+			kekRaw = "insecure-dev-broker-kek"
+		}
+	}
+	wrapper, err := crypto.NewLocalKEK(kekRaw, 1)
+	if err != nil {
+		return nil, fmt.Errorf("broker kek: %w", err)
+	}
+	return persistence.NewBrokerCredentialsRepository(db, wrapper), nil
 }
 
 // Wire opens persistence, runs migrations, and wires application services.
@@ -53,14 +81,22 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 		_ = db.Close()
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
-	if err := runMigrations(ctx, db); err != nil {
+	if err := runMigrations(ctx, db, settings.TenantBackfillID()); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	logger.Info("database ready")
 
+	credRepo, err := buildCredentialRepo(settings, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	tokens := buildTokenSource(settings, credRepo)
+
 	portfolioRepo := persistence.NewPortfolioRepository(db)
 	favoritesRepo := persistence.NewFavoritesRepository(db)
+	usersRepo := persistence.NewUserRepository(db)
 	notificationsRepo := persistence.NewNotificationsRepository(db)
 	deployRepo := persistence.NewDeploySessionRepository(db)
 	radarRepo := persistence.NewMarketRadarRepository(db.DB)
@@ -87,12 +123,12 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 		portfolioRepo,
 		deployRepo,
 		notificationsRepo,
-		settings.TTradingTokenSandbox,
-		settings.TTradingTokenProduction,
+		tokens,
 	)
 	portfolioInner := appportfolio.NewService(portfolioRepo, tradingInner.PlanUseCase())
 
-	jwtManager := auth.NewJWTManager(settings.AuthSecret, settings.AuthEnabled())
+	jwtManager := auth.NewJWTManager(settings.AuthSecret, settings.AuthEnabled()).
+		WithDevUser(settings.DevTelegramID, "Dev User")
 	var consumer application.NotificationConsumer
 	if settings.RedisURL != "" {
 		consumer = appnotifications.NewConsumer(settings.RedisURL, notificationsRepo, logger)
@@ -111,6 +147,9 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 		Trading:       tradingInner,
 		Notifications: adapters.NewNotificationsRepository(notificationsRepo),
 		MarketRadar:   adapters.NewMarketRadarService(getRadar),
+		Credentials:   credRepo,
+		Users:         usersRepo,
+		TokenSource:   tokens,
 		HTTPClient:    &http.Client{Timeout: 20 * time.Second},
 	}
 
@@ -132,17 +171,24 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 		_ = db.Close()
 		return nil, nil, nil, fmt.Errorf("ping db: %w", err)
 	}
-	if err := runMigrations(ctx, db); err != nil {
+	if err := runMigrations(ctx, db, settings.TenantBackfillID()); err != nil {
 		_ = db.Close()
 		return nil, nil, nil, fmt.Errorf("migrate: %w", err)
 	}
+
+	credRepo, err := buildCredentialRepo(settings, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, nil, nil, err
+	}
+	tokens := buildTokenSource(settings, credRepo)
 
 	portfolioRepo := persistence.NewPortfolioRepository(db)
 	notificationsRepo := persistence.NewNotificationsRepository(db)
 	spreadRepo := persistence.NewSpreadSnapshotsRepository(db.DB)
 	radarRepo := persistence.NewMarketRadarRepository(db.DB)
 	bondRefRepo := persistence.NewBondReferenceRepository(db.DB)
-	tradingCtx := apptrading.NewContext(portfolioRepo, settings.TTradingTokenSandbox, settings.TTradingTokenProduction)
+	tradingCtx := apptrading.NewContext(portfolioRepo, tokens)
 	bondSvc := appbonds.NewServiceWithDeps(
 		settings.KeyRate,
 		settings.TaxRateFraction(),

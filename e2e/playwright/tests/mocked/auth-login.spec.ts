@@ -32,7 +32,7 @@ test.describe("auth login", () => {
     });
     await page.route("**/api/v1/auth/me", async (route) => {
       await route.fulfill({
-        json: { telegram_id: 42, display_name: "E2E User" },
+        json: { telegram_id: 42, display_name: "E2E User", credentials: {} },
       });
     });
     await page.route("**/api/v1/bonds/**", async (route) => {

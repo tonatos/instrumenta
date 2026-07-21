@@ -7,6 +7,7 @@ import { FavoritesPage } from "@/features/favorites/FavoritesPage";
 import { PortfolioPage } from "@/features/portfolio/PortfolioPage";
 import { RadarPage } from "@/features/radar/RadarPage";
 import { CalculatorPage } from "@/features/calculator/CalculatorPage";
+import { AccountPage } from "@/features/account/AccountPage";
 import { AuthProvider } from "@/features/auth/AuthContext";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { LoginCallbackPage } from "@/features/auth/LoginCallbackPage";
@@ -36,6 +37,7 @@ export function App() {
                   <Route path="portfolio/:portfolioId?" element={<PortfolioPage />} />
                   <Route path="radar" element={<RadarPage />} />
                   <Route path="calculator" element={<CalculatorPage />} />
+                  <Route path="account" element={<AccountPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>
               </Route>

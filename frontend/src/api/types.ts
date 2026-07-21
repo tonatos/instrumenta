@@ -106,6 +106,15 @@ export interface AuthTokenResponse {
 export interface AuthMeResponse {
   telegram_id: number;
   display_name: string;
+  credentials: {
+    sandbox?: { fingerprint: string; updated_at: string };
+    production?: { fingerprint: string; updated_at: string };
+  };
+}
+
+export interface BrokerCredentialStatus {
+  fingerprint: string;
+  updated_at: string;
 }
 
 export type PositionStatus = "pending" | "active" | "drift" | "closed";

@@ -34,6 +34,8 @@ const simulationPortfolio = {
 
 test.describe("Мастер режима торговли", () => {
   test.beforeEach(async ({ page }) => {
+    const credFlags = { sandbox: true, production: false };
+
     await page.route("**/api/v1/config/", async (route) => {
       await route.fulfill({
         json: {
@@ -42,11 +44,26 @@ test.describe("Мастер режима торговли", () => {
           max_days: 1825,
           min_volume_rub: 1_000_000,
           tinkoff_configured: true,
-          sandbox_configured: true,
-          production_configured: false,
+          sandbox_configured: credFlags.sandbox,
+          production_configured: credFlags.production,
+          auth_enabled: false,
         },
       });
     });
+    await page.route("**/api/v1/auth/me", async (route) => {
+      const credentials: Record<string, { fingerprint: string; updated_at: string }> = {};
+      if (credFlags.sandbox) {
+        credentials.sandbox = { fingerprint: "mocksand", updated_at: "2026-01-01T00:00:00Z" };
+      }
+      if (credFlags.production) {
+        credentials.production = { fingerprint: "mockprod", updated_at: "2026-01-01T00:00:00Z" };
+      }
+      await route.fulfill({
+        json: { telegram_id: 1, display_name: "E2E User", credentials },
+      });
+    });
+    // Expose mutable flags for tests that need other credential shapes.
+    (page as unknown as { __credFlags: typeof credFlags }).__credFlags = credFlags;
 
     await page.route("**/api/v1/bonds/**", async (route) => {
       await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });
@@ -262,19 +279,10 @@ test.describe("Мастер режима торговли", () => {
   });
 
   test("при одном токене production пропускает выбор контура", async ({ page }) => {
-    await page.route("**/api/v1/config/", async (route) => {
-      await route.fulfill({
-        json: {
-          key_rate: 16,
-          tax_rate: 13,
-          max_days: 1825,
-          min_volume_rub: 1_000_000,
-          tinkoff_configured: true,
-          sandbox_configured: false,
-          production_configured: true,
-        },
-      });
-    });
+    const flags = (page as unknown as { __credFlags: { sandbox: boolean; production: boolean } })
+      .__credFlags;
+    flags.sandbox = false;
+    flags.production = true;
 
     await page.route("**/api/v1/accounts?kind=production", async (route) => {
       await route.fulfill({
@@ -292,42 +300,8 @@ test.describe("Мастер режима торговли", () => {
     const configLoaded = page.waitForResponse(
       (response) => response.url().includes("/api/v1/config/") && response.ok(),
     );
-    const portfoliosLoaded = page.waitForResponse((response) => {
-      const { pathname } = new URL(response.url());
-      return (
-        pathname === "/api/v1/portfolios/" &&
-        response.request().method() === "GET" &&
-        response.ok()
-      );
-    });
-
-    await page.goto("/portfolio");
-    await Promise.all([configLoaded, portfoliosLoaded]);
-
-    await page.getByRole("button", { name: "Перевести в торговлю" }).click();
-    await expect(page.getByText("Выберите счёт")).toBeVisible();
-    await expect(page.getByText("Выберите контур T-Invest")).not.toBeVisible();
-    await expect(page.getByRole("button", { name: "Production account" })).toBeVisible();
-    await expect(page.getByText("Создать счёт в песочнице")).not.toBeVisible();
-  });
-
-  test("при двух токенах показывает выбор контура", async ({ page }) => {
-    await page.route("**/api/v1/config/", async (route) => {
-      await route.fulfill({
-        json: {
-          key_rate: 16,
-          tax_rate: 13,
-          max_days: 1825,
-          min_volume_rub: 1_000_000,
-          tinkoff_configured: true,
-          sandbox_configured: true,
-          production_configured: true,
-        },
-      });
-    });
-
-    const configLoaded = page.waitForResponse(
-      (response) => response.url().includes("/api/v1/config/") && response.ok(),
+    const meLoaded = page.waitForResponse(
+      (response) => response.url().includes("/api/v1/auth/me") && response.ok(),
     );
     const portfoliosLoaded = page.waitForResponse((response) => {
       const { pathname } = new URL(response.url());
@@ -339,7 +313,38 @@ test.describe("Мастер режима торговли", () => {
     });
 
     await page.goto("/portfolio");
-    await Promise.all([configLoaded, portfoliosLoaded]);
+    await Promise.all([configLoaded, meLoaded, portfoliosLoaded]);
+
+    await page.getByRole("button", { name: "Перевести в торговлю" }).click();
+    await expect(page.getByText("Выберите счёт")).toBeVisible();
+    await expect(page.getByText("Выберите контур T-Invest")).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "Production account" })).toBeVisible();
+    await expect(page.getByText("Создать счёт в песочнице")).not.toBeVisible();
+  });
+
+  test("при двух токенах показывает выбор контура", async ({ page }) => {
+    const flags = (page as unknown as { __credFlags: { sandbox: boolean; production: boolean } })
+      .__credFlags;
+    flags.sandbox = true;
+    flags.production = true;
+
+    const configLoaded = page.waitForResponse(
+      (response) => response.url().includes("/api/v1/config/") && response.ok(),
+    );
+    const meLoaded = page.waitForResponse(
+      (response) => response.url().includes("/api/v1/auth/me") && response.ok(),
+    );
+    const portfoliosLoaded = page.waitForResponse((response) => {
+      const { pathname } = new URL(response.url());
+      return (
+        pathname === "/api/v1/portfolios/" &&
+        response.request().method() === "GET" &&
+        response.ok()
+      );
+    });
+
+    await page.goto("/portfolio");
+    await Promise.all([configLoaded, meLoaded, portfoliosLoaded]);
 
     await page.getByRole("button", { name: "Перевести в торговлю" }).click();
     await expect(page.getByText("Выберите контур T-Invest")).toBeVisible();

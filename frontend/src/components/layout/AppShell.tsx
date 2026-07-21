@@ -4,6 +4,7 @@ import {
   BarChart3,
   Calculator,
   Heart,
+  KeyRound,
   LogOut,
   Moon,
   Settings,
@@ -25,6 +26,7 @@ const navItems = [
   { to: "/portfolio", label: "Портфель", mobileLabel: "Портф.", icon: BarChart3 },
   { to: "/radar", label: "Radar", mobileLabel: "Radar", icon: Activity },
   { to: "/calculator", label: "Калькулятор", mobileLabel: "Кальк.", icon: Calculator },
+  { to: "/account", label: "Кабинет", mobileLabel: "Кабинет", icon: KeyRound },
 ];
 
 export function AppShell() {

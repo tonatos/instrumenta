@@ -13,26 +13,29 @@ import (
 var envProdTemplate string
 
 type envTemplateData struct {
-	Domain                  string
-	ImageTag                string
-	TLSCaddyDataDir         string
-	TLSCaddyConfigDir       string
-	TinkoffToken            string
-	TTradingTokenSandbox    string
-	TTradingTokenProduction string
-	KeyRate                 string
-	TaxRate                 string
-	MaxDays                 string
-	MinVolumeRub            string
-	LogLevel                string
-	AuthDisabled            string
-	AuthSecret              string
+	Domain                   string
+	ImageTag                 string
+	TLSCaddyDataDir          string
+	TLSCaddyConfigDir        string
+	TinkoffToken             string
+	TTradingTokenSandbox     string
+	TTradingTokenProduction  string
+	BrokerKEK                string
+	KeyRate                  string
+	TaxRate                  string
+	MaxDays                  string
+	MinVolumeRub             string
+	LogLevel                 string
+	AuthDisabled             string
+	AuthSecret               string
 	TelegramOIDCClientID     string
 	TelegramOIDCClientSecret string
 	AllowedTelegramIDs       string
-	NotifierScanIntervalSec string
-	TelegramBotToken        string
-	TelegramNotifyUserID    string
+	DevTelegramID            string
+	TenantBackfillTelegramID string
+	NotifierScanIntervalSec  string
+	TelegramBotToken         string
+	TelegramNotifyUserID     string
 }
 
 func renderEnv(inv Inventory) (string, error) {
@@ -42,26 +45,29 @@ func renderEnv(inv Inventory) (string, error) {
 	}
 
 	data := envTemplateData{
-		Domain:                  inv.Domain,
-		ImageTag:                inv.ImageTag,
-		TLSCaddyDataDir:         inv.TLSCaddyDataDir,
-		TLSCaddyConfigDir:       inv.TLSCaddyConfigDir,
-		TinkoffToken:            inv.TinkoffToken,
-		TTradingTokenSandbox:    inv.TTradingTokenSandbox,
-		TTradingTokenProduction: inv.TTradingTokenProduction,
-		KeyRate:                 formatFloat(inv.KeyRate),
-		TaxRate:                 formatFloat(inv.TaxRate),
-		MaxDays:                 strconv.Itoa(inv.MaxDays),
-		MinVolumeRub:            strconv.Itoa(inv.MinVolumeRub),
-		LogLevel:                inv.LogLevel,
-		AuthDisabled:            strconv.FormatBool(inv.AuthDisabled),
-		AuthSecret:              inv.AuthSecret,
+		Domain:                   inv.Domain,
+		ImageTag:                 inv.ImageTag,
+		TLSCaddyDataDir:          inv.TLSCaddyDataDir,
+		TLSCaddyConfigDir:        inv.TLSCaddyConfigDir,
+		TinkoffToken:             inv.TinkoffToken,
+		TTradingTokenSandbox:     inv.TTradingTokenSandbox,
+		TTradingTokenProduction:  inv.TTradingTokenProduction,
+		BrokerKEK:                inv.BrokerKEK,
+		KeyRate:                  formatFloat(inv.KeyRate),
+		TaxRate:                  formatFloat(inv.TaxRate),
+		MaxDays:                  strconv.Itoa(inv.MaxDays),
+		MinVolumeRub:             strconv.Itoa(inv.MinVolumeRub),
+		LogLevel:                 inv.LogLevel,
+		AuthDisabled:             strconv.FormatBool(inv.AuthDisabled),
+		AuthSecret:               inv.AuthSecret,
 		TelegramOIDCClientID:     inv.TelegramOIDCClientID,
 		TelegramOIDCClientSecret: inv.TelegramOIDCClientSecret,
 		AllowedTelegramIDs:       allowedTelegramIDs(inv.AllowedTelegramIDs),
-		NotifierScanIntervalSec: strconv.Itoa(inv.NotifierScanIntervalSec),
-		TelegramBotToken:        inv.TelegramBotToken,
-		TelegramNotifyUserID:    strconv.Itoa(inv.TelegramNotifyUserID),
+		DevTelegramID:            strconv.FormatInt(inv.DevTelegramID, 10),
+		TenantBackfillTelegramID: strconv.FormatInt(inv.TenantBackfillTelegramID, 10),
+		NotifierScanIntervalSec:  strconv.Itoa(inv.NotifierScanIntervalSec),
+		TelegramBotToken:         inv.TelegramBotToken,
+		TelegramNotifyUserID:     strconv.Itoa(inv.TelegramNotifyUserID),
 	}
 
 	var buf bytes.Buffer

@@ -17,10 +17,17 @@ image_tag: main
 tls_caddy_data_dir: /opt/tls/caddy
 tls_caddy_config_dir: /opt/tls/caddy-config
 
-# T-Invest tokens (optional, for TRADING mode)
+# System T-Invest token for bond enrich / screener (read-only is enough)
 tinkoff_token: ""
+
+# Trading tokens — LOCAL / AUTH_DISABLED fallback only.
+# In multi-tenant prod users store encrypted keys via /account — leave empty.
 t_trading_token_sandbox: ""
 t_trading_token_production: ""
+
+# Required when auth_disabled is false. 32-byte secret (base64/hex/any string).
+# Keep separately from DB backups. Example: openssl rand -base64 32
+broker_kek: ""
 
 # Scoring defaults
 key_rate: 14.5
@@ -29,16 +36,22 @@ max_days: 120
 min_volume_rub: 500000
 log_level: INFO
 
-# Auth (Telegram OIDC + JWT whitelist)
+# Auth (Telegram OIDC + JWT)
 auth_disabled: false
 auth_secret: change-me-to-a-long-random-string
 telegram_oidc_client_id: ""
 telegram_oidc_client_secret: ""
-allowed_telegram_ids: "" # comma-separated, e.g. "123456789,987654321"
+# Optional allowlist (CSV). Empty = any Telegram user may sign in (SaaS open mode).
+allowed_telegram_ids: ""
+# Synthetic owner when AUTH_DISABLED=true (local/e2e)
+dev_telegram_id: 1
+# Owner for portfolios/favorites created before multi-tenant migration
+# tenant_backfill_telegram_id: 139693774
 
 # Notifier worker
 notifier_scan_interval_sec: 3600
 telegram_bot_token: ""
+# Legacy fallback chat; prefer per-user owner telegram_id
 telegram_notify_user_id: 0
 
 # GHCR (only for private packages; public images pull without login)

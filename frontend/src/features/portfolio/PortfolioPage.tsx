@@ -53,7 +53,9 @@ export function PortfolioPage() {
     searchParams,
     portfolios,
     isLoading,
-    config,
+    sandboxConfigured,
+    productionConfigured,
+    tradingCredentialsLoaded,
     bondsList,
     activeId,
     active,
@@ -319,11 +321,11 @@ export function PortfolioPage() {
                   )}
 
                   <TradingModeWizard
-                    key={`${active.id}-${active.mode}`}
+                    key={`${active.id}-${active.mode}-${sandboxConfigured}-${productionConfigured}`}
                     portfolio={active}
-                    sandboxConfigured={config?.sandbox_configured ?? false}
-                    productionConfigured={config?.production_configured ?? false}
-                    tradingConfigLoaded={config !== undefined}
+                    sandboxConfigured={sandboxConfigured}
+                    productionConfigured={productionConfigured}
+                    tradingConfigLoaded={tradingCredentialsLoaded}
                     onPortfolioDeleted={(deletedId) => {
                       if (deletedId === active.id) {
                         const fallback = portfolios?.find((p) => p.id !== deletedId);

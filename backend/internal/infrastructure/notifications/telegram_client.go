@@ -12,25 +12,35 @@ import (
 
 // TelegramClient sends messages via Telegram Bot API.
 type TelegramClient struct {
-	botToken string
-	chatID   int64
+	botToken       string
+	fallbackChatID int64
 }
 
-func NewTelegramClient(botToken string, chatID int64) *TelegramClient {
-	return &TelegramClient{botToken: botToken, chatID: chatID}
+func NewTelegramClient(botToken string, fallbackChatID int64) *TelegramClient {
+	return &TelegramClient{botToken: botToken, fallbackChatID: fallbackChatID}
 }
 
 func (t *TelegramClient) Configured() bool {
-	return t.botToken != "" && t.chatID != 0
+	return t.botToken != ""
 }
 
+// SendMessage sends to the legacy fallback chat id (if configured).
 func (t *TelegramClient) SendMessage(text string) bool {
-	if !t.Configured() {
+	if t.fallbackChatID == 0 {
+		log.Println("Telegram fallback chat id is not configured")
+		return false
+	}
+	return t.SendToChat(t.fallbackChatID, text)
+}
+
+// SendToChat sends a message to a specific Telegram chat id.
+func (t *TelegramClient) SendToChat(chatID int64, text string) bool {
+	if !t.Configured() || chatID == 0 {
 		log.Println("Telegram notifier is not configured")
 		return false
 	}
 	body, _ := json.Marshal(map[string]any{
-		"chat_id":                  t.chatID,
+		"chat_id":                  chatID,
 		"text":                     text,
 		"disable_web_page_preview": true,
 	})
@@ -50,5 +60,4 @@ func (t *TelegramClient) SendMessage(text string) bool {
 
 var _ notifications.TelegramNotifier = (*TelegramClient)(nil)
 
-// noop for compile-time check of http client timeout usage
 var _ = time.Second

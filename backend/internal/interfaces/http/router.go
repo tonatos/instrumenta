@@ -35,6 +35,11 @@ func NewRouter(deps Deps, logger *slog.Logger) http.Handler {
 			r.Get("/logout", h.Logout)
 		})
 
+		r.Route("/me", func(r chi.Router) {
+			r.Put("/broker-credentials/{kind}", h.PutBrokerCredential)
+			r.Delete("/broker-credentials/{kind}", h.DeleteBrokerCredential)
+		})
+
 		r.Route("/bonds", func(r chi.Router) {
 			r.Get("/", h.ListBonds)
 			r.Get("/by-isins", h.BondsByISINs)

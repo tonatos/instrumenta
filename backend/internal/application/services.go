@@ -264,15 +264,16 @@ func (e DeploySessionNotFoundError) Is(target error) bool {
 
 // Domain errors for HTTP mapping.
 var (
-	ErrNotFound            = errSentinel("not found")
-	ErrPortfolioNotFound   = errSentinel("portfolio not found")
-	ErrPositionNotFound    = errSentinel("position not found")
-	ErrBondNotFound        = errSentinel("bond not found")
-	ErrNotificationNotFound = errSentinel("notification not found")
-	ErrDeploySessionNotFound = errSentinel("deploy session not found")
-	ErrDeploySessionConflict = errSentinel("deploy session conflict")
-	ErrDeploySessionEmpty    = errSentinel("deploy session empty")
-	ErrSlotOverrideInvalid   = errSentinel("slot override invalid")
+	ErrNotFound                  = errSentinel("not found")
+	ErrPortfolioNotFound         = errSentinel("portfolio not found")
+	ErrPositionNotFound          = errSentinel("position not found")
+	ErrBondNotFound              = errSentinel("bond not found")
+	ErrNotificationNotFound      = errSentinel("notification not found")
+	ErrDeploySessionNotFound     = errSentinel("deploy session not found")
+	ErrDeploySessionConflict     = errSentinel("deploy session conflict")
+	ErrDeploySessionEmpty        = errSentinel("deploy session empty")
+	ErrSlotOverrideInvalid       = errSentinel("slot override invalid")
+	ErrBrokerCredentialsRequired = errSentinel("broker_credentials_required")
 )
 
 type errSentinel string

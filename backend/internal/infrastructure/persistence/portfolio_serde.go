@@ -124,6 +124,7 @@ func portfolioFromRow(row portfolioRow) (portfolio.Portfolio, error) {
 		ID: row.ID, Name: row.Name,
 		CreatedAt: row.CreatedAt,
 		UpdatedAt: row.UpdatedAt,
+		OwnerTelegramID: row.OwnerTelegramID,
 		InitialAmountRub: row.InitialAmountRub,
 		HorizonDate:      parseDate(row.HorizonDate),
 		RiskProfile:      portfolio.RiskProfile(row.RiskProfile),

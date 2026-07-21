@@ -9,6 +9,7 @@ import (
 
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
 	domain "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
+	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
 )
 
 type unset int
@@ -26,17 +27,30 @@ func NewService(repo domain.Repository, plans *PlanUseCase) *Service {
 }
 
 func (s *Service) ListPortfolios(ctx context.Context) ([]domain.Portfolio, error) {
-	return s.repo.ListAll(ctx)
+	owner, ok := ownerFrom(ctx)
+	if !ok {
+		return nil, fmt.Errorf("%w", ErrNotFound)
+	}
+	return s.repo.ListByOwner(ctx, owner)
 }
 
 func (s *Service) GetPortfolio(ctx context.Context, portfolioID string) (*domain.Portfolio, error) {
-	return s.repo.GetByID(ctx, portfolioID)
+	owner, ok := ownerFrom(ctx)
+	if !ok {
+		return nil, nil
+	}
+	return s.repo.GetByIDForOwner(ctx, portfolioID, owner)
 }
 
 func (s *Service) CreatePortfolio(ctx context.Context, name string, initialAmountRub float64, horizonDate time.Time, riskProfile domain.RiskProfile, apiTradeOnly bool, turboEntryEnabled bool, maxWeightedDurationYears, targetDurationYears *float64) (domain.Portfolio, error) {
+	owner, ok := ownerFrom(ctx)
+	if !ok {
+		return domain.Portfolio{}, fmt.Errorf("owner required")
+	}
 	now := time.Now().UTC().Format(time.RFC3339)
 	p := domain.Portfolio{
 		ID: newPortfolioID(), Name: name, CreatedAt: now, UpdatedAt: now,
+		OwnerTelegramID: owner,
 		InitialAmountRub: initialAmountRub, HorizonDate: horizonDate, RiskProfile: riskProfile,
 		APITradeOnly: apiTradeOnly, TurboEntryEnabled: turboEntryEnabled, MaxWeightedDurationYears: maxWeightedDurationYears,
 		TargetDurationYears: targetDurationYears, CashBalanceRub: initialAmountRub,
@@ -50,13 +64,29 @@ func (s *Service) UpdatePortfolio(ctx context.Context, p domain.Portfolio) (doma
 }
 
 func (s *Service) DeletePortfolio(ctx context.Context, portfolioID string) (bool, error) {
-	return s.repo.Delete(ctx, portfolioID)
+	owner, ok := ownerFrom(ctx)
+	if !ok {
+		return false, nil
+	}
+	return s.repo.DeleteForOwner(ctx, portfolioID, owner)
+}
+
+func (s *Service) loadOwned(ctx context.Context, portfolioID string) (*domain.Portfolio, error) {
+	owner, ok := ownerFrom(ctx)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
+	}
+	p, err := s.repo.GetByIDForOwner(ctx, portfolioID, owner)
+	if err != nil || p == nil {
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
+	}
+	return p, nil
 }
 
 func (s *Service) AutoComposePortfolio(ctx context.Context, portfolioID string, universe []bonds.BondRecord, keyRate, taxRate float64, today time.Time, durationPolicy *domain.DurationPolicy) (domain.Portfolio, error) {
-	p, err := s.repo.GetByID(ctx, portfolioID)
-	if err != nil || p == nil {
-		return domain.Portfolio{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
+	p, err := s.loadOwned(ctx, portfolioID)
+	if err != nil {
+		return domain.Portfolio{}, err
 	}
 	policy := durationPolicyOrDefault(*p, durationPolicy)
 	positions, remainingCash, _ := domain.AutoCompose(
@@ -79,9 +109,9 @@ func (s *Service) BuildPortfolioPlan(ctx context.Context, portfolioID string, un
 }
 
 func (s *Service) UpdatePortfolioFields(ctx context.Context, portfolioID string, name *string, initialAmountRub *float64, horizonDate *time.Time, riskProfile *domain.RiskProfile, apiTradeOnly *bool, turboEntryEnabled *bool, maxWeightedDurationYears, targetDurationYears any) (domain.Portfolio, error) {
-	p, err := s.repo.GetByID(ctx, portfolioID)
-	if err != nil || p == nil {
-		return domain.Portfolio{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
+	p, err := s.loadOwned(ctx, portfolioID)
+	if err != nil {
+		return domain.Portfolio{}, err
 	}
 	if name != nil {
 		p.Name = *name
@@ -120,9 +150,9 @@ func (s *Service) UpdatePortfolioFields(ctx context.Context, portfolioID string,
 }
 
 func (s *Service) SetPutOfferDecision(ctx context.Context, portfolioID, isin, decision string) (domain.Portfolio, error) {
-	p, err := s.repo.GetByID(ctx, portfolioID)
-	if err != nil || p == nil {
-		return domain.Portfolio{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
+	p, err := s.loadOwned(ctx, portfolioID)
+	if err != nil {
+		return domain.Portfolio{}, err
 	}
 	found := false
 	for i := range p.Positions {
@@ -140,9 +170,9 @@ func (s *Service) SetPutOfferDecision(ctx context.Context, portfolioID, isin, de
 }
 
 func (s *Service) AddPosition(ctx context.Context, portfolioID string, universe []bonds.BondRecord, isin string, lots int, today time.Time) (domain.Portfolio, error) {
-	p, err := s.repo.GetByID(ctx, portfolioID)
-	if err != nil || p == nil {
-		return domain.Portfolio{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
+	p, err := s.loadOwned(ctx, portfolioID)
+	if err != nil {
+		return domain.Portfolio{}, err
 	}
 	var bond *bonds.BondRecord
 	for i := range universe {
@@ -165,9 +195,9 @@ func (s *Service) AddPosition(ctx context.Context, portfolioID string, universe 
 }
 
 func (s *Service) RemovePosition(ctx context.Context, portfolioID, isin string) (domain.Portfolio, error) {
-	p, err := s.repo.GetByID(ctx, portfolioID)
-	if err != nil || p == nil {
-		return domain.Portfolio{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
+	p, err := s.loadOwned(ctx, portfolioID)
+	if err != nil {
+		return domain.Portfolio{}, err
 	}
 	before := len(p.Positions)
 	var kept []domain.PortfolioPosition
@@ -185,9 +215,9 @@ func (s *Service) RemovePosition(ctx context.Context, portfolioID, isin string) 
 }
 
 func (s *Service) ClearPositions(ctx context.Context, portfolioID string) (domain.Portfolio, error) {
-	p, err := s.repo.GetByID(ctx, portfolioID)
-	if err != nil || p == nil {
-		return domain.Portfolio{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
+	p, err := s.loadOwned(ctx, portfolioID)
+	if err != nil {
+		return domain.Portfolio{}, err
 	}
 	p.Positions = nil
 	p.Slots = nil
@@ -197,9 +227,9 @@ func (s *Service) ClearPositions(ctx context.Context, portfolioID string) (domai
 }
 
 func (s *Service) SetSlotOverride(ctx context.Context, portfolioID, sourcePositionISIN string, confirmedISIN *string, universe []bonds.BondRecord, keyRate, taxRate float64, today time.Time, durationPolicy *domain.DurationPolicy) (domain.Portfolio, error) {
-	p, err := s.repo.GetByID(ctx, portfolioID)
-	if err != nil || p == nil {
-		return domain.Portfolio{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
+	p, err := s.loadOwned(ctx, portfolioID)
+	if err != nil {
+		return domain.Portfolio{}, err
 	}
 	if s.plans == nil {
 		return domain.Portfolio{}, fmt.Errorf("plan use case not configured")
@@ -241,9 +271,9 @@ func (s *Service) SetSlotOverride(ctx context.Context, portfolioID, sourcePositi
 }
 
 func (s *Service) ResetAllSlotOverrides(ctx context.Context, portfolioID string) (domain.Portfolio, error) {
-	p, err := s.repo.GetByID(ctx, portfolioID)
-	if err != nil || p == nil {
-		return domain.Portfolio{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
+	p, err := s.loadOwned(ctx, portfolioID)
+	if err != nil {
+		return domain.Portfolio{}, err
 	}
 	changed := false
 	for i := range p.Slots {
@@ -274,3 +304,7 @@ func newPortfolioID() string {
 
 // Unset is a sentinel for optional patch fields in UpdatePortfolioFields.
 var Unset any = unsetValue
+
+func ownerFrom(ctx context.Context) (int64, bool) {
+	return auth.OwnerTelegramID(ctx)
+}

@@ -8,6 +8,7 @@ import (
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
 	domain "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
 )
 
 // BrokerPlanPort loads live broker data required for trading plan builds.
@@ -34,7 +35,14 @@ func (u *PlanUseCase) Build(
 	assumeBestPutOutcome bool,
 	durationPolicy *domain.DurationPolicy,
 ) (domain.PortfolioPlan, error) {
-	p, err := u.repo.GetByID(ctx, portfolioID)
+	owner, ok := auth.OwnerTelegramID(ctx)
+	var p *domain.Portfolio
+	var err error
+	if ok {
+		p, err = u.repo.GetByIDForOwner(ctx, portfolioID, owner)
+	} else {
+		p, err = u.repo.GetByID(ctx, portfolioID)
+	}
 	if err != nil || p == nil {
 		return domain.PortfolioPlan{}, fmt.Errorf("%w: %s", ErrNotFound, portfolioID)
 	}
