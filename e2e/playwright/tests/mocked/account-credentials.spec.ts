@@ -1,7 +1,33 @@
 import { test, expect } from "@playwright/test";
-import { mockAuthMe, mockConfig, mockBondsEmpty } from "./fixtures";
+import { mockAuthMe, mockConfig, mockBondsEmpty, seedAuth } from "./fixtures";
 
 test.describe("Личный кабинет — брокерские ключи", () => {
+  test("GET /auth/me отправляет Bearer из localStorage", async ({ page }) => {
+    await mockConfig(page);
+    await mockBondsEmpty(page);
+    await seedAuth(page, "account-page-jwt");
+
+    let authorization: string | undefined;
+    await page.unroute("**/api/v1/auth/me").catch(() => undefined);
+    await page.route("**/api/v1/auth/me", async (route) => {
+      authorization = route.request().headers()["authorization"];
+      await route.fulfill({
+        json: {
+          telegram_id: 42,
+          display_name: "Prod User",
+          credentials: {
+            production: { fingerprint: "abcd1234", updated_at: "2026-07-21T00:00:00Z" },
+          },
+        },
+      });
+    });
+
+    await page.goto("/account");
+    await expect(page.getByRole("heading", { name: "Личный кабинет" })).toBeVisible();
+    await expect.poll(() => authorization).toBe("Bearer account-page-jwt");
+    await expect(page.getByText(/сохранён · abcd1234/)).toBeVisible();
+  });
+
   test("показывает production и sandbox под details; сохраняет/удаляет ключ", async ({
     page,
   }) => {

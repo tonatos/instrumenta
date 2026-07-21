@@ -71,16 +71,20 @@ function parseErrorMessage(text: string, status: number): ApiError {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const { headers: initHeaders, ...rest } = init ?? {};
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(init?.headers as Record<string, string> | undefined),
+    ...(initHeaders as Record<string, string> | undefined),
   };
+  // Prefer an explicit Authorization from the caller (e.g. login before setAuthToken).
   const token = getAuthToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (token && !headers.Authorization) {
+    headers.Authorization = `Bearer ${token}`;
+  }
 
   const res = await fetch(`${BASE}${path}`, {
+    ...rest,
     headers,
-    ...init,
   });
   if (!res.ok) {
     const text = await res.text();
@@ -127,9 +131,10 @@ export const api = {
   getConfig: () => request<ConfigResponse>("/config/"),
 
   getMe: (token?: string) =>
-    request<AuthMeResponse>("/auth/me", {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    }),
+    request<AuthMeResponse>(
+      "/auth/me",
+      token ? { headers: { Authorization: `Bearer ${token}` } } : undefined,
+    ),
   logout: () => request<{ status: string }>("/auth/logout", { method: "POST" }),
 
   putBrokerCredential: (kind: "sandbox" | "production", token: string) =>
