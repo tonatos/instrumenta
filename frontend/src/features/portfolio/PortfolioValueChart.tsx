@@ -43,7 +43,7 @@ function ChartTooltip({
         </p>
         <p className="flex items-center justify-between gap-4">
           <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="inline-block h-2 w-2 rounded-full bg-sky-500/80" />
+            <span className="inline-block h-2 w-2 rounded-full bg-brand-blue/80" />
             Кэш
           </span>
           <span className="tabular-nums">{formatRub(point.cash_rub)}</span>
@@ -119,11 +119,11 @@ export function PortfolioValueChart({
 
       <div className="mb-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-500/70" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-brand-lime/70" />
           Бумаги
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-sky-500/50" />
+          <span className="inline-block h-2.5 w-2.5 rounded-sm bg-brand-blue/50" />
           Кэш
         </span>
         <span className="flex items-center gap-1.5">
@@ -137,12 +137,12 @@ export function PortfolioValueChart({
           <ComposedChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="positionsGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="rgb(16 185 129)" stopOpacity={0.45} />
-                <stop offset="100%" stopColor="rgb(16 185 129)" stopOpacity={0.08} />
+                <stop offset="0%" stopColor="#a8fe5b" stopOpacity={0.45} />
+                <stop offset="100%" stopColor="#a8fe5b" stopOpacity={0.08} />
               </linearGradient>
               <linearGradient id="cashGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="rgb(14 165 233)" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="rgb(14 165 233)" stopOpacity={0.05} />
+                <stop offset="0%" stopColor="#6a8cfe" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#6a8cfe" stopOpacity={0.05} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" className="stroke-border/60" vertical={false} />
@@ -172,7 +172,7 @@ export function PortfolioValueChart({
               type="monotone"
               dataKey="cash_rub"
               stackId="portfolio"
-              stroke="rgb(14 165 233)"
+              stroke="#6a8cfe"
               strokeWidth={1}
               fill="url(#cashGradient)"
               isAnimationActive={false}
@@ -181,7 +181,7 @@ export function PortfolioValueChart({
               type="monotone"
               dataKey="positions_value_rub"
               stackId="portfolio"
-              stroke="rgb(16 185 129)"
+              stroke="#a8fe5b"
               strokeWidth={1}
               fill="url(#positionsGradient)"
               isAnimationActive={false}

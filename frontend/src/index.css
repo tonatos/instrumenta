@@ -3,47 +3,130 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+  Instrumenta brand palette (from brand sheet):
+  orange #FEB933 · coral #FE5C7A · blue #6A8CFE · lime #A8FE5B
+  dark base #080C12 + warm / magenta light leaks
+*/
 @theme {
-  --color-background: oklch(0.99 0.002 250);
-  --color-foreground: oklch(0.18 0.02 250);
-  --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.18 0.02 250);
-  --color-primary: oklch(0.42 0.17 255);
-  --color-primary-foreground: oklch(0.99 0 0);
-  --color-secondary: oklch(0.96 0.01 250);
-  --color-secondary-foreground: oklch(0.25 0.02 250);
-  --color-muted: oklch(0.96 0.005 250);
-  --color-muted-foreground: oklch(0.5 0.02 250);
-  --color-accent: oklch(0.94 0.02 255);
-  --color-accent-foreground: oklch(0.25 0.05 255);
-  --color-destructive: oklch(0.55 0.2 25);
-  --color-border: oklch(0.9 0.01 250);
-  --color-ring: oklch(0.42 0.17 255);
-  --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.18 0.02 250);
+  --color-brand-orange: #feb933;
+  --color-brand-coral: #fe5c7a;
+  --color-brand-blue: #6a8cfe;
+  --color-brand-lime: #a8fe5b;
+
+  /*
+    Roles (as before, brand shades):
+    primary / accent     → васильковый #6A8CFE
+    amber / orange / blue info chips → рыжий #FEB933 (информашки)
+    red / destructive    → коралл #FE5C7A (предупреждения)
+    green / emerald      → лайм #A8FE5B (хорошие новости)
+  */
+  --color-orange-300: #ffd27a;
+  --color-orange-400: #fec34d;
+  --color-orange-500: #feb933;
+  --color-orange-600: #e89a1a;
+  --color-orange-700: #b87410;
+  --color-orange-800: #8a560c;
+  --color-orange-900: #5c3908;
+
+  --color-amber-300: #ffd27a;
+  --color-amber-400: #fec34d;
+  --color-amber-500: #feb933;
+  --color-amber-600: #e89a1a;
+  --color-amber-700: #b87410;
+  --color-amber-800: #8a560c;
+  --color-amber-900: #5c3908;
+
+  --color-red-300: #ff9aab;
+  --color-red-400: #fe7a91;
+  --color-red-500: #fe5c7a;
+  --color-red-600: #e04560;
+  --color-red-700: #b8324a;
+  --color-red-800: #8a2438;
+  --color-red-900: #5c1825;
+
+  --color-green-300: #c8fe9a;
+  --color-green-400: #b5fe78;
+  --color-green-500: #a8fe5b;
+  --color-green-600: #7fd92e;
+  --color-green-700: #5eaa1c;
+  --color-green-800: #457814;
+  --color-green-900: #2d4f0d;
+
+  --color-emerald-300: #c8fe9a;
+  --color-emerald-400: #b5fe78;
+  --color-emerald-500: #a8fe5b;
+  --color-emerald-600: #7fd92e;
+  --color-emerald-700: #5eaa1c;
+  --color-emerald-800: #457814;
+  --color-emerald-900: #2d4f0d;
+
+  /* info callouts historically use blue-* → рыжий */
+  --color-blue-300: #ffd27a;
+  --color-blue-400: #fec34d;
+  --color-blue-500: #feb933;
+  --color-blue-600: #e89a1a;
+  --color-blue-700: #b87410;
+  --color-blue-800: #8a560c;
+  --color-blue-900: #5c3908;
+
+  --color-sky-300: #ffd27a;
+  --color-sky-400: #fec34d;
+  --color-sky-500: #feb933;
+  --color-sky-600: #e89a1a;
+  --color-sky-700: #b87410;
+  --color-sky-800: #8a560c;
+  --color-sky-900: #5c3908;
+
+  --color-purple-300: #b8a8fe;
+  --color-purple-400: #9a8cfe;
+  --color-purple-500: #7a72fe;
+  --color-purple-600: #5a54d4;
+  --color-purple-700: #433fa0;
+  --color-purple-800: #302d70;
+  --color-purple-900: #1f1d48;
+
+  /* Semantic UI — light */
+  --color-background: #f5f4f0;
+  --color-foreground: #12141a;
+  --color-card: #ffffff;
+  --color-card-foreground: #12141a;
+  --color-primary: #4a6fe0;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #eceff8;
+  --color-secondary-foreground: #1c1f28;
+  --color-muted: #eceff8;
+  --color-muted-foreground: #5c6475;
+  --color-accent: #e8eeff;
+  --color-accent-foreground: #3553b0;
+  --color-destructive: #e04560;
+  --color-border: #e2dfd6;
+  --color-ring: #6a8cfe;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #12141a;
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
 }
 
 .dark {
-  --color-background: oklch(0.14 0.02 250);
-  --color-foreground: oklch(0.96 0.01 250);
-  --color-card: oklch(0.18 0.02 250);
-  --color-card-foreground: oklch(0.96 0.01 250);
-  --color-primary: oklch(0.62 0.18 255);
-  --color-primary-foreground: oklch(0.99 0 0);
-  --color-secondary: oklch(0.22 0.02 250);
-  --color-secondary-foreground: oklch(0.96 0.01 250);
-  --color-muted: oklch(0.22 0.02 250);
-  --color-muted-foreground: oklch(0.65 0.02 250);
-  --color-accent: oklch(0.25 0.04 255);
-  --color-accent-foreground: oklch(0.9 0.05 255);
-  --color-destructive: oklch(0.6 0.2 25);
-  --color-border: oklch(0.28 0.02 250);
-  --color-ring: oklch(0.62 0.18 255);
-  --color-popover: oklch(0.18 0.02 250);
-  --color-popover-foreground: oklch(0.96 0.01 250);
+  --color-background: #080c12;
+  --color-foreground: #f5f6fa;
+  --color-card: #0f141c;
+  --color-card-foreground: #f5f6fa;
+  --color-primary: #6a8cfe;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #161b24;
+  --color-secondary-foreground: #f5f6fa;
+  --color-muted: #161b24;
+  --color-muted-foreground: #9aa3b5;
+  --color-accent: #151a28;
+  --color-accent-foreground: #a8bcfe;
+  --color-destructive: #fe5c7a;
+  --color-border: #232a36;
+  --color-ring: #6a8cfe;
+  --color-popover: #0f141c;
+  --color-popover-foreground: #f5f6fa;
 }
 
 @layer base {
@@ -58,6 +141,15 @@
   body {
     @apply bg-background text-foreground antialiased;
     font-family: "Inter", system-ui, -apple-system, sans-serif;
+  }
+
+  .dark body {
+    background-color: #080c12;
+    background-image:
+      radial-gradient(ellipse 75% 60% at 90% 5%, rgba(106, 140, 254, 0.16), transparent 58%),
+      radial-gradient(ellipse 60% 55% at 5% 95%, rgba(254, 92, 122, 0.12), transparent 55%),
+      radial-gradient(ellipse 45% 40% at 72% 78%, rgba(254, 185, 51, 0.07), transparent 60%);
+    background-attachment: fixed;
   }
 
   .pb-safe {

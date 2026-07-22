@@ -1,12 +1,14 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("Bond Monitor landing", () => {
+test.describe("Instrumenta landing", () => {
   test("visitor sees product pitch, product mock, and pricing", async ({
     page,
   }) => {
     await page.goto("/");
 
-    await expect(page.getByRole("banner")).toContainText("Bond Monitor");
+    await expect(
+      page.getByRole("banner").getByRole("link", { name: "Instrumenta" }),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", {
         level: 1,

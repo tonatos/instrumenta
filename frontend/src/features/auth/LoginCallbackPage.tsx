@@ -54,7 +54,7 @@ export function LoginCallbackPage() {
   }, [loginWithAccessToken, navigate]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen items-center justify-center bg-transparent p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>Telegram</CardTitle>

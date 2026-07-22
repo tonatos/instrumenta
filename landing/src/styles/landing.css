@@ -50,21 +50,10 @@
   font-size: 1.05rem;
 }
 
-.brand__mark {
-  width: 1.75rem;
+.brand__logo {
   height: 1.75rem;
-  border-radius: 0.5rem;
-  background: var(--grad);
-  position: relative;
-  flex-shrink: 0;
-}
-
-.brand__mark::after {
-  content: "";
-  position: absolute;
-  inset: 35%;
-  border-radius: 50%;
-  background: var(--bg);
+  width: auto;
+  max-width: min(11rem, 42vw);
 }
 
 .nav__links {

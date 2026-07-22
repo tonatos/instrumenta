@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import {
   Activity,
   BarChart3,
@@ -39,14 +39,17 @@ export function AppShell() {
   });
 
   return (
-    <div className="flex min-h-screen overflow-x-hidden bg-background">
-      <aside className="hidden w-64 flex-col border-r border-border bg-card md:flex">
-        <div className="flex h-16 items-center gap-3 border-b border-border px-6">
-          <img src="/favicon.svg" alt="" width={32} height={32} className="shrink-0" />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold tracking-tight">Bond Monitor</p>
-            <p className="truncate text-xs text-muted-foreground">Краткосрочные ОФЗ и корп.</p>
-          </div>
+    <div className="flex min-h-screen overflow-x-hidden bg-transparent">
+      <aside className="hidden w-64 flex-col border-r border-border bg-card/90 backdrop-blur-md md:flex">
+        <div className="flex h-16 items-center justify-center border-b border-border px-5">
+          <Link to="/" className="min-w-0" aria-label="Instrumenta">
+            <img
+              src="/brand/instrumenta-logo.png"
+              alt="Instrumenta"
+              width={140}
+              className=""
+            />
+          </Link>
         </div>
         <nav className="flex flex-1 flex-col gap-1 p-4" aria-label="Основная навигация">
           {navItems.map(({ to, label, icon: Icon }) => (
@@ -94,11 +97,16 @@ export function AppShell() {
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-border bg-background px-4 md:hidden">
-          <div className="flex min-w-0 items-center gap-2">
-            <img src="/favicon.svg" alt="" width={28} height={28} className="shrink-0" />
-            <p className="truncate font-semibold tracking-tight">Bond Monitor</p>
-          </div>
+        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md md:hidden">
+          <Link to="/" className="min-w-0" aria-label="Instrumenta">
+            <img
+              src="/brand/instrumenta-logo.png"
+              alt="Instrumenta"
+              width={141}
+              height={24}
+              className="h-6 w-auto max-w-[11rem]"
+            />
+          </Link>
           <div className="flex shrink-0 gap-2">
             <Button variant="outline" size="icon" onClick={toggle} aria-label="Тема">
               {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
@@ -114,7 +122,7 @@ export function AppShell() {
         </main>
 
         <nav
-          className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-card pb-safe md:hidden"
+          className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border bg-card/90 pb-safe backdrop-blur-md md:hidden"
           aria-label="Мобильная навигация"
         >
           {navItems.map(({ to, label, mobileLabel, icon: Icon }) => (

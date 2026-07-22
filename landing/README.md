@@ -1,10 +1,10 @@
-# Bond Monitor Landing
+# Instrumenta Landing
 
 Отдельный маркетинговый лендинг. **Не зависит** от `frontend/` и backend API.
 
 ## Продукт (multi-tenant)
 
-Bond Monitor — multi-user: вход через Telegram, портфели и избранное привязаны к пользователю.
+Instrumenta — multi-user: вход через Telegram, портфели и избранное привязаны к пользователю.
 Торговые ключи T‑Invest хранятся **на пользователя** в зашифрованном виде (envelope encryption + `BROKER_KEK`);
 системный `TINKOFF_TOKEN` используется только для обогащения бумаг в скринере.
 Настройка ключей и краткое описание защиты — в приложении (`/account`). Отдельная публичная Security-страница на лендинге — в планах.

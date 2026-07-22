@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 const PAGE_READY_TIMEOUT = 30_000;
 
-test.describe("Bond Monitor webapp", () => {
+test.describe("Instrumenta webapp", () => {
   test("screener page loads bonds from API", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Скринер облигаций" })).toBeVisible({

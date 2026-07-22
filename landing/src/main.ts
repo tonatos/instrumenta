@@ -9,9 +9,14 @@ if (!app) {
 app.innerHTML = `
   <div class="page">
     <header class="nav shell" role="banner" data-nav>
-      <a class="brand" href="#top" aria-label="Bond Monitor">
-        <span class="brand__mark" aria-hidden="true"></span>
-        Bond Monitor
+      <a class="brand" href="#top" aria-label="Instrumenta">
+        <img
+          class="brand__logo"
+          src="/brand/instrumenta-logo.png"
+          alt="Instrumenta"
+          width="168"
+          height="28"
+        />
       </a>
       <nav class="nav__links" aria-label="Разделы">
         <a href="#features">Возможности</a>
@@ -58,7 +63,7 @@ app.innerHTML = `
               <div class="product-mock__dots" aria-hidden="true">
                 <span></span><span></span><span></span>
               </div>
-              bond-monitor.app / screener
+              instrumenta.app / screener
             </div>
             <div class="product-mock__body">
               <aside class="product-mock__side" aria-hidden="true">
@@ -200,7 +205,7 @@ app.innerHTML = `
         <div class="section__head reveal">
           <h2>Полный контур работы с облигациями</h2>
           <p>
-            Bond Monitor закрывает цикл: найти бумагу → собрать портфель →
+            Instrumenta закрывает цикл: найти бумагу → собрать портфель →
             исполнить план → вовремя среагировать на событие.
           </p>
         </div>
@@ -373,7 +378,7 @@ app.innerHTML = `
 
       <section class="section shell" id="compare">
         <div class="section__head reveal">
-          <h2>Что входит в Bond Monitor</h2>
+          <h2>Что входит в Instrumenta</h2>
           <p>Скринер, исполнение и сигналы — в одном продукте.</p>
         </div>
         <div class="compare reveal">
@@ -383,7 +388,7 @@ app.innerHTML = `
                 <th></th>
                 <th>Скринер</th>
                 <th>Трекер</th>
-                <th>Bond Monitor</th>
+                <th>Instrumenta</th>
               </tr>
             </thead>
             <tbody>
@@ -478,9 +483,14 @@ app.innerHTML = `
     <footer class="footer">
       <div class="shell">
         <div class="footer__top">
-          <a class="brand" href="#top">
-            <span class="brand__mark" aria-hidden="true"></span>
-            Bond Monitor
+          <a class="brand" href="#top" aria-label="Instrumenta">
+            <img
+              class="brand__logo"
+              src="/brand/instrumenta-logo.png"
+              alt="Instrumenta"
+              width="168"
+              height="28"
+            />
           </a>
           <div class="footer__links">
             <a href="#features">Скринер</a>
@@ -490,7 +500,7 @@ app.innerHTML = `
           </div>
         </div>
         <p class="footer__legal">
-          © 2026 Bond Monitor. Данные Мосбиржи и T-Invest. Не является
+          © 2026 Instrumenta. Данные Мосбиржи и T-Invest. Не является
           индивидуальной инвестиционной рекомендацией.
         </p>
       </div>

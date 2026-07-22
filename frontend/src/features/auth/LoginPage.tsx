@@ -20,11 +20,17 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen items-center justify-center bg-transparent p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="items-center text-center">
-          <img src="/favicon.svg" alt="" width={56} height={56} className="mb-1" />
-          <CardTitle>Bond Monitor</CardTitle>
+          <img
+            src="/brand/instrumenta-logo.png"
+            alt="Instrumenta"
+            width={220}
+            height={37}
+            className="mb-2 h-9 w-auto"
+          />
+          <CardTitle className="sr-only">Instrumenta</CardTitle>
           <CardDescription>Войдите через Telegram, чтобы открыть приложение.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-4">
