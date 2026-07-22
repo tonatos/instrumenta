@@ -44,7 +44,6 @@ type Inventory struct {
 	AuthSecret               string `yaml:"auth_secret"`
 	TelegramOIDCClientID     string `yaml:"telegram_oidc_client_id"`
 	TelegramOIDCClientSecret string `yaml:"telegram_oidc_client_secret"`
-	AllowedTelegramIDs       string `yaml:"allowed_telegram_ids"`
 	DevTelegramID            int64  `yaml:"dev_telegram_id"`
 	TenantBackfillTelegramID int64  `yaml:"tenant_backfill_telegram_id"`
 

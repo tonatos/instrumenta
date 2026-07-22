@@ -103,17 +103,13 @@ tasks:
 
   deploy:update:
     desc: Manual update on VPS (git pull + compose pull, keeps .env)
-    deps: [deploy:sync]
+    deps: [deploy:bootstrap]
     cmds:
       - cd deploy && go run . update
 
   deploy:update-dry:
     desc: Preview manual VPS update
-    deps: [deploy:sync]
+    deps: [deploy:bootstrap]
     cmds:
       - cd deploy && go run . update -dry-run
 
-  deploy:
-    desc: Alias for deploy:update (routine deploy is automatic via GitHub Actions)
-    cmds:
-      - task: deploy:update

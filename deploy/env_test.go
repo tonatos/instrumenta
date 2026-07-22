@@ -23,7 +23,6 @@ func TestRenderEnv(t *testing.T) {
 		AuthSecret:               "secret-value",
 		TelegramOIDCClientID:     "oidc-id",
 		TelegramOIDCClientSecret: "oidc-secret",
-		AllowedTelegramIDs:       "123,456",
 		DevTelegramID:            1,
 		TenantBackfillTelegramID: 139693774,
 		NotifierScanIntervalSec:  3600,
@@ -48,7 +47,6 @@ func TestRenderEnv(t *testing.T) {
 		"AUTH_SECRET=secret-value",
 		"PUBLIC_APP_URL=https://bond.example.com",
 		"TELEGRAM_BOT_TOKEN=bot-token",
-		"ALLOWED_TELEGRAM_IDS=123,456",
 		"DEV_TELEGRAM_ID=1",
 		"TENANT_BACKFILL_TELEGRAM_ID=139693774",
 		"NOTIFIER_SCAN_INTERVAL_SEC=3600",
@@ -57,6 +55,9 @@ func TestRenderEnv(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("renderEnv missing %q\noutput:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "ALLOWED_TELEGRAM_IDS") {
+		t.Fatal("ALLOWED_TELEGRAM_IDS should be removed from prod env")
 	}
 }
 

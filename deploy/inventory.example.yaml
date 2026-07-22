@@ -41,8 +41,6 @@ auth_disabled: false
 auth_secret: change-me-to-a-long-random-string
 telegram_oidc_client_id: ""
 telegram_oidc_client_secret: ""
-# Optional allowlist (CSV). Empty = any Telegram user may sign in (SaaS open mode).
-allowed_telegram_ids: ""
 # Synthetic owner when AUTH_DISABLED=true (local/e2e)
 dev_telegram_id: 1
 # Owner for portfolios/favorites created before multi-tenant migration

@@ -45,7 +45,7 @@ smart-lab ──► infrastructure/ratings/ ──► SQLite bond_credit_ratings
 | Notifier | scan с токеном владельца; Telegram на `owner_telegram_id` |
 | Isolation | чужой `portfolio_id` → 404; тесты `isolation_test.go`, e2e tenant |
 
-`ALLOWED_TELEGRAM_IDS` пустой = любой Telegram-user (SaaS). Миграция `005_multi_tenant.sql` + `EnsureMultiTenantSchema`.
+Миграция `005_multi_tenant.sql` + `EnsureMultiTenantSchema`. Вход через Telegram OIDC открыт для любого пользователя (без allowlist).
 
 ### DDD-слои (`backend/internal/`)
 

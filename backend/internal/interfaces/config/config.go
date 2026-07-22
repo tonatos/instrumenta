@@ -34,7 +34,6 @@ type Settings struct {
 	TelegramOIDCClientID     string
 	TelegramOIDCClientSecret string
 	TelegramOIDCRedirectURI  string
-	AllowedTelegramIDs       []int64
 
 	TinkoffToken            string
 	TTradingTokenSandbox    string
@@ -115,8 +114,6 @@ func Load() Settings {
 		TelegramOIDCClientSecret: strings.TrimSpace(os.Getenv("TELEGRAM_OIDC_CLIENT_SECRET")),
 		TelegramOIDCRedirectURI:  strings.TrimSpace(os.Getenv("TELEGRAM_OIDC_REDIRECT_URI")),
 
-		AllowedTelegramIDs: parseIntList(os.Getenv("ALLOWED_TELEGRAM_IDS")),
-
 		TinkoffToken:            os.Getenv("TINKOFF_TOKEN"),
 		TTradingTokenSandbox:    os.Getenv("T_TRADING_TOKEN_SANDBOX"),
 		TTradingTokenProduction: os.Getenv("T_TRADING_TOKEN_PRODUCTION"),
@@ -165,9 +162,6 @@ func (s Settings) TenantBackfillID() int64 {
 	}
 	if s.TelegramNotifyUserID != 0 {
 		return s.TelegramNotifyUserID
-	}
-	if len(s.AllowedTelegramIDs) == 1 {
-		return s.AllowedTelegramIDs[0]
 	}
 	if s.DevTelegramID != 0 {
 		return s.DevTelegramID
@@ -248,25 +242,6 @@ func envStringSlice(key string, fallback []string) []string {
 	}
 	if len(out) == 0 {
 		return fallback
-	}
-	return out
-}
-
-func parseIntList(v string) []int64 {
-	v = strings.TrimSpace(v)
-	if v == "" {
-		return nil
-	}
-	parts := strings.Split(v, ",")
-	out := make([]int64, 0, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		if n, err := strconv.ParseInt(p, 10, 64); err == nil {
-			out = append(out, n)
-		}
 	}
 	return out
 }

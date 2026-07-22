@@ -3,7 +3,6 @@ package httpapi
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -70,13 +69,8 @@ func (h *Handler) TelegramCallback(w http.ResponseWriter, r *http.Request) {
 		h.deps.Settings.TelegramOIDCClientID,
 		h.deps.Settings.TelegramOIDCClientSecret,
 		h.deps.Settings.TelegramOIDCRedirectURIResolved(),
-		h.deps.Settings.AllowedTelegramIDs,
 	)
 	if err != nil {
-		if errors.Is(err, auth.ErrTelegramOIDCForbidden) {
-			http.Redirect(w, r, frontendErrorURL(frontendCallback, "forbidden", err.Error()), http.StatusFound)
-			return
-		}
 		http.Redirect(w, r, frontendErrorURL(frontendCallback, "auth_failed", err.Error()), http.StatusFound)
 		return
 	}

@@ -27,8 +27,7 @@ const (
 )
 
 var (
-	ErrTelegramOIDC         = errors.New("telegram oidc error")
-	ErrTelegramOIDCForbidden = errors.New("telegram oidc forbidden")
+	ErrTelegramOIDC = errors.New("telegram oidc error")
 )
 
 type OAuthState struct {
@@ -158,17 +157,10 @@ func telegramIDFromClaims(claims map[string]any) (int64, error) {
 	return 0, fmt.Errorf("%w: Telegram id_token is missing user id", ErrTelegramOIDC)
 }
 
-func userFromClaims(claims map[string]any, allowed []int64) (TelegramUser, error) {
+func userFromClaims(claims map[string]any) (TelegramUser, error) {
 	userID, err := telegramIDFromClaims(claims)
 	if err != nil {
 		return TelegramUser{}, err
-	}
-	allowedSet := make(map[int64]bool, len(allowed))
-	for _, id := range allowed {
-		allowedSet[id] = true
-	}
-	if len(allowed) > 0 && !allowedSet[userID] {
-		return TelegramUser{}, fmt.Errorf("%w: User not allowed", ErrTelegramOIDCForbidden)
 	}
 	displayName := ""
 	for _, key := range []string{"name", "given_name", "preferred_username"} {
@@ -190,7 +182,6 @@ func ExchangeAuthorizationCode(
 	ctx context.Context,
 	client *http.Client,
 	code, codeVerifier, nonce, clientID, clientSecret, redirectURI string,
-	allowed []int64,
 ) (TelegramUser, error) {
 	if clientID == "" || clientSecret == "" {
 		return TelegramUser{}, fmt.Errorf("%w: Telegram OIDC client is not configured", ErrTelegramOIDC)
@@ -256,5 +247,5 @@ func ExchangeAuthorizationCode(
 	if err != nil {
 		return TelegramUser{}, err
 	}
-	return userFromClaims(claims, allowed)
+	return userFromClaims(claims)
 }

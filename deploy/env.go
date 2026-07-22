@@ -30,7 +30,6 @@ type envTemplateData struct {
 	AuthSecret               string
 	TelegramOIDCClientID     string
 	TelegramOIDCClientSecret string
-	AllowedTelegramIDs       string
 	DevTelegramID            string
 	TenantBackfillTelegramID string
 	NotifierScanIntervalSec  string
@@ -62,7 +61,6 @@ func renderEnv(inv Inventory) (string, error) {
 		AuthSecret:               inv.AuthSecret,
 		TelegramOIDCClientID:     inv.TelegramOIDCClientID,
 		TelegramOIDCClientSecret: inv.TelegramOIDCClientSecret,
-		AllowedTelegramIDs:       allowedTelegramIDs(inv.AllowedTelegramIDs),
 		DevTelegramID:            strconv.FormatInt(inv.DevTelegramID, 10),
 		TenantBackfillTelegramID: strconv.FormatInt(inv.TenantBackfillTelegramID, 10),
 		NotifierScanIntervalSec:  strconv.Itoa(inv.NotifierScanIntervalSec),
@@ -83,8 +81,4 @@ func formatFloat(value float64) string {
 		s = strings.TrimRight(strings.TrimRight(s, "0"), ".")
 	}
 	return s
-}
-
-func allowedTelegramIDs(value string) string {
-	return strings.TrimSpace(value)
 }
