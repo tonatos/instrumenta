@@ -52,6 +52,8 @@ type Inventory struct {
 	YooKassaSecretKey        string `yaml:"yookassa_secret_key"`
 	ComplimentaryTelegramIDs string `yaml:"complimentary_telegram_ids"`
 
+	PostgresPassword string `yaml:"postgres_password"`
+
 	GHCRUsername string `yaml:"ghcr_username"`
 	GHCRToken    string `yaml:"ghcr_token"`
 }
@@ -141,6 +143,8 @@ func (inv Inventory) validate() error {
 		return fmt.Errorf("inventory: domain is required")
 	case !inv.AuthDisabled && strings.TrimSpace(inv.BrokerKEK) == "":
 		return fmt.Errorf("inventory: broker_kek is required when auth_disabled is false")
+	case strings.TrimSpace(inv.PostgresPassword) == "":
+		return fmt.Errorf("inventory: postgres_password is required")
 	default:
 		return nil
 	}

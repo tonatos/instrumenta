@@ -34,6 +34,7 @@ type envTemplateData struct {
 	YooKassaShopID           string
 	YooKassaSecretKey        string
 	ComplimentaryTelegramIDs string
+	PostgresPassword         string
 }
 
 func renderEnv(inv Inventory) (string, error) {
@@ -66,6 +67,7 @@ func renderEnv(inv Inventory) (string, error) {
 		YooKassaShopID:           inv.YooKassaShopID,
 		YooKassaSecretKey:        inv.YooKassaSecretKey,
 		ComplimentaryTelegramIDs: inv.ComplimentaryTelegramIDs,
+		PostgresPassword:         inv.PostgresPassword,
 	}
 
 	var buf bytes.Buffer

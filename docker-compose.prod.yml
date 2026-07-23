@@ -6,12 +6,18 @@ services:
     environment:
       LOG_LEVEL: INFO
       REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
 
   notifier:
     image: ghcr.io/tonatos/instrumenta-api:${IMAGE_TAG:-main}
     environment:
       LOG_LEVEL: INFO
       REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
 
   web:
     image: ghcr.io/tonatos/instrumenta-web:${IMAGE_TAG:-main}
@@ -20,6 +26,12 @@ services:
 
   redis:
     ports: !reset []
+
+  db:
+    profiles: !reset []
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
 
   caddy:
     image: caddy:2-alpine

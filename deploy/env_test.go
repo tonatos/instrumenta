@@ -26,6 +26,7 @@ func TestRenderEnv(t *testing.T) {
 		TelegramBotToken:         "bot-token",
 		TelegramBotUsername:      "instrumenta_bot",
 		ComplimentaryTelegramIDs: "111999777",
+		PostgresPassword:         "pg-secret",
 	}
 
 	out, err := renderEnv(inv)
@@ -47,6 +48,8 @@ func TestRenderEnv(t *testing.T) {
 		"DEV_TELEGRAM_ID=1",
 		"NOTIFIER_SCAN_INTERVAL_SEC=3600",
 		"COMPLIMENTARY_TELEGRAM_IDS=111999777",
+		"POSTGRES_PASSWORD=pg-secret",
+		"DATABASE_URL=postgres://instrumenta:pg-secret@db:5432/instrumenta?sslmode=disable",
 	}
 	for _, want := range checks {
 		if !strings.Contains(out, want) {
@@ -71,7 +74,7 @@ func TestRenderEnv(t *testing.T) {
 }
 
 func TestValidateRequiresBrokerKEKWhenAuthEnabled(t *testing.T) {
-	inv := Inventory{Host: "1.2.3.4", Domain: "example.com", AuthDisabled: false}
+	inv := Inventory{Host: "1.2.3.4", Domain: "example.com", AuthDisabled: false, PostgresPassword: "pg"}
 	if err := inv.validate(); err == nil {
 		t.Fatal("expected broker_kek required")
 	}
@@ -83,5 +86,9 @@ func TestValidateRequiresBrokerKEKWhenAuthEnabled(t *testing.T) {
 	inv.BrokerKEK = ""
 	if err := inv.validate(); err != nil {
 		t.Fatalf("auth disabled should allow empty kek: %v", err)
+	}
+	inv.PostgresPassword = ""
+	if err := inv.validate(); err == nil {
+		t.Fatal("expected postgres_password required")
 	}
 }

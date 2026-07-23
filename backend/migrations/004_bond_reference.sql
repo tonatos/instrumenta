@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS issuer_rating_patterns (
     rating      TEXT NOT NULL
 );
 
-INSERT OR IGNORE INTO issuer_rating_patterns (pattern, rating) VALUES
+INSERT INTO issuer_rating_patterns (pattern, rating) VALUES
     ('ОФЗ', 'ruAAA'),
     ('ДОМ.РФ', 'ruAAA'),
     ('ДомРФ', 'ruAAA'),
@@ -80,7 +80,8 @@ INSERT OR IGNORE INTO issuer_rating_patterns (pattern, rating) VALUES
     ('ДетМир', 'ruA-'),
     ('ГТЛК', 'ruAA-'),
     ('Сегеж', 'ruCC'),
-    ('СЕГЕЖ', 'ruCC');
+    ('СЕГЕЖ', 'ruCC')
+ON CONFLICT (pattern) DO NOTHING;
 -- +goose StatementEnd
 
 -- +goose Down

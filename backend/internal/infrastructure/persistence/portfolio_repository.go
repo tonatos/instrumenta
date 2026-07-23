@@ -269,9 +269,9 @@ CREATE TABLE IF NOT EXISTS broker_credentials (
     id TEXT PRIMARY KEY,
     owner_telegram_id INTEGER NOT NULL,
     account_kind TEXT NOT NULL,
-    ciphertext BLOB NOT NULL,
-    dek_wrapped BLOB NOT NULL,
-    nonce BLOB NOT NULL,
+    ciphertext BYTEA NOT NULL,
+    dek_wrapped BYTEA NOT NULL,
+    nonce BYTEA NOT NULL,
     kek_version INTEGER NOT NULL DEFAULT 1,
     fingerprint TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -376,11 +376,12 @@ CREATE TABLE IF NOT EXISTS billing_ledger (
 		return err
 	}
 	_, err := db.Exec(`
-INSERT OR IGNORE INTO billing_plan_versions (
+INSERT INTO billing_plan_versions (
     id, catalog_group, code, period, amount_kopecks, features_json, effective_from, is_current
 ) VALUES
 ('pro_month_v1','pro','pro_month','month',79500,'["broker_credentials.write","portfolio.attach","trading_portfolio.access"]','2026-01-01T00:00:00Z',1),
 ('pro_year_v1','pro','pro_year','year',594000,'["broker_credentials.write","portfolio.attach","trading_portfolio.access"]','2026-01-01T00:00:00Z',1)
+ON CONFLICT (id) DO NOTHING
 `)
 	return err
 }

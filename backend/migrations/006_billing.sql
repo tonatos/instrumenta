@@ -61,8 +61,8 @@ CREATE TABLE IF NOT EXISTS billing_ledger (
 CREATE INDEX IF NOT EXISTS idx_billing_ledger_owner_created
     ON billing_ledger(owner_telegram_id, created_at);
 
--- Seed current Pro tariff: 795 ₽/mo, 5940 ₽/yr (idempotent)
-INSERT OR IGNORE INTO billing_plan_versions (
+-- Seed current Pro tariff: 795 ₽/mo, 5940 ₽/yr (idempotent; SQLite + Postgres)
+INSERT INTO billing_plan_versions (
     id, catalog_group, code, period, amount_kopecks, features_json, effective_from, is_current
 ) VALUES (
     'pro_month_v1',
@@ -73,8 +73,8 @@ INSERT OR IGNORE INTO billing_plan_versions (
     '["broker_credentials.write","portfolio.attach","trading_portfolio.access"]',
     '2026-01-01T00:00:00Z',
     1
-);
-INSERT OR IGNORE INTO billing_plan_versions (
+) ON CONFLICT (id) DO NOTHING;
+INSERT INTO billing_plan_versions (
     id, catalog_group, code, period, amount_kopecks, features_json, effective_from, is_current
 ) VALUES (
     'pro_year_v1',
@@ -85,7 +85,7 @@ INSERT OR IGNORE INTO billing_plan_versions (
     '["broker_credentials.write","portfolio.attach","trading_portfolio.access"]',
     '2026-01-01T00:00:00Z',
     1
-);
+) ON CONFLICT (id) DO NOTHING;
 -- +goose StatementEnd
 
 -- +goose Down

@@ -54,6 +54,9 @@ yookassa_secret_key: ""
 # Comma-separated Telegram IDs with free Pro (empty = nobody)
 complimentary_telegram_ids: ""
 
+# Postgres password for compose db service + DATABASE_URL
+postgres_password: "change-me-strong-password"
+
 # GHCR (only for private packages; public images pull without login)
 # ghcr_username: tonatos
 # ghcr_token: "" # PAT with read:packages
