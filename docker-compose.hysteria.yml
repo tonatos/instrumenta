@@ -1,9 +1,9 @@
-# Optional overlay: outbound HTTP(S) from api/notifier via local Hysteria2 client.
+# Optional overlay: Hysteria2 client + Telegram-only outbound proxy.
 # Enable: put hysteria2_uri in deploy/inventory.yaml and bootstrap (writes hysteria-client.yaml).
 # Disable: clear hysteria2_uri, re-bootstrap (removes config) or:
 #   rm -f hysteria-client.yaml && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
 #
-# Go net/http respects HTTPS_PROXY. T-Invest gRPC usually ignores it and stays direct (good for RU APIs).
+# Only TELEGRAM_HTTP_PROXY is set — MOEX / T-Invest / YooKassa stay direct.
 
 services:
   hysteria:
@@ -16,18 +16,14 @@ services:
 
   api:
     environment:
-      HTTP_PROXY: http://hysteria:8080
-      HTTPS_PROXY: http://hysteria:8080
-      NO_PROXY: localhost,127.0.0.1,redis,db,web,caddy,hysteria,api,notifier
+      TELEGRAM_HTTP_PROXY: http://hysteria:8080
     depends_on:
       hysteria:
         condition: service_started
 
   notifier:
     environment:
-      HTTP_PROXY: http://hysteria:8080
-      HTTPS_PROXY: http://hysteria:8080
-      NO_PROXY: localhost,127.0.0.1,redis,db,web,caddy,hysteria,api,notifier
+      TELEGRAM_HTTP_PROXY: http://hysteria:8080
     depends_on:
       hysteria:
         condition: service_started

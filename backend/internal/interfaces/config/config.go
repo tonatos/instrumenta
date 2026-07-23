@@ -46,6 +46,7 @@ type Settings struct {
 	NotifierScanIntervalSec  int
 	TelegramBotToken         string
 	TelegramBotUsername      string // optional override; otherwise resolved via getMe
+	TelegramHTTPProxy        string // optional; only Bot API + OIDC (TSPU bypass)
 	NotifierLedgerPath       string
 	NotificationsDev         bool
 
@@ -127,6 +128,7 @@ func Load() Settings {
 		NotifierScanIntervalSec: envInt("NOTIFIER_SCAN_INTERVAL_SEC", 3600),
 		TelegramBotToken:        os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramBotUsername:     strings.TrimPrefix(strings.TrimSpace(os.Getenv("TELEGRAM_BOT_USERNAME")), "@"),
+		TelegramHTTPProxy:       strings.TrimSpace(os.Getenv("TELEGRAM_HTTP_PROXY")),
 		NotifierLedgerPath:      envString("NOTIFIER_LEDGER_PATH", defaultNotifierLedgerPath(root)),
 		NotificationsDev:        envBool("NOTIFICATIONS_DEV", false),
 

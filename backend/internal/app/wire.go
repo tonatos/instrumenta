@@ -20,6 +20,7 @@ import (
 	"github.com/tonatos/instrumenta/backend/internal/domain/preferences"
 	"github.com/tonatos/instrumenta/backend/internal/infrastructure/cbr"
 	"github.com/tonatos/instrumenta/backend/internal/infrastructure/crypto"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/httpx"
 	"github.com/tonatos/instrumenta/backend/internal/infrastructure/moex"
 	"github.com/tonatos/instrumenta/backend/internal/infrastructure/notifications"
 	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
@@ -166,7 +167,7 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 
 	botUsername := settings.TelegramBotUsername
 	if botUsername == "" && settings.TelegramBotToken != "" {
-		tg := notifications.NewTelegramClient(settings.TelegramBotToken)
+		tg := notifications.NewTelegramClient(settings.TelegramBotToken, settings.TelegramHTTPProxy)
 		if me, err := tg.GetMe(ctx); err == nil {
 			botUsername = me.Username
 		} else {
@@ -189,7 +190,8 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 		TokenSource:         tokens,
 		Billing:             billingSvc,
 		TelegramBotUsername: botUsername,
-		HTTPClient:          &http.Client{Timeout: 20 * time.Second},
+		// Telegram OIDC token exchange only (api.telegram.org / oauth.telegram.org via optional proxy).
+		HTTPClient: httpx.Client(20*time.Second, settings.TelegramHTTPProxy),
 	}
 
 	return &App{Deps: deps, DB: db, Consumer: consumer}, nil
@@ -275,7 +277,7 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 		settings.ComplimentaryTelegramIDs,
 		settings.YooKassaReturnURLResolved(),
 	)
-	telegram := notifications.NewTelegramClient(settings.TelegramBotToken)
+	telegram := notifications.NewTelegramClient(settings.TelegramBotToken, settings.TelegramHTTPProxy)
 	gate := &appnotifications.SubscriptionTelegramGate{Users: usersRepo, Billing: billingSvc}
 	deliver := appnotifications.NewDeliverUseCase(ledger, bus, telegram, notificationsRepo, gate)
 	radarScan := appmarketsignals.NewScanRadarUseCase(

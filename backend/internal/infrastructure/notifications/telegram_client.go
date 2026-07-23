@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/tonatos/instrumenta/backend/internal/domain/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/httpx"
 )
 
 // TelegramClient sends messages and receives updates via Telegram Bot API.
@@ -22,12 +23,12 @@ type TelegramClient struct {
 	apiBase    string // override for tests
 }
 
-func NewTelegramClient(botToken string) *TelegramClient {
+// NewTelegramClient builds a Bot API client. proxyURL is optional (TELEGRAM_HTTP_PROXY);
+// when set, only Telegram traffic uses that HTTP proxy.
+func NewTelegramClient(botToken, proxyURL string) *TelegramClient {
 	return &TelegramClient{
-		botToken: botToken,
-		httpClient: &http.Client{
-			Timeout: 45 * time.Second,
-		},
+		botToken:   botToken,
+		httpClient: httpx.Client(45*time.Second, proxyURL),
 	}
 }
 

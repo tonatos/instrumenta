@@ -131,7 +131,7 @@ func TestBotInbox_StartRequiresSubscription(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	tg := infranotify.NewTelegramClient("test-token")
+	tg := infranotify.NewTelegramClient("test-token", "")
 	tg.SetAPIBaseForTest(srv.URL)
 	inbox := NewBotInbox(tg, users, billingSvc, nil)
 

@@ -28,7 +28,8 @@ type Deps struct {
 	TokenSource       apptrading.TokenSource
 	Billing           *appbilling.Service
 	TelegramBotUsername string
-	HTTPClient        *http.Client
+	// HTTPClient is used for Telegram OIDC token exchange (optional TELEGRAM_HTTP_PROXY).
+	HTTPClient *http.Client
 }
 
 // Handler serves HTTP API endpoints.
