@@ -49,6 +49,7 @@ export function SuggestionCard({
   onSkip,
   sessionStatus,
   buyRequiresFrozenPlan,
+  ordersDisabled,
   isPending,
 }: {
   suggestion: Suggestion;
@@ -59,6 +60,8 @@ export function SuggestionCard({
   onSkip?: (s: Suggestion) => void;
   sessionStatus?: DeploySessionItemStatus;
   buyRequiresFrozenPlan?: boolean;
+  /** Read-only broker token — no place/cancel. */
+  ordersDisabled?: boolean;
   isPending: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -67,6 +70,11 @@ export function SuggestionCard({
     buyRequiresFrozenPlan &&
     direction === "BUY" &&
     (suggestion.kind === "buy" || suggestion.kind === "reinvest");
+  const confirmDisabled =
+    isPending ||
+    sessionStatus === "placed" ||
+    buyBlocked ||
+    Boolean(ordersDisabled);
   const borderClass =
     suggestion.urgency === "critical"
       ? "border-red-400/50"
@@ -140,7 +148,7 @@ export function SuggestionCard({
             type="button"
             size="sm"
             onClick={() => onConfirm(suggestion)}
-            disabled={isPending || sessionStatus === "placed" || buyBlocked}
+            disabled={confirmDisabled}
             data-testid={
               direction === "BUY" ? `confirm-buy-${suggestion.id}` : undefined
             }
@@ -149,7 +157,10 @@ export function SuggestionCard({
             {isProduction && " (боевой)"}
           </Button>
         )}
-        {buyBlocked && (
+        {ordersDisabled && direction && (
+          <p className="text-xs text-muted-foreground">Ключ только для чтения — заявки недоступны</p>
+        )}
+        {buyBlocked && !ordersDisabled && (
           <p className="text-xs text-muted-foreground">Сначала зафиксируйте план закупки</p>
         )}
         {onSkip && sessionStatus === "pending" && (
@@ -158,7 +169,7 @@ export function SuggestionCard({
             size="sm"
             variant="outline"
             onClick={() => onSkip(suggestion)}
-            disabled={isPending}
+            disabled={isPending || Boolean(ordersDisabled)}
           >
             Пропустить
           </Button>
@@ -184,10 +195,12 @@ export function ActiveOrderCard({
   order,
   onCancel,
   isPending,
+  cancelDisabled,
 }: {
   order: ActiveOrder;
   onCancel: (order: ActiveOrder) => void;
   isPending: boolean;
+  cancelDisabled?: boolean;
 }) {
   return (
     <div className="rounded-lg border border-blue-400/40 bg-blue-500/5 p-3 space-y-2 text-sm">
@@ -209,7 +222,7 @@ export function ActiveOrderCard({
         size="sm"
         variant="outline"
         onClick={() => onCancel(order)}
-        disabled={isPending}
+        disabled={isPending || Boolean(cancelDisabled)}
       >
         <XCircle className="h-3.5 w-3.5" />
         Отменить заявку

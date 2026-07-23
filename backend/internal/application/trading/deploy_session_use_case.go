@@ -107,6 +107,9 @@ func (u *DeploySessionUseCase) buildAndSave(ctx context.Context, portfolioID str
 	}
 	kind := *p.AccountKind
 	accountID := *p.AccountID
+	if err := u.broker.RequireAccountTradeAccess(ctx, kind, accountID); err != nil {
+		return trading.DeploySession{}, err
+	}
 	snapshot, err := u.broker.GetAccountSnapshot(ctx, kind, accountID)
 	if err != nil {
 		return trading.DeploySession{}, err

@@ -130,16 +130,31 @@ export async function mockAuthMe(
   flags: {
     sandbox?: boolean;
     production?: boolean;
+    productionTradeEnabled?: boolean;
+    sandboxTradeEnabled?: boolean;
     telegramBot?: { configured?: boolean; connected?: boolean; username?: string };
   } = {},
 ): Promise<void> {
   await page.unroute("**/api/v1/auth/me").catch(() => undefined);
-  const credentials: Record<string, { fingerprint: string; updated_at: string }> = {};
+  const credentials: Record<
+    string,
+    { fingerprint: string; updated_at: string; trade_enabled: boolean; trade_capability_checked: boolean }
+  > = {};
   if (flags.sandbox) {
-    credentials.sandbox = { fingerprint: "mocksand", updated_at: "2026-01-01T00:00:00Z" };
+    credentials.sandbox = {
+      fingerprint: "mocksand",
+      updated_at: "2026-01-01T00:00:00Z",
+      trade_enabled: flags.sandboxTradeEnabled ?? true,
+      trade_capability_checked: true,
+    };
   }
   if (flags.production) {
-    credentials.production = { fingerprint: "mockprod", updated_at: "2026-01-01T00:00:00Z" };
+    credentials.production = {
+      fingerprint: "mockprod",
+      updated_at: "2026-01-01T00:00:00Z",
+      trade_enabled: flags.productionTradeEnabled ?? true,
+      trade_capability_checked: true,
+    };
   }
   const botConfigured = flags.telegramBot?.configured ?? true;
   const botConnected = flags.telegramBot?.connected ?? false;
@@ -199,6 +214,7 @@ export function makeAdvice(overrides: Record<string, unknown> = {}) {
     blocked_money_rub: 0,
     warnings: [],
     as_of: new Date().toISOString(),
+    can_place_orders: true,
     ...overrides,
   };
 }

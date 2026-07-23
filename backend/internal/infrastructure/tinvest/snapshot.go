@@ -25,7 +25,8 @@ func (c *SDKClient) ListAccounts(kind trading.AccountKind) ([]trading.AccountInf
 		}
 		accounts = resp.GetAccounts()
 	} else {
-		resp, err := client.NewUsersServiceClient().GetAccounts(nil)
+		status := pb.AccountStatus_ACCOUNT_STATUS_OPEN
+		resp, err := client.NewUsersServiceClient().GetAccounts(&status)
 		if err != nil {
 			return nil, mapRPCError(err, "")
 		}
@@ -37,15 +38,15 @@ func (c *SDKClient) ListAccounts(kind trading.AccountKind) ([]trading.AccountInf
 		if acc.GetStatus() != pb.AccountStatus_ACCOUNT_STATUS_OPEN {
 			continue
 		}
-		isWritable := acc.GetAccessLevel() == pb.AccessLevel_ACCOUNT_ACCESS_LEVEL_FULL_ACCESS
-		result = append(result, trading.AccountInfo{
+		info := trading.AccountInfo{
 			ID:          acc.GetId(),
 			Name:        acc.GetName(),
 			Kind:        kind,
 			AccessLevel: acc.GetAccessLevel().String(),
 			Status:      acc.GetStatus().String(),
-			IsWritable:  isWritable,
-		})
+		}
+		info.IsWritable = trading.AccountAllowsTrade(info)
+		result = append(result, info)
 	}
 	return result, nil
 }

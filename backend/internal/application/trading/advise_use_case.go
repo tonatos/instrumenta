@@ -75,6 +75,14 @@ func (u *AdviseUseCase) BuildAdviceResult(ctx context.Context, p domainPortfolio
 		}
 		deploySession = &persisted
 	}
+	canPlace := false
+	if p.AccountKind != nil && p.AccountID != nil && u.broker != nil {
+		ok, err := u.broker.AccountCanPlaceOrders(ctx, *p.AccountKind, *p.AccountID)
+		if err != nil {
+			return application.TradingAdviceResult{}, err
+		}
+		canPlace = ok
+	}
 	return application.TradingAdviceResult{
 		Holdings:              advice.Holdings,
 		Cashflow:              cashflowEventsToMaps(advice.Cashflow),
@@ -88,6 +96,7 @@ func (u *AdviseUseCase) BuildAdviceResult(ctx context.Context, p domainPortfolio
 		AsOf:                  advice.AsOf,
 		WeightedDurationYears: advice.WeightedDurationYears,
 		DeploySession:         deploySession,
+		CanPlaceOrders:        canPlace,
 	}, nil
 }
 
@@ -202,6 +211,9 @@ func mapTradingErr(err error) error {
 	}
 	if errors.Is(err, ErrBrokerCredentialsRequired) {
 		return application.ErrBrokerCredentialsRequired
+	}
+	if errors.Is(err, ErrBrokerTokenReadOnly) {
+		return application.ErrBrokerTokenReadOnly
 	}
 	if err.Error() == "portfolio not found" || err.Error() == "portfolio is not in trading mode" {
 		return application.ErrPortfolioNotFound

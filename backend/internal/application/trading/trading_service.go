@@ -227,6 +227,9 @@ func mapDeployErr(err error) error {
 	if errors.Is(err, ErrBrokerCredentialsRequired) {
 		return application.ErrBrokerCredentialsRequired
 	}
+	if errors.Is(err, ErrBrokerTokenReadOnly) {
+		return application.ErrBrokerTokenReadOnly
+	}
 	var conflict DeploySessionConflictError
 	if errors.As(err, &conflict) {
 		return application.DeploySessionConflictError{Message: conflict.Message}

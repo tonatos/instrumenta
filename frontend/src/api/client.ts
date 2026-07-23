@@ -66,10 +66,13 @@ function parseErrorMessage(text: string, status: number): ApiError {
       detail?: string;
       extra?: Record<string, unknown>;
     };
-    const message =
+    let message =
       typeof body.detail === "string" && body.detail
         ? body.detail
         : text || `HTTP ${status}`;
+    if (body.extra?.code === "broker_token_readonly") {
+      message = "Ключ брокера только для чтения — размещение и отмена заявок недоступны";
+    }
     return new ApiError(message, status, body.extra);
   } catch {
     return new ApiError(text || `HTTP ${status}`, status);
@@ -147,10 +150,13 @@ export const api = {
   logout: () => request<{ status: string }>("/auth/logout", { method: "POST" }),
 
   putBrokerCredential: (kind: "sandbox" | "production", token: string) =>
-    request<{ fingerprint: string; updated_at: string }>(`/me/broker-credentials/${kind}`, {
-      method: "PUT",
-      body: JSON.stringify({ token }),
-    }),
+    request<{ fingerprint: string; updated_at: string; trade_enabled: boolean }>(
+      `/me/broker-credentials/${kind}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ token }),
+      },
+    ),
   deleteBrokerCredential: (kind: "sandbox" | "production") =>
     request<void>(`/me/broker-credentials/${kind}`, { method: "DELETE" }),
   disconnectTelegramBot: () =>

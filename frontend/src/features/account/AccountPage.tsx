@@ -2,12 +2,37 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { api, ApiError } from "@/api/client";
+import type { BrokerCredentialStatus } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSubscriptionPaywall } from "@/features/billing/SubscriptionPaywallProvider";
 
 const TOKEN_DOCS = "https://developer.tbank.ru/invest/intro/intro/token";
+const TOKEN_SETTINGS = "https://www.tbank.ru/invest/settings/api/";
+
+function CredentialModeBadge({ status }: { status?: BrokerCredentialStatus }) {
+  if (!status) return null;
+  if (!status.trade_capability_checked && !status.trade_enabled) {
+    return (
+      <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+        права уточняются
+      </span>
+    );
+  }
+  if (status.trade_enabled) {
+    return (
+      <span className="rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-800 dark:text-emerald-300">
+        торговля разрешена
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-md bg-amber-500/15 px-2 py-0.5 text-xs text-amber-800 dark:text-amber-300">
+      только чтение
+    </span>
+  );
+}
 
 export function AccountKeysPage() {
   const [params] = useSearchParams();
@@ -103,16 +128,8 @@ export function AccountKeysPage() {
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Брокерские ключи T‑Invest</h2>
         <p className="text-sm text-muted-foreground">
-          Ключи нужны, чтобы читать портфель и выставлять заявки от вашего имени. Выпустите токен в{" "}
-          <a
-            href={TOKEN_DOCS}
-            target="_blank"
-            rel="noreferrer"
-            className="underline underline-offset-2"
-          >
-            кабинете T‑Invest API
-          </a>
-          . Рекомендуем минимальные права и привязку к одному счёту.
+          Ключи нужны, чтобы читать портфель и (при full-access) выставлять заявки от вашего имени.
+          Режим ключа определяется автоматически по ответам T‑Invest API.
         </p>
 
         <div
@@ -120,16 +137,25 @@ export function AccountKeysPage() {
             highlightKind === "production" ? "ring-1 ring-ring" : ""
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-medium">Production</p>
             {production ? (
-              <span className="text-xs text-muted-foreground">
-                сохранён · {production.fingerprint}
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                <CredentialModeBadge status={production} />
+                <span className="text-xs text-muted-foreground">
+                  сохранён · {production.fingerprint}
+                </span>
+              </div>
             ) : (
               <span className="text-xs text-amber-700 dark:text-amber-400">не задан</span>
             )}
           </div>
+          {production && production.trade_capability_checked && !production.trade_enabled && (
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              Ключ только для чтения: мониторинг портфеля работает, заявки недоступны. Чтобы
+              торговать — выпустите full-access токен и сохраните его здесь.
+            </p>
+          )}
           {canWriteKeys && (
             <>
               <Input
@@ -188,12 +214,15 @@ export function AccountKeysPage() {
             Если хотите попробовать алгоритм в режиме песочницы — добавьте sandbox-токен.
           </p>
           <div className="mt-3 space-y-3">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm">Sandbox</p>
               {sandbox ? (
-                <span className="text-xs text-muted-foreground">
-                  сохранён · {sandbox.fingerprint}
-                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <CredentialModeBadge status={sandbox} />
+                  <span className="text-xs text-muted-foreground">
+                    сохранён · {sandbox.fingerprint}
+                  </span>
+                </div>
               ) : (
                 <span className="text-xs text-muted-foreground">не задан</span>
               )}
@@ -245,6 +274,50 @@ export function AccountKeysPage() {
         </details>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
+      </section>
+
+      <section className="space-y-3" data-testid="token-issue-instructions">
+        <h2 className="text-lg font-medium">Как выпустить ключ</h2>
+        <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+          <li>
+            В настройках Т‑Инвестиций отключите «Подтверждение сделок кодом» — иначе API не сможет
+            выставлять заявки.
+          </li>
+          <li>
+            Откройте{" "}
+            <a
+              href={TOKEN_SETTINGS}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-2"
+            >
+              настройки токенов T‑Invest API
+            </a>{" "}
+            (удобнее с компьютера).
+          </li>
+          <li>
+            Выпустите токен: <span className="text-foreground">Read-only</span> — только мониторинг;{" "}
+            <span className="text-foreground">Full-access</span> — чтение и заявки. Можно ограничить
+            доступ одним счётом.
+          </li>
+          <li>Скопируйте токен сразу — он показывается один раз — и вставьте в форму выше.</li>
+          <li>
+            Срок жизни — около трёх месяцев с последнего использования. Отозвать токен можно в
+            кабинете Т‑Банка.
+          </li>
+        </ol>
+        <p className="text-sm text-muted-foreground">
+          Подробнее в{" "}
+          <a
+            href={TOKEN_DOCS}
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2"
+          >
+            документации T‑Invest
+          </a>
+          .
+        </p>
       </section>
 
       <section className="space-y-2">

@@ -275,6 +275,8 @@ CREATE TABLE IF NOT EXISTS broker_credentials (
     kek_version INTEGER NOT NULL DEFAULT 1,
     fingerprint TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    trade_enabled INTEGER NOT NULL DEFAULT 0,
+    trade_capability_checked INTEGER NOT NULL DEFAULT 0,
     UNIQUE (owner_telegram_id, account_kind)
 );
 CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);

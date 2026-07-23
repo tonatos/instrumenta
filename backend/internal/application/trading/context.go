@@ -16,6 +16,9 @@ import (
 // ErrBrokerCredentialsRequired is returned when the owner has no token for the account kind.
 var ErrBrokerCredentialsRequired = errors.New("broker_credentials_required")
 
+// ErrBrokerTokenReadOnly is returned when the token cannot place or cancel orders.
+var ErrBrokerTokenReadOnly = errors.New("broker_token_readonly")
+
 // TokenSource resolves plaintext broker tokens for a tenant.
 type TokenSource interface {
 	TokenFor(ctx context.Context, ownerTelegramID int64, kind trading.AccountKind) (string, error)
@@ -193,6 +196,32 @@ func (b *BrokerFacade) ListAccounts(ctx context.Context, kind trading.AccountKin
 		return nil, err
 	}
 	return client.ListAccounts(kind)
+}
+
+// RequireAccountTradeAccess errors with ErrBrokerTokenReadOnly when the attached account is not writable.
+func (b *BrokerFacade) RequireAccountTradeAccess(ctx context.Context, kind trading.AccountKind, accountID string) error {
+	accounts, err := b.ListAccounts(ctx, kind)
+	if err != nil {
+		return err
+	}
+	acc := trading.FindAccount(accounts, accountID)
+	if acc == nil || !trading.AccountAllowsTrade(*acc) {
+		return ErrBrokerTokenReadOnly
+	}
+	return nil
+}
+
+// AccountCanPlaceOrders reports whether orders may be placed on accountID with the current token.
+func (b *BrokerFacade) AccountCanPlaceOrders(ctx context.Context, kind trading.AccountKind, accountID string) (bool, error) {
+	accounts, err := b.ListAccounts(ctx, kind)
+	if err != nil {
+		return false, err
+	}
+	acc := trading.FindAccount(accounts, accountID)
+	if acc == nil {
+		return false, nil
+	}
+	return trading.AccountAllowsTrade(*acc), nil
 }
 
 func (b *BrokerFacade) ResolveFIGIForISIN(ctx context.Context, kind trading.AccountKind, isin string) (string, error) {

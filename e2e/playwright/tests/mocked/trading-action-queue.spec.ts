@@ -504,4 +504,21 @@ test.describe("Советы по торговле", () => {
       timeout: 10_000,
     });
   });
+
+  test("read-only ключ: баннер и disabled покупка/фиксация плана", async ({ page }) => {
+    await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/trading-state**`, async (route) => {
+      await route.fulfill({
+        json: makeTradingState({
+          plan: planMock,
+          advice: adviceResponse([buySuggestion], { can_place_orders: false }),
+        }),
+      });
+    });
+
+    await gotoPortfolio(page, PORTFOLIO_ID);
+
+    await expect(page.getByTestId("readonly-token-banner")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("freeze-deploy-plan")).toHaveCount(0);
+    await expect(page.getByTestId(`confirm-buy-${SUGGESTION_ID}`)).toBeDisabled();
+  });
 });

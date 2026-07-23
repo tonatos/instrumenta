@@ -99,6 +99,7 @@ type TradingAdviceResult struct {
 	AsOf                  string
 	WeightedDurationYears *float64
 	DeploySession         *trading.DeploySession
+	CanPlaceOrders        bool
 }
 
 // TradingStateResult bundles plan + advice.
@@ -274,6 +275,7 @@ var (
 	ErrDeploySessionEmpty        = errSentinel("deploy session empty")
 	ErrSlotOverrideInvalid       = errSentinel("slot override invalid")
 	ErrBrokerCredentialsRequired = errSentinel("broker_credentials_required")
+	ErrBrokerTokenReadOnly       = errSentinel("broker_token_readonly")
 )
 
 type errSentinel string

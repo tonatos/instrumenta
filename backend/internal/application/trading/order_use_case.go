@@ -115,6 +115,9 @@ func (u *OrderUseCase) PlaceOrder(ctx context.Context, portfolioID string, unive
 	}
 	kind := *p.AccountKind
 	accountID := *p.AccountID
+	if err := u.broker.RequireAccountTradeAccess(ctx, kind, accountID); err != nil {
+		return PlaceOrderResult{}, err
+	}
 	trade, err := u.broker.EnsureOrderInstrument(ctx, kind, derefString(figi), "", isin, direction)
 	if err != nil {
 		return PlaceOrderResult{}, err
@@ -142,6 +145,9 @@ func (u *OrderUseCase) PlaceOrder(ctx context.Context, portfolioID string, unive
 func (u *OrderUseCase) CancelOrder(ctx context.Context, portfolioID, orderID string) error {
 	p, err := u.ctx.GetTradingPortfolio(ctx, portfolioID)
 	if err != nil {
+		return err
+	}
+	if err := u.broker.RequireAccountTradeAccess(ctx, *p.AccountKind, *p.AccountID); err != nil {
 		return err
 	}
 	return u.broker.CancelOrder(ctx, *p.AccountKind, *p.AccountID, orderID)

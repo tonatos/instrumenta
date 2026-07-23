@@ -55,7 +55,7 @@ export function PositionsTab({
   const [detailIsin, setDetailIsin] = useState<string | null>(null);
   const [sellPosition, setSellPosition] = useState<PortfolioPosition | null>(null);
 
-  const canSellInTrading = isTrading;
+  const canSellInTrading = isTrading && tradingAdvice?.can_place_orders !== false;
 
   const activeSellByFigi = useMemo(() => {
     const map = new Map<string, { lots: number; onExchange: boolean }>();

@@ -46,6 +46,7 @@ func (u *SandboxUseCase) ListAccounts(ctx context.Context, kind trading.AccountK
 	for _, account := range accounts {
 		item := map[string]any{
 			"id": account.ID, "name": account.Name, "kind": string(kind),
+			"is_writable": account.IsWritable,
 		}
 		if lp, ok := linked[account.ID]; ok {
 			item["linked_portfolio"] = map[string]string{"id": lp.ID, "name": lp.Name}

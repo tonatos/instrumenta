@@ -346,6 +346,7 @@
       }
     ],
     "warnings": [],
-    "weighted_duration_years": null
+    "weighted_duration_years": null,
+    "can_place_orders": true
   }
 }

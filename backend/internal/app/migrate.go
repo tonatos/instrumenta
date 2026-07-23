@@ -30,6 +30,9 @@ func runMigrations(ctx context.Context, db *persistence.DB) error {
 	if err := persistence.EnsureUsersTaxSchema(ctx, db.DB); err != nil {
 		return fmt.Errorf("ensure users tax schema: %w", err)
 	}
+	if err := persistence.EnsureBrokerCredentialsTradeSchema(ctx, db.DB); err != nil {
+		return fmt.Errorf("ensure broker credentials trade schema: %w", err)
+	}
 	return nil
 }
 

@@ -418,6 +418,7 @@ func AdviceToResponse(result application.TradingAdviceResult) TradingAdviceRespo
 		AsOf:                  result.AsOf,
 		WeightedDurationYears: result.WeightedDurationYears,
 		DeploySession:         DeploySessionToResponse(result.DeploySession),
+		CanPlaceOrders:        result.CanPlaceOrders,
 	}
 }
 

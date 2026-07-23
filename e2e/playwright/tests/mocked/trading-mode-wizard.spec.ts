@@ -51,12 +51,23 @@ test.describe("Мастер режима торговли", () => {
       });
     });
     await page.route("**/api/v1/auth/me", async (route) => {
-      const credentials: Record<string, { fingerprint: string; updated_at: string }> = {};
+      const credentials: Record<
+        string,
+        { fingerprint: string; updated_at: string; trade_enabled: boolean }
+      > = {};
       if (credFlags.sandbox) {
-        credentials.sandbox = { fingerprint: "mocksand", updated_at: "2026-01-01T00:00:00Z" };
+        credentials.sandbox = {
+          fingerprint: "mocksand",
+          updated_at: "2026-01-01T00:00:00Z",
+          trade_enabled: true,
+        };
       }
       if (credFlags.production) {
-        credentials.production = { fingerprint: "mockprod", updated_at: "2026-01-01T00:00:00Z" };
+        credentials.production = {
+          fingerprint: "mockprod",
+          updated_at: "2026-01-01T00:00:00Z",
+          trade_enabled: true,
+        };
       }
       await route.fulfill({
         json: { telegram_id: 1, display_name: "E2E User", credentials },

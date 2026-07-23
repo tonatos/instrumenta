@@ -349,6 +349,7 @@ type TradingAdviceResponse struct {
 	AsOf                  string                     `json:"as_of"`
 	WeightedDurationYears *float64                   `json:"weighted_duration_years"`
 	DeploySession         *DeploySessionResponse     `json:"deploy_session"`
+	CanPlaceOrders        bool                       `json:"can_place_orders"`
 }
 
 type TradingStateResponse struct {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -39,6 +40,22 @@ interface Props {
   refetchAdvice: () => void;
   adviceUpdatedAt: number;
   rateScenario: string;
+}
+
+function ReadOnlyTokenBanner() {
+  return (
+    <div
+      className="rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
+      data-testid="readonly-token-banner"
+    >
+      Ключ только для чтения — заявки недоступны. Мониторинг и рекомендации работают. Чтобы
+      выставлять заявки, сохраните full-access токен в{" "}
+      <Link to="/account" className="underline underline-offset-2">
+        кабинете
+      </Link>
+      .
+    </div>
+  );
 }
 
 export function TradingActionQueue({
@@ -99,6 +116,8 @@ export function TradingActionQueue({
 
   const suggestions = data?.suggestions ?? [];
   const deploySession = data?.deploy_session ?? null;
+  const canPlaceOrders = data?.can_place_orders !== false;
+  const ordersDisabled = !canPlaceOrders;
   const sessionItemStatusById = useMemo(() => {
     const map = new Map<string, string>();
     for (const item of deploySession?.items ?? []) {
@@ -112,14 +131,14 @@ export function TradingActionQueue({
   const urgentCount = groups.urgent.length;
 
   useEffect(() => {
-    if (!suggestionConfirmId || !suggestions.length) return;
+    if (!suggestionConfirmId || !suggestions.length || ordersDisabled) return;
     const target = suggestions.find((s) => s.id === suggestionConfirmId);
     if (!target) return;
     document.getElementById(`suggestion-${target.id}`)?.scrollIntoView({ behavior: "smooth" });
     if (target.kind !== "put_offer_reminder") {
       setConfirmSuggestion(target);
     }
-  }, [suggestionConfirmId, suggestions]);
+  }, [suggestionConfirmId, suggestions, ordersDisabled]);
 
   const adviceTime = dataUpdatedAt
     ? new Date(dataUpdatedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
@@ -173,6 +192,7 @@ export function TradingActionQueue({
   if (!hasContent) {
     return (
       <div className="space-y-3 rounded-xl border border-green-400/30 bg-green-500/5 px-4 py-3 text-sm">
+        {ordersDisabled && <ReadOnlyTokenBanner />}
         <div className="flex items-center justify-between gap-3">
           <span className="text-green-800 dark:text-green-300">
             Рекомендаций нет — портфель в порядке
@@ -196,6 +216,7 @@ export function TradingActionQueue({
   const freeCash = data?.available_money_rub ?? data?.money_rub ?? portfolio.cash_balance_rub;
   const buySuggestions = groups.buys;
   const canFreezePlan =
+    !ordersDisabled &&
     !deploySession &&
     buySuggestions.length > 0 &&
     (groups.buys.some((s) => s.kind === "buy") || groups.buys.some((s) => s.kind === "reinvest"));
@@ -207,6 +228,7 @@ export function TradingActionQueue({
   return (
     <>
       <div className="space-y-4 rounded-xl border border-amber-400/40 bg-amber-500/5 p-4">
+        {ordersDisabled && <ReadOnlyTokenBanner />}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="space-y-0.5">
             <p className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
@@ -309,7 +331,7 @@ export function TradingActionQueue({
                 size="sm"
                 variant="outline"
                 data-testid="refresh-deploy-plan"
-                disabled={isPlanSyncing || refreshMutation.isPending}
+                disabled={isPlanSyncing || refreshMutation.isPending || ordersDisabled}
                 onClick={() => refreshMutation.mutate(deploySession.id)}
               >
                 Обновить план
@@ -357,6 +379,7 @@ export function TradingActionQueue({
               suggestion={s}
               isProduction={isProduction}
               isPending={isPending}
+              ordersDisabled={ordersDisabled}
               onAcknowledgeRisk={
                 s.risk_acknowledgeable
                   ? (item) => acknowledgeRiskMutation.mutate(item.isin)
@@ -381,12 +404,13 @@ export function TradingActionQueue({
               suggestion={s}
               isProduction={isProduction}
               isPending={isPending}
+              ordersDisabled={ordersDisabled}
               onConfirm={() => undefined}
             />
           ))}
         </AdvisorySection>
 
-        {!deploySession && buySuggestions.length > 0 && (
+        {!deploySession && buySuggestions.length > 0 && !ordersDisabled && (
           <p className="text-xs text-muted-foreground" data-testid="freeze-plan-required-hint">
             Докупка и реинвестиции доступны только после фиксации плана закупки.
           </p>
@@ -414,6 +438,7 @@ export function TradingActionQueue({
               suggestion={s}
               isProduction={isProduction}
               isPending={isPending || isPlanSyncing}
+              ordersDisabled={ordersDisabled}
               buyRequiresFrozenPlan={!deploySession}
               sessionStatus={sessionItemStatusById.get(s.id) as DeploySessionItemStatus | undefined}
               onSkip={
@@ -448,6 +473,7 @@ export function TradingActionQueue({
               key={order.order_id}
               order={order}
               isPending={isPending}
+              cancelDisabled={ordersDisabled}
               onCancel={(o) => cancelMutation.mutate(o.order_id)}
             />
           ))}

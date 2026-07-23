@@ -107,8 +107,8 @@ export interface AuthMeResponse {
   telegram_id: number;
   display_name: string;
   credentials: {
-    sandbox?: { fingerprint: string; updated_at: string };
-    production?: { fingerprint: string; updated_at: string };
+    sandbox?: BrokerCredentialStatus;
+    production?: BrokerCredentialStatus;
   };
   telegram_bot?: {
     configured: boolean;
@@ -121,6 +121,8 @@ export interface AuthMeResponse {
 export interface BrokerCredentialStatus {
   fingerprint: string;
   updated_at: string;
+  trade_enabled: boolean;
+  trade_capability_checked?: boolean;
 }
 
 export type PositionStatus = "pending" | "active" | "drift" | "closed";
@@ -301,6 +303,7 @@ export interface BrokerAccount {
   name: string;
   kind: string;
   money_rub?: number;
+  is_writable?: boolean;
   linked_portfolio?: LinkedPortfolioPreview | null;
 }
 
@@ -359,6 +362,7 @@ export interface TradingAdviceResponse {
   as_of: string;
   weighted_duration_years: number | null;
   deploy_session?: DeploySessionResponse | null;
+  can_place_orders: boolean;
 }
 
 export type DeploySessionItemStatus =

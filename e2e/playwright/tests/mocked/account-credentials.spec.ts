@@ -16,7 +16,12 @@ test.describe("Личный кабинет — брокерские ключи",
           telegram_id: 42,
           display_name: "Prod User",
           credentials: {
-            production: { fingerprint: "abcd1234", updated_at: "2026-07-21T00:00:00Z" },
+            production: {
+              fingerprint: "abcd1234",
+              updated_at: "2026-07-21T00:00:00Z",
+              trade_enabled: true,
+              trade_capability_checked: true,
+            },
           },
         },
       });
@@ -40,7 +45,7 @@ test.describe("Личный кабинет — брокерские ключи",
       if (route.request().method() === "PUT") {
         putBody = route.request().postDataJSON();
         await route.fulfill({
-          json: { fingerprint: "abcd1234", updated_at: "2026-07-21T00:00:00Z" },
+          json: { fingerprint: "abcd1234", updated_at: "2026-07-21T00:00:00Z", trade_enabled: true },
         });
         return;
       }
@@ -65,7 +70,22 @@ test.describe("Личный кабинет — брокерские ключи",
     await mockAuthMe(page, { production: true });
     await page.reload();
     await expect(page.getByText(/сохранён/)).toBeVisible();
+    await expect(page.getByText("торговля разрешена")).toBeVisible();
     await expect(page.getByRole("button", { name: "Удалить" }).first()).toBeVisible();
+  });
+
+  test("показывает инструкцию выпуска и бейдж только чтение", async ({ page }) => {
+    await mockConfig(page);
+    await mockBondsEmpty(page);
+    await mockAuthMe(page, { production: true, productionTradeEnabled: false });
+
+    await page.goto("/account");
+    await expect(page.getByTestId("token-issue-instructions")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Как выпустить ключ" })).toBeVisible();
+    await expect(page.getByText("только чтение")).toBeVisible();
+    await expect(
+      page.getByText(/Ключ только для чтения: мониторинг портфеля работает/),
+    ).toBeVisible();
   });
 
   test("без ключей кнопка торговли ведёт в кабинет", async ({ page }) => {
