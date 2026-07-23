@@ -23,6 +23,7 @@ var authExcludedPaths = map[string]bool{
 	"/api/v1/auth/telegram/callback":     true,
 	"/api/v1/config":                     true,
 	"/api/v1/config/":                    true,
+	"/api/v1/billing/catalog":            true,
 	"/api/v1/billing/webhooks/yookassa":  true,
 }
 

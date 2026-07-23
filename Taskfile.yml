@@ -11,22 +11,7 @@ tasks:
     deps: [sync:front]
     dir: ./frontend
     cmds:
-      - npm run dev
-
-  run:landing:
-    desc: Run marketing landing (independent of frontend)
-    dir: ./landing
-    cmds:
-      - npm install
-      - npm run dev
-
-  test:landing:
-    desc: Landing e2e (Playwright)
-    dir: ./landing
-    cmds:
-      - npm install
-      - npx playwright install chromium
-      - npm run test:e2e
+      - npm run dev -- --host 127.0.0.1
 
   run:notifier:
     desc: Run notification worker locally
@@ -83,6 +68,14 @@ tasks:
     dir: ./frontend
     cmds:
       - npm install
+
+  record:media:
+    desc: Record and process product tour screencast (needs ffmpeg for VP9 polish)
+    deps: [sync:front]
+    dir: ./e2e/playwright
+    cmds:
+      - npm install
+      - npx playwright test -c media/playwright.media.config.ts
 
   deploy:sync:
     desc: Download Porter deploy dependencies

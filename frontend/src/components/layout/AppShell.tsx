@@ -39,9 +39,9 @@ export function AppShell() {
   });
 
   return (
-    <div className="flex min-h-screen overflow-x-hidden bg-transparent">
-      <aside className="hidden w-64 flex-col border-r border-border bg-card/90 backdrop-blur-md md:flex">
-        <div className="flex h-16 items-center justify-center border-b border-border px-5">
+    <div className="flex h-dvh overflow-hidden bg-transparent">
+      <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-border bg-card/90 backdrop-blur-md md:flex">
+        <div className="flex h-16 shrink-0 items-center justify-center border-b border-border px-5">
           <Link to="/" className="min-w-0" aria-label="Instrumenta">
             <img
               src="/brand/instrumenta-logo.png"
@@ -51,7 +51,7 @@ export function AppShell() {
             />
           </Link>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 p-4" aria-label="Основная навигация">
+        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-4" aria-label="Основная навигация">
           {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
@@ -76,7 +76,7 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
-        <div className="flex gap-2 border-t border-border p-4">
+        <div className="flex shrink-0 gap-2 border-t border-border p-4">
           {authEnabled && displayName && (
             <div className="flex min-w-0 flex-1 items-center text-xs text-muted-foreground">
               <span className="truncate">{displayName}</span>
@@ -96,7 +96,7 @@ export function AppShell() {
         </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-md md:hidden">
           <Link to="/" className="min-w-0" aria-label="Instrumenta">
             <img

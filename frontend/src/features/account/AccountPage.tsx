@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { api, ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
@@ -257,6 +257,13 @@ export function AccountKeysPage() {
           <li>Plaintext токена не возвращается API и не пишется в логи.</li>
           <li>Вы можете удалить ключ здесь в любой момент и отозвать его в T‑Банке.</li>
         </ul>
+        <p className="text-sm text-muted-foreground">
+          Подробнее простым языком — на странице{" "}
+          <Link to="/security" className="underline underline-offset-2">
+            Безопасность
+          </Link>
+          .
+        </p>
       </section>
     </div>
   );

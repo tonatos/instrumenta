@@ -18,6 +18,9 @@ import { LoginCallbackPage } from "@/features/auth/LoginCallbackPage";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
 import { SubscriptionPaywallProvider } from "@/features/billing/SubscriptionPaywallProvider";
 import { RateScenarioProvider } from "@/features/settings/RateScenarioProvider";
+import { LandingPage } from "@/features/landing/LandingPage";
+import { OfferPage } from "@/features/landing/OfferPage";
+import { SecurityPage } from "@/features/landing/SecurityPage";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +37,9 @@ export function App() {
             <SubscriptionPaywallProvider>
               <BrowserRouter>
                 <Routes>
+                  <Route path="/landing" element={<LandingPage />} />
+                  <Route path="/offer" element={<OfferPage />} />
+                  <Route path="/security" element={<SecurityPage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/login/callback" element={<LoginCallbackPage />} />
                   <Route element={<ProtectedRoute />}>

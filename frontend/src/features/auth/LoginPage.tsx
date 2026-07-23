@@ -1,17 +1,11 @@
 import { Navigate, useLocation } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/api/client";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "./AuthContext";
+import { TelegramLoginButton } from "./TelegramLoginButton";
 
 export function LoginPage() {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
-  const { data: config, isLoading, isError } = useQuery({
-    queryKey: ["config"],
-    queryFn: api.getConfig,
-  });
 
   if (isAuthenticated) {
     const redirectTo =
@@ -22,33 +16,19 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-transparent p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="items-center text-center">
+        <CardHeader className="items-center py-12 text-center">
           <img
             src="/brand/instrumenta-logo.png"
             alt="Instrumenta"
             width={220}
             height={37}
-            className="mb-2 h-9 w-auto"
+            className="my-2 h-9 w-auto"
           />
           <CardTitle className="sr-only">Instrumenta</CardTitle>
-          <CardDescription>Войдите через Telegram, чтобы открыть приложение.</CardDescription>
         </CardHeader>
-        <CardContent className="flex flex-col items-center gap-4">
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Загрузка...</p>
-          ) : config?.telegram_oidc_configured ? (
-            <Button onClick={() => window.location.assign("/api/v1/auth/telegram/login")}>
-              Войти через Telegram
-            </Button>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Telegram OIDC не настроен. Укажите TELEGRAM_OIDC_CLIENT_ID, TELEGRAM_OIDC_CLIENT_SECRET
-              и TELEGRAM_OIDC_REDIRECT_URI в .env.
-            </p>
-          )}
-          {isError && (
-            <p className="text-sm text-destructive">Не удалось загрузить конфигурацию приложения.</p>
-          )}
+        <CardContent className="flex flex-col items-center gap-4  text-center">
+          <CardDescription className="text-base">Войдите через Telegram, чтобы открыть приложение.</CardDescription>
+          <TelegramLoginButton />
         </CardContent>
       </Card>
     </div>

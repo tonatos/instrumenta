@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { MOCK_CONFIG } from "./fixtures";
 
 test.describe("auth login", () => {
-  test("redirects to login when auth is enabled and user is not authenticated", async ({
+  test("redirects unauthenticated users to landing, then login via nav", async ({
     page,
   }) => {
     await page.route("**/api/v1/config/", async (route) => {
@@ -16,6 +16,9 @@ test.describe("auth login", () => {
     });
 
     await page.goto("/");
+    await expect(page).toHaveURL(/\/landing$/);
+    await expect(page.getByTestId("landing-page")).toBeVisible();
+    await page.getByTestId("nav-login").click();
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByText("Войдите через Telegram")).toBeVisible();
   });
