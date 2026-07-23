@@ -8,19 +8,11 @@ import {
   type VisibilityState,
   type SortingState,
 } from "@tanstack/react-table";
-import {
-  ChevronDown,
-  ChevronUp,
-  Download,
-  RefreshCw,
-  RotateCcw,
-  Search,
-  Settings2,
-  Star,
-} from "lucide-react";
+import { Download, RefreshCw, Settings2, Star } from "lucide-react";
 import { api } from "@/api/client";
 import type { Bond } from "@/api/types";
 import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
+import { ScreenerFilters } from "@/features/screener/ScreenerFilters";
 import {
   getScreenerRiskProfile,
   setScreenerRiskProfile,
@@ -29,17 +21,13 @@ import {
 } from "@/features/screener/screenerRiskProfile";
 import { buildScreenerQueryParams } from "@/features/screener/screenerQuery";
 import { useDebouncedValue } from "@/features/screener/useDebouncedValue";
-import { SECTOR_FILTER_OPTIONS } from "@/features/bonds/sectorLabels";
-import { RISK_LABELS as PROFILE_RISK_LABELS } from "@/features/portfolio/labels";
 import { useRateScenario } from "@/features/settings/RateScenarioProvider";
+import { RISK_LABELS as PROFILE_RISK_LABELS } from "@/features/portfolio/labels";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
 import { PopoverContent, PopoverRoot, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip } from "@/components/ui/tooltip";
 import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
 
 const columnHelper = createColumnHelper<Bond>();
@@ -50,20 +38,6 @@ const RISK_LABELS: Record<number, string> = {
   2: "Умеренный",
   3: "Высокий",
 };
-
-const COUPON_TYPES = [
-  { value: "fixed", label: "Фиксированный" },
-  { value: "floating", label: "Плавающий" },
-  { value: "variable", label: "Переменный" },
-  { value: "unknown", label: "Неизвестен" },
-];
-
-const RISK_LEVELS = [
-  { value: 1, label: "Низкий" },
-  { value: 2, label: "Умеренный" },
-  { value: 3, label: "Высокий" },
-  { value: 0, label: "Неизвестен" },
-];
 
 const STORAGE_KEY = "screener_column_visibility";
 
@@ -101,6 +75,7 @@ export function ScreenerPage() {
     loadColumnVisibility,
   );
   const [filtersExpanded, setFiltersExpanded] = useState(false);
+  const [advancedFiltersOpen, setAdvancedFiltersOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const queryClient = useQueryClient();
   const { rateScenario } = useRateScenario();
@@ -260,6 +235,7 @@ export function ScreenerPage() {
     if (maxLotPrice !== "" && maxLotPrice !== 0) count++;
     if (couponTypes.length > 0) count++;
     if (riskLevels.length > 0) count++;
+    if (sectors.length > 0) count++;
     if (hideSubordinated) count++;
     if (!hideDefault) count++;
     return count;
@@ -272,6 +248,7 @@ export function ScreenerPage() {
     maxLotPrice,
     couponTypes,
     riskLevels,
+    sectors,
     hideSubordinated,
     hideDefault,
     config,
@@ -482,15 +459,6 @@ export function ScreenerPage() {
     URL.revokeObjectURL(url);
   };
 
-  const toggleCouponType = (v: string) =>
-    setCouponTypes((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
-
-  const toggleRiskLevel = (v: number) =>
-    setRiskLevels((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
-
-  const toggleSector = (v: string) =>
-    setSectors((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
-
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -514,368 +482,84 @@ export function ScreenerPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader className="pb-2 pt-4">
-          <div className="flex items-center justify-between gap-2">
-            <button
-              type="button"
-              className="flex min-w-0 flex-1 items-center gap-2 text-left md:pointer-events-none"
-              onClick={() => setFiltersExpanded((v) => !v)}
-              data-testid="screener-filters-toggle"
-              aria-expanded={filtersExpanded}
-            >
-              <CardTitle className="text-sm font-semibold">Фильтры</CardTitle>
-              {!filtersExpanded && activeFilterCount > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {activeFilterCount} активн.
-                </Badge>
-              )}
-              <span className="md:hidden">
-                {filtersExpanded ? (
-                  <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden />
-                ) : (
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden />
-                )}
-              </span>
-            </button>
-            <Button variant="ghost" size="sm" onClick={resetFilters} className="h-7 shrink-0 gap-1 text-xs">
-              <RotateCcw className="h-3.5 w-3.5" />
-              Сбросить
-            </Button>
-          </div>
-        </CardHeader>
-        {filtersExpanded && (
-        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
-          {/* Search */}
-          <div className="space-y-1 sm:col-span-2 lg:col-span-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder="Поиск по названию, SECID или ISIN…"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Risk profile */}
-          <div className="space-y-1.5 lg:col-span-2">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Риск-профиль
-              <Tooltip content="Скор и ранжирование рассчитываются под выбранную стратегию: консервативный, нормальный или агрессивный.">
-                <button type="button" className="opacity-60 hover:opacity-100">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              </Tooltip>
-            </div>
-            <select
-              aria-label="Риск-профиль"
-              className="flex h-8 w-full rounded-md border border-border bg-card px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-              value={riskProfile}
-              onChange={(e) => {
-                const value = e.target.value as ScreenerRiskProfile;
-                setScreenerRiskProfile(value);
-                setRiskProfile(value);
-              }}
-            >
-              {(Object.keys(PROFILE_RISK_LABELS) as ScreenerRiskProfile[]).map((profile) => (
-                <option key={profile} value={profile}>
-                  {PROFILE_RISK_LABELS[profile]}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* filterBy */}
-          <div className="space-y-1.5 lg:col-span-2">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Как считать срок
-              <Tooltip content="Определяет, по какой дате рассчитывается YTM и фильтрация по дням: до ближайшей оферты/погашения (effective) или только до даты погашения (maturity).">
-                <button type="button" className="opacity-60 hover:opacity-100">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              </Tooltip>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              {(["effective", "maturity"] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setFilterBy(v)}
-                  className={cn(
-                    "flex-1 rounded-md border px-2 py-1.5 text-xs transition-colors",
-                    filterBy === v
-                      ? "border-primary bg-primary/10 font-medium text-primary"
-                      : "border-border hover:bg-muted/50",
-                  )}
-                >
-                  {v === "effective" ? (
-                    <>
-                      <span className="sm:hidden">Оферта/погаш.</span>
-                      <span className="hidden sm:inline">До оферты/погашения</span>
-                    </>
-                  ) : (
-                    "До погашения"
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Max days */}
-          <div className="space-y-1.5 lg:col-span-2">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Макс. дней до погашения
-              <Tooltip content="Максимальное количество дней от сегодня до даты погашения (или оферты). Позволяет ограничить горизонт инвестиции.">
-                <button type="button" className="opacity-60 hover:opacity-100">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              </Tooltip>
-            </div>
-            <Input
-              type="number"
-              min={1}
-              value={maxDays}
-              onChange={(e) => setMaxDays(e.target.value === "" ? "" : Number(e.target.value))}
-              placeholder="Без ограничения"
-              className="h-8 text-sm"
-            />
-          </div>
-
-          {/* Min volume */}
-          <div className="space-y-1.5 lg:col-span-2">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Мин. объём торгов, ₽/день
-              <Tooltip content="Минимальный объём торгов за предыдущую сессию — по нему же фильтруется скринер. В таблице крупно показан вчерашний объём, мелко — сегодняшний.">
-                <button type="button" className="opacity-60 hover:opacity-100">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              </Tooltip>
-            </div>
-            <Input
-              type="number"
-              min={0}
-              value={minVolume}
-              onChange={(e) => setMinVolume(e.target.value === "" ? "" : Number(e.target.value))}
-              placeholder="0"
-              className="h-8 text-sm"
-            />
-          </div>
-
-          {/* Min YTM */}
-          <div className="space-y-1.5 lg:col-span-2">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Мин. YTM нетто, %
-              <Tooltip content="Минимальная доходность к погашению после уплаты НДФЛ. Позволяет отфильтровать низкодоходные бумаги.">
-                <button type="button" className="opacity-60 hover:opacity-100">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              </Tooltip>
-            </div>
-            <Input
-              type="number"
-              min={0}
-              step={0.1}
-              value={minYtm}
-              onChange={(e) => setMinYtm(e.target.value === "" ? "" : Number(e.target.value))}
-              placeholder="0"
-              className="h-8 text-sm"
-            />
-          </div>
-
-          {/* Max lot price */}
-          <div className="space-y-1.5 lg:col-span-2">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Макс. стоимость лота, ₽
-              <Tooltip content="Максимальная стоимость одного лота (цена × номинал × лотность). 0 — без ограничения.">
-                <button type="button" className="opacity-60 hover:opacity-100">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              </Tooltip>
-            </div>
-            <Input
-              type="number"
-              min={0}
-              value={maxLotPrice}
-              onChange={(e) => setMaxLotPrice(e.target.value === "" ? "" : Number(e.target.value))}
-              placeholder="0 — без ограничения"
-              className="h-8 text-sm"
-            />
-          </div>
-
-          {/* Coupon type */}
-          <div className="space-y-1.5 lg:col-span-3">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Тип купона
-              <Tooltip content="Фиксированный — ставка не меняется. Плавающий — привязан к КС/RUONIA. Переменный — объявляется эмитентом.">
-                <button type="button" className="opacity-60 hover:opacity-100">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              </Tooltip>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {COUPON_TYPES.map((ct) => (
-                <button
-                  key={ct.value}
-                  type="button"
-                  onClick={() => toggleCouponType(ct.value)}
-                  className={cn(
-                    "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
-                    couponTypes.includes(ct.value)
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border hover:bg-muted/50",
-                  )}
-                >
-                  {ct.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Risk level */}
-          <div className="space-y-1.5 lg:col-span-3">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Уровень риска
-              <Tooltip content="1 — Низкий (ОФЗ, госкорп), 2 — Умеренный (крупные частные), 3 — Высокий (BB и ниже). Можно выбрать несколько.">
-                <button type="button" className="opacity-60 hover:opacity-100">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              </Tooltip>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {RISK_LEVELS.map((rl) => (
-                <button
-                  key={rl.value}
-                  type="button"
-                  onClick={() => toggleRiskLevel(rl.value)}
-                  className={cn(
-                    "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
-                    riskLevels.includes(rl.value)
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border hover:bg-muted/50",
-                  )}
-                >
-                  {rl.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Sector */}
-          <div className="space-y-1.5 sm:col-span-2 lg:col-span-6">
-            <div className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-              Сектор
-              <Tooltip content="Отрасль эмитента по классификации T-Invest. Можно выбрать несколько.">
-                <button type="button" className="opacity-60 hover:opacity-100">
-                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </button>
-              </Tooltip>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {SECTOR_FILTER_OPTIONS.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => toggleSector(s.value)}
-                  className={cn(
-                    "rounded-full border px-2.5 py-0.5 text-xs transition-colors",
-                    sectors.includes(s.value)
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border hover:bg-muted/50",
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Checkboxes */}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 sm:col-span-2 lg:col-span-3">
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <Checkbox
-                checked={hideDefault}
-                onCheckedChange={(c) => setHideDefault(!!c)}
-              />
-              <span>
-                Скрыть дефолтные
-                <Tooltip content="Скрыть эмитентов, у которых MOEX зафиксировал дефолт или технический дефолт.">
-                  <button type="button" className="ml-1 opacity-60 hover:opacity-100">
-                    <svg className="inline h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
-                    </svg>
-                  </button>
-                </Tooltip>
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-center gap-2 text-sm">
-              <Checkbox
-                checked={hideSubordinated}
-                onCheckedChange={(c) => setHideSubordinated(!!c)}
-              />
-              <span>
-                Скрыть субординированные
-                <Tooltip content="Субординированные облигации при банкротстве выплачиваются последними после всех других кредиторов.">
-                  <button type="button" className="ml-1 opacity-60 hover:opacity-100">
-                    <svg className="inline h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round"/>
-                    </svg>
-                  </button>
-                </Tooltip>
-              </span>
-            </label>
-          </div>
-        </CardContent>
-        )}
-      </Card>
+      <ScreenerFilters
+        filtersExpanded={filtersExpanded}
+        onToggleExpanded={() => setFiltersExpanded((v) => !v)}
+        activeFilterCount={activeFilterCount}
+        onReset={resetFilters}
+        searchInput={searchInput}
+        onSearchChange={setSearchInput}
+        filterBy={filterBy}
+        onFilterByChange={setFilterBy}
+        maxDays={maxDays}
+        onMaxDaysChange={setMaxDays}
+        minVolume={minVolume}
+        onMinVolumeChange={setMinVolume}
+        defaultMinVolume={config?.min_volume_rub ?? 0}
+        minYtm={minYtm}
+        onMinYtmChange={setMinYtm}
+        maxLotPrice={maxLotPrice}
+        onMaxLotPriceChange={setMaxLotPrice}
+        couponTypes={couponTypes}
+        onCouponTypesChange={setCouponTypes}
+        riskLevels={riskLevels}
+        onRiskLevelsChange={setRiskLevels}
+        sectors={sectors}
+        onSectorsChange={setSectors}
+        hideDefault={hideDefault}
+        onHideDefaultChange={setHideDefault}
+        hideSubordinated={hideSubordinated}
+        onHideSubordinatedChange={setHideSubordinated}
+        advancedOpen={advancedFiltersOpen}
+        onAdvancedOpenChange={setAdvancedFiltersOpen}
+      />
 
       {/* Table toolbar */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           {isLoading ? "Загрузка…" : `${bonds.length} из ${total} бумаг`}
         </p>
-        <PopoverRoot>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-1.5">
-              <Settings2 className="h-4 w-4" />
-              Колонки
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-56" align="end">
-            <p className="mb-2 text-xs font-semibold text-muted-foreground">Видимость колонок</p>
-            <div className="space-y-2">
-              {table.getAllLeafColumns().filter((c) => c.getCanHide()).map((col) => (
-                <label key={col.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <Checkbox
-                    checked={col.getIsVisible()}
-                    onCheckedChange={(v) => col.toggleVisibility(!!v)}
-                  />
-                  {typeof col.columnDef.header === "string" ? col.columnDef.header : col.id}
-                </label>
-              ))}
-            </div>
-          </PopoverContent>
-        </PopoverRoot>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            aria-label="Риск-профиль"
+            data-testid="screener-risk-profile"
+            className="flex h-9 min-h-10 max-w-[11rem] rounded-md border border-border bg-card px-2.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring sm:min-h-9"
+            value={riskProfile}
+            onChange={(e) => {
+              const value = e.target.value as ScreenerRiskProfile;
+              setScreenerRiskProfile(value);
+              setRiskProfile(value);
+            }}
+          >
+            {(Object.keys(PROFILE_RISK_LABELS) as ScreenerRiskProfile[]).map((profile) => (
+              <option key={profile} value={profile}>
+                {PROFILE_RISK_LABELS[profile]}
+              </option>
+            ))}
+          </select>
+          <PopoverRoot>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 min-h-10 gap-1.5 sm:min-h-9">
+                <Settings2 className="h-4 w-4" />
+                Колонки
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56" align="end">
+              <p className="mb-2 text-xs font-semibold text-muted-foreground">Видимость колонок</p>
+              <div className="space-y-2">
+                {table.getAllLeafColumns().filter((c) => c.getCanHide()).map((col) => (
+                  <label key={col.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={col.getIsVisible()}
+                      onCheckedChange={(v) => col.toggleVisibility(!!v)}
+                    />
+                    {typeof col.columnDef.header === "string" ? col.columnDef.header : col.id}
+                  </label>
+                ))}
+              </div>
+            </PopoverContent>
+          </PopoverRoot>
+        </div>
       </div>
 
       {/* Table */}

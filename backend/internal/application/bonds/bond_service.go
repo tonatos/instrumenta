@@ -121,7 +121,8 @@ func (s *Service) ListBonds(
 	profile := toScreeningProfile(riskProfile)
 	if query.SortBy == "score" {
 		filtered = screening.SortBondsByResolvedScore(filtered, profile, screenPolicy)
-		if query.SortDesc {
+		// SortBondsByResolvedScore already returns highest score first.
+		if !query.SortDesc {
 			filtered = reverseBondList(filtered)
 		}
 	} else {

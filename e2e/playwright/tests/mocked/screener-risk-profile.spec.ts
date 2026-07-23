@@ -142,7 +142,6 @@ test.describe("Скринер — риск-профиль", () => {
     await page.getByLabel("Риск-профиль").selectOption("aggressive");
     await expect(rows.nth(0)).toContainText("ВДО высокий YTM", { timeout: 15_000 });
   });
-
   test("скор в таблице совпадает с карточкой и показывает три стратегии", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("button", { name: "IG надёжная" })).toBeVisible({

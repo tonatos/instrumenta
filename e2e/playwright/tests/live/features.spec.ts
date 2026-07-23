@@ -45,8 +45,18 @@ test.describe("Скринер — фильтры", () => {
     await page.goto("/");
     await expect(page.getByText(/\d+ из \d+/)).toBeVisible({ timeout: TIMEOUT });
 
-    // Toggle "Плавающий" coupon type chip
-    await page.getByRole("button", { name: "Плавающий" }).first().click();
+    const toggle = page.getByTestId("screener-filters-toggle");
+    if ((await toggle.getAttribute("aria-expanded")) === "false") {
+      await toggle.click();
+    }
+    const advanced = page.getByTestId("screener-filters-advanced-toggle");
+    if ((await advanced.getAttribute("aria-expanded")) === "false") {
+      await advanced.click();
+    }
+
+    await page.getByTestId("screener-filter-coupon").click();
+    await page.getByRole("option", { name: "Плавающий" }).click();
+    await page.keyboard.press("Escape");
 
     // Counter should update
     await expect(page.getByText(/\d+ бумаг/)).toBeVisible({ timeout: 5000 });

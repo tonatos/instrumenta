@@ -59,7 +59,9 @@ async function assertNoPageOverflow(page: import("@playwright/test").Page) {
 }
 
 test.describe("Mobile layout", () => {
-  test("bottom nav виден и совпадает с шириной экрана", async ({ page }) => {
+  test("bottom nav виден и совпадает с шириной экрана", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "bottom nav only on mobile viewport");
+
     await mockConfig(page);
     await page.route("**/api/v1/bonds/**", async (route) => {
       await route.fulfill({ json: bondsListResponse([makeBond()]) });
@@ -82,7 +84,9 @@ test.describe("Mobile layout", () => {
     await assertNoPageOverflow(page);
   });
 
-  test("скринер: фильтры сворачиваются и разворачиваются", async ({ page }) => {
+  test("скринер: фильтры сворачиваются и разворачиваются", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "collapse only on mobile viewport");
+
     await mockConfig(page);
     await page.route("**/api/v1/bonds/**", async (route) => {
       await route.fulfill({ json: bondsListResponse([makeBond()]) });
@@ -98,9 +102,10 @@ test.describe("Mobile layout", () => {
 
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByTestId("screener-filters-advanced-toggle")).toBeVisible();
     await expect(page.getByLabel("Риск-профиль")).toBeVisible();
 
-    await page.getByRole("button", { name: "До погашения" }).click();
+    await page.getByLabel("Как считать срок").selectOption("maturity");
     await assertNoPageOverflow(page);
   });
 

@@ -2,7 +2,7 @@
  * E2E: серверные фильтры скринера, пагинация и infinite scroll.
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { bondsListResponse, MOCK_CONFIG } from "./fixtures";
 
 function makeBond(
@@ -111,8 +111,33 @@ function filterBonds(url: URL) {
   return filtered;
 }
 
-function expectScreenerCount(page: import("@playwright/test").Page, text: string) {
+function expectScreenerCount(page: Page, text: string) {
   return expect(page.getByText(`${text} · mock`)).toBeVisible({ timeout: 15_000 });
+}
+
+/** На mobile панель свёрнута — раскрываем перед «Дополнительно». */
+async function ensureFiltersExpanded(page: Page) {
+  const toggle = page.getByTestId("screener-filters-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) === "false") {
+    await toggle.click();
+  }
+  await expect(page.getByTestId("screener-filters-advanced-toggle")).toBeVisible();
+}
+
+async function ensureAdvancedOpen(page: Page) {
+  await ensureFiltersExpanded(page);
+  const advanced = page.getByTestId("screener-filters-advanced-toggle");
+  if ((await advanced.getAttribute("aria-expanded")) === "false") {
+    await advanced.click();
+  }
+  await expect(page.getByRole("checkbox", { name: /субординир/i })).toBeVisible();
+}
+
+async function selectMultiOption(page: Page, testId: string, optionLabel: string) {
+  await ensureAdvancedOpen(page);
+  await page.getByTestId(testId).click();
+  await page.getByRole("option", { name: optionLabel }).click();
+  await page.keyboard.press("Escape");
 }
 
 test.describe("Скринер — серверные фильтры", () => {
@@ -153,15 +178,16 @@ test.describe("Скринер — серверные фильтры", () => {
   test("мин. объём уменьшает total через новый запрос", async ({ page }) => {
     await page.goto("/");
     await expectScreenerCount(page, "50 из 58");
+    await ensureAdvancedOpen(page);
 
-    const minVolumeInput = page.locator('input[type="number"]').nth(1);
-    await minVolumeInput.fill("500000");
+    await page.getByLabel("Мин. объём торгов").fill("500000");
     await expectScreenerCount(page, "50 из 57");
   });
 
   test("скрыть субординированные убирает SUB1", async ({ page }) => {
     await page.goto("/");
     await expectScreenerCount(page, "50 из 58");
+    await ensureAdvancedOpen(page);
 
     await page.getByRole("checkbox", { name: /субординир/i }).check();
     await expectScreenerCount(page, "50 из 57");
@@ -180,8 +206,22 @@ test.describe("Скринер — серверные фильтры", () => {
     await page.goto("/");
     await expectScreenerCount(page, "50 из 58");
 
-    await page.getByRole("button", { name: "Финансы", exact: true }).click();
+    await selectMultiOption(page, "screener-filter-sector", "Финансы");
     await expectScreenerCount(page, "1 из 1");
     await expect(page.getByRole("button", { name: "Ликвидная" })).toBeVisible();
+  });
+
+  test("дополнительные фильтры спрятаны под раскрывалку", async ({ page }) => {
+    await page.goto("/");
+    await ensureFiltersExpanded(page);
+
+    await expect(page.getByLabel("Мин. YTM нетто")).toBeVisible();
+    await expect(page.getByTestId("screener-filter-coupon")).not.toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /субординир/i })).not.toBeVisible();
+
+    await page.getByTestId("screener-filters-advanced-toggle").click();
+    await expect(page.getByTestId("screener-filter-coupon")).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /субординир/i })).toBeVisible();
+    await expect(page.getByLabel("Мин. объём торгов")).toBeVisible();
   });
 });
