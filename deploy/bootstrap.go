@@ -6,7 +6,7 @@ import (
 	"github.com/booyaka101/porter"
 )
 
-func buildBootstrapTasks(inv Inventory, envContent string) []porter.Task {
+func buildBootstrapTasks(inv Inventory, envContent string, hysteriaContent string, hysteriaEnabled bool) []porter.Task {
 	builders := []porter.TaskBuilder{
 		porter.EnsurePackage("ca-certificates").Name("Install ca-certificates"),
 		porter.EnsurePackage("curl").Name("Install curl"),
@@ -31,6 +31,22 @@ func buildBootstrapTasks(inv Inventory, envContent string) []porter.Task {
 			Mode("0600").
 			Name("Generate production .env").
 			Sudo(),
+	}
+
+	hysteriaPath := inv.AppDir + "/hysteria-client.yaml"
+	if hysteriaEnabled {
+		builders = append(builders,
+			porter.EnsureFile(hysteriaPath, hysteriaContent).
+				Mode("0600").
+				Name("Generate Hysteria2 client config").
+				Sudo(),
+		)
+	} else {
+		builders = append(builders,
+			porter.Run(fmt.Sprintf("rm -f %s", shellQuote(hysteriaPath))).
+				Name("Remove Hysteria2 client config (disabled)").
+				Sudo(),
+		)
 	}
 
 	if inv.GHCRToken != "" {

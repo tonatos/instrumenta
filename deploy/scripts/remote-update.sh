@@ -26,7 +26,14 @@ if [[ -n "${GHCR_TOKEN:-}" && -n "${GHCR_USERNAME:-}" ]]; then
 fi
 
 export IMAGE_TAG
-docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
 
-docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+# Optional TSPU bypass: hysteria overlay when client config is present on the VPS.
+COMPOSE_ARGS=(-f docker-compose.yml -f docker-compose.prod.yml)
+if [[ -f hysteria-client.yaml ]]; then
+  COMPOSE_ARGS+=(-f docker-compose.hysteria.yml)
+fi
+
+docker compose "${COMPOSE_ARGS[@]}" pull
+docker compose "${COMPOSE_ARGS[@]}" up -d --remove-orphans
+
+docker compose "${COMPOSE_ARGS[@]}" ps

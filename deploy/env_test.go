@@ -73,6 +73,45 @@ func TestRenderEnv(t *testing.T) {
 	}
 }
 
+func TestRenderHysteriaClientYAML(t *testing.T) {
+	_, ok, err := renderHysteriaClientYAML(Inventory{})
+	if err != nil || ok {
+		t.Fatalf("empty URI: ok=%v err=%v", ok, err)
+	}
+
+	out, ok, err := renderHysteriaClientYAML(Inventory{
+		Hysteria2URI: "hysteria2://user:secret-pass@1.2.3.4:443?sni=darktimes.win#user-Hysteria2",
+	})
+	if err != nil || !ok {
+		t.Fatalf("render: ok=%v err=%v", ok, err)
+	}
+	if !strings.Contains(out, `server: "hysteria2://user:secret-pass@1.2.3.4:443?sni=darktimes.win"`) {
+		t.Fatalf("missing normalized server URI:\n%s", out)
+	}
+	if strings.Contains(out, "#user-Hysteria2") {
+		t.Fatalf("fragment should be stripped:\n%s", out)
+	}
+	if !strings.Contains(out, "listen: 0.0.0.0:8080") {
+		t.Fatalf("missing http listen:\n%s", out)
+	}
+}
+
+func TestEffectiveComposeFilesIncludesHysteria(t *testing.T) {
+	inv := Inventory{
+		ComposeFiles: []string{"docker-compose.yml", "docker-compose.prod.yml"},
+		Hysteria2URI: "hysteria2://x@1.2.3.4:443",
+	}
+	files := inv.effectiveComposeFiles()
+	if len(files) != 3 || files[2] != "docker-compose.hysteria.yml" {
+		t.Fatalf("got %#v", files)
+	}
+	inv.Hysteria2URI = ""
+	files = inv.effectiveComposeFiles()
+	if len(files) != 2 {
+		t.Fatalf("disabled should keep 2 files, got %#v", files)
+	}
+}
+
 func TestValidateRequiresBrokerKEKWhenAuthEnabled(t *testing.T) {
 	inv := Inventory{Host: "1.2.3.4", Domain: "example.com", AuthDisabled: false, PostgresPassword: "pg"}
 	if err := inv.validate(); err == nil {

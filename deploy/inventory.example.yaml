@@ -57,6 +57,10 @@ complimentary_telegram_ids: ""
 # Postgres password for compose db service + DATABASE_URL
 postgres_password: "change-me-strong-password"
 
+# Optional: Hysteria2 outbound proxy for Telegram (and other HTTPS) when VPS is behind TSPU.
+# Leave empty to disable. Bootstrap writes /opt/.../hysteria-client.yaml and enables docker-compose.hysteria.yml.
+# hysteria2_uri: "hysteria2://user:password@exit-host:443?sni=example.com"
+
 # GHCR (only for private packages; public images pull without login)
 # ghcr_username: tonatos
 # ghcr_token: "" # PAT with read:packages

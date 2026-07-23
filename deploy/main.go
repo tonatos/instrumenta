@@ -43,7 +43,15 @@ func main() {
 		if envErr != nil {
 			log.Fatalf("render env: %v", envErr)
 		}
-		stats, runErr := executor.Run("Bootstrap Instrumenta", buildBootstrapTasks(inv, envContent), vars)
+		hysteriaContent, hysteriaEnabled, hysteriaErr := renderHysteriaClientYAML(inv)
+		if hysteriaErr != nil {
+			log.Fatalf("render hysteria config: %v", hysteriaErr)
+		}
+		stats, runErr := executor.Run(
+			"Bootstrap Instrumenta",
+			buildBootstrapTasks(inv, envContent, hysteriaContent, hysteriaEnabled),
+			vars,
+		)
 		if runErr != nil {
 			log.Fatalf("bootstrap failed: %v", runErr)
 		}

@@ -54,6 +54,10 @@ type Inventory struct {
 
 	PostgresPassword string `yaml:"postgres_password"`
 
+	// Optional Hysteria2 client URI for outbound proxy (TSPU bypass). Empty = disabled.
+	// Example: hysteria2://user:pass@host:443?sni=example.com
+	Hysteria2URI string `yaml:"hysteria2_uri"`
+
 	GHCRUsername string `yaml:"ghcr_username"`
 	GHCRToken    string `yaml:"ghcr_token"`
 }
@@ -150,9 +154,24 @@ func (inv Inventory) validate() error {
 	}
 }
 
+func (inv Inventory) effectiveComposeFiles() []string {
+	files := append([]string{}, inv.ComposeFiles...)
+	uri := strings.TrimSpace(inv.Hysteria2URI)
+	if uri == "" {
+		return files
+	}
+	const hysteriaCompose = "docker-compose.hysteria.yml"
+	for _, name := range files {
+		if name == hysteriaCompose {
+			return files
+		}
+	}
+	return append(files, hysteriaCompose)
+}
+
 func (inv Inventory) composeFilesFlag() string {
-	parts := make([]string, 0, len(inv.ComposeFiles))
-	for _, name := range inv.ComposeFiles {
+	parts := make([]string, 0, len(inv.effectiveComposeFiles()))
+	for _, name := range inv.effectiveComposeFiles() {
 		parts = append(parts, "-f "+shellQuote(name))
 	}
 	return strings.Join(parts, " ")
