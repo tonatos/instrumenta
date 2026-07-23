@@ -284,21 +284,21 @@ export function TradingModeWizard({
     return (
       <Button
         size="sm"
-        className="min-h-10 gap-1.5"
+        className="gap-1.5"
         onClick={() => openPaywall({ reason: "portfolio.attach" })}
       >
         <Wifi className="h-4 w-4" />
-        Привязать счёт
+        Перевести в торговлю
       </Button>
     );
   }
 
   if (!canAttach) {
     return (
-      <Button size="sm" className="min-h-10 gap-1.5" asChild>
+      <Button size="sm" className="gap-1.5" asChild>
         <Link to="/account">
           <Wifi className="h-4 w-4" />
-          Настроить ключи
+          Перевести в торговлю
         </Link>
       </Button>
     );

@@ -42,7 +42,7 @@ smart-lab ──► infrastructure/ratings/ ──► SQLite bond_credit_ratings
 | Broker keys | `broker_credentials` envelope AES-GCM + `BROKER_KEK`; API `PUT/DELETE /me/broker-credentials/{kind}` |
 | Enrich | `TINKOFF_TOKEN` остаётся process env |
 | Trading | `TokenFor(owner, kind)`; env `T_TRADING_TOKEN_*` только как fallback при `AUTH_DISABLED` |
-| UI | `/account` — ключи + тариф/финансы + подключение Telegram-бота; wizard без ключей → «Настроить ключи»; без подписки → «Привязать счёт» → paywall-диалог |
+| UI | `/account` — ключи + тариф/финансы + подключение Telegram-бота; кнопка всегда «Перевести в торговлю»: без подписки → paywall, без ключей → `/account`, иначе wizard |
 | Notifier | scan с токеном владельца; Telegram на `owner_telegram_id` после `/start` в боте; `RenewDue` биллинга |
 | Isolation | чужой `portfolio_id` → 404; тесты `isolation_test.go`, e2e tenant |
 | Billing | `domain/billing` + ЮKassa; платные фичи v1: ключи write + attach + доступ к trading-портфелю; `COMPLIMENTARY_TELEGRAM_IDS` |

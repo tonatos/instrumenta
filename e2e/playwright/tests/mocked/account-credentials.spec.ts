@@ -117,7 +117,7 @@ test.describe("Личный кабинет — брокерские ключи",
     });
 
     await page.goto("/portfolio");
-    await page.getByRole("link", { name: "Настроить ключи" }).click();
+    await page.getByRole("link", { name: "Перевести в торговлю" }).click();
     await expect(page).toHaveURL(/\/account/);
     await expect(page.getByRole("heading", { name: "Личный кабинет" })).toBeVisible();
   });
