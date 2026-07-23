@@ -37,7 +37,7 @@ const notificationsPayload = {
       payload: {
         isin: "sector:financial",
         name: "Концентрация в секторе: financial",
-        reason: "Сектор «financial» занимает 42.0% портфеля (лимит 35%). Рекомендуем диверсифицировать.",
+        reason: "Сектор «financial» занимает 42.0% портфеля (лимит 35%). Сигнал модели: концентрация выше лимита стратегии.",
       },
       urgency: "normal",
       created_at: "2026-07-28T10:01:00+00:00",

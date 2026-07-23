@@ -1,8 +1,15 @@
+/** Display names for risk_profile API keys (conservative/normal/aggressive). */
 export const RISK_LABELS: Record<string, string> = {
-  normal: "Нормальный",
-  aggressive: "Агрессивный",
-  conservative: "Консервативный",
+  conservative: "Тихая гавань",
+  normal: "Умеренность",
+  aggressive: "Возможность",
 };
+
+/** Content-type marker (CBR base standard §1.5): analytical, not IIR. */
+export const ANALYTICAL_INFO_MARK =
+  "Аналитическая информация: алгоритмическое ранжирование по параметрам выбранной стратегии. Не является индивидуальной инвестиционной рекомендацией.";
+
+export const ANALYTICAL_INFO_SHORT = "Аналитическая информация · не является ИИР";
 
 export const SOURCE_LABELS: Record<string, string> = {
   initial: "Старт",

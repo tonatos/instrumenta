@@ -102,7 +102,7 @@ test.describe("Пут-оферта", () => {
 
     await gotoPortfolio(page, PORTFOLIO_ID);
 
-    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("На контроле", { exact: true }).first()).toBeVisible();
     await expect(page.getByText(/окно подачи ещё не объявлено/i)).toBeVisible();
     await expect(page.getByText(/\d+ срочных/)).not.toBeVisible();

@@ -381,7 +381,7 @@ export function PositionsTab({
                     <td className="px-2 py-2">
                       {(holdingsByIsin.get(pos.isin) ?? 0) > 0 && (
                         sellBlocked && manualSell ? (
-                          <Tooltip content="Заявка на продажу уже на бирже — отмените в блоке «Советы по торговле»">
+                          <Tooltip content="Заявка на продажу уже на бирже — отмените в блоке «Очередь действий»">
                             <Button
                               type="button"
                               variant="outline"

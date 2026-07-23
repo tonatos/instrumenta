@@ -52,7 +52,7 @@ export function SandboxPayInPanel({
       </p>
       <p className="text-xs text-muted-foreground">
         Имитирует ввод средств на брокерский счёт в песочнице. После добавления обновятся
-        рекомендации при наличии свободного кэша.
+        расчётные варианты при наличии свободного кэша.
       </p>
       {deploySessionActive && (
         <p className="text-xs text-amber-900 dark:text-amber-100" data-testid="pay-in-refresh-hint">

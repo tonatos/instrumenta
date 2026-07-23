@@ -54,15 +54,15 @@ export function PortfolioForm({
         />
       </label>
       <label className="space-y-1.5 text-sm sm:col-span-2">
-        <span className="font-medium text-muted-foreground">Профиль риска</span>
+        <span className="font-medium text-muted-foreground">Стратегия</span>
         <select
           className="flex h-9 w-full rounded-md border border-border bg-card px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
           value={form.risk_profile}
           onChange={(e) => setForm({ ...form, risk_profile: e.target.value })}
         >
-          <option value="conservative">Консервативный</option>
-          <option value="normal">Нормальный</option>
-          <option value="aggressive">Агрессивный</option>
+          <option value="conservative">Тихая гавань</option>
+          <option value="normal">Умеренность</option>
+          <option value="aggressive">Возможность</option>
         </select>
       </label>
       <label className="space-y-1.5 text-sm sm:col-span-2">
@@ -92,7 +92,7 @@ export function PortfolioForm({
           <span className="font-medium text-foreground">Только API-торгуемые</span>
           <span className="mt-0.5 block text-muted-foreground">
             В автосборе и реинвесте — только бумаги, которые можно купить через T-Invest API
-            (рекомендуется для режима торговли)
+            (удобно для режима торговли)
           </span>
         </span>
       </label>

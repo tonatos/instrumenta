@@ -74,7 +74,7 @@ const buySuggestion = {
   suggested_price_pct: 100.5,
   market_price_pct: 100,
   due_date: null,
-  reason: "Свободный кэш — рекомендуем докупить 5 лот(а)",
+  reason: "Свободный кэш — алгоритмический отбор кандидатов: 5 лот(а)",
   urgency: "normal",
   chat_template: null,
 };
@@ -136,7 +136,7 @@ const diversifiedBuySuggestions = [
     figi: "FIGI-2",
     suggested_price_pct: 101.0,
     due_date: null,
-    reason: "Свободный кэш — рекомендуем докупить по стратегии портфеля",
+    reason: "Свободный кэш — алгоритмический отбор кандидатов по параметрам стратегии",
     urgency: "normal",
     chat_template: null,
   },
@@ -149,7 +149,7 @@ const diversifiedBuySuggestions = [
     figi: "FIGI-3",
     suggested_price_pct: 100.8,
     due_date: null,
-    reason: "Свободный кэш — рекомендуем докупить по стратегии портфеля",
+    reason: "Свободный кэш — алгоритмический отбор кандидатов по параметрам стратегии",
     urgency: "normal",
     chat_template: null,
   },
@@ -275,7 +275,7 @@ async function setupTradingMocks(
   });
 }
 
-test.describe("Советы по торговле", () => {
+test.describe("Очередь действий", () => {
   test.beforeEach(async ({ page }) => {
     await setupTradingMocks(page);
   });
@@ -283,14 +283,14 @@ test.describe("Советы по торговле", () => {
   test("advice показывает покупку, confirm-диалог отправляет заявку", async ({ page }) => {
     await page.goto(`/portfolio/${PORTFOLIO_ID}?suggestion_confirm=${SUGGESTION_ID}`);
 
-    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
     const suggestionCard = page.locator(`#suggestion-${SUGGESTION_ID}`);
     await expect(suggestionCard).toBeVisible();
 
-    await expect(page.getByRole("heading", { name: "Подтвердить покупку" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "Отправить заявку BUY" })).toBeVisible({
       timeout: 10_000,
     });
-    const confirmDialog = page.getByRole("dialog", { name: "Подтвердить покупку" });
+    const confirmDialog = page.getByRole("dialog", { name: "Отправить заявку BUY" });
     await expect(confirmDialog.getByText(/чистой.*цене/i)).toBeVisible();
     await expect(confirmDialog.getByText(/Рынок.*100\.00%.*1.*000.*лот/i)).toBeVisible();
     await expect(confirmDialog.getByText(/лимит на 0\.50% выше рынка/i)).toBeVisible();
@@ -307,7 +307,7 @@ test.describe("Советы по торговле", () => {
     await expect(page.getByText(/5[\s\u00a0]055/)).toBeVisible();
   });
 
-  test("advice со свободным кэшем показывает баннер и рекомендации покупки", async ({ page }) => {
+  test("advice со свободным кэшем показывает баннер и кандидатов на размещение", async ({ page }) => {
     await page.route(`**/api/v1/portfolios/${PORTFOLIO_ID}/trading-state**`, async (route) => {
       await route.fulfill({
         json: makeTradingState({
@@ -322,9 +322,9 @@ test.describe("Советы по торговле", () => {
 
     await gotoPortfolio(page, PORTFOLIO_ID);
 
-    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/капитал.*200/)).toBeVisible();
-    await expect(page.getByText(/Свободный кэш.*рекомендуем.*Тестовая облигация 2.*Тестовая облигация 3/i)).toBeVisible();
+    await expect(page.getByText(/Свободный кэш.*алгоритмический отбор кандидатов.*Тестовая облигация 2.*Тестовая облигация 3/i)).toBeVisible();
     await expect(page.getByText("Покупки")).toBeVisible();
     await expect(page.getByText("2", { exact: true })).toBeVisible();
   });
@@ -332,7 +332,7 @@ test.describe("Советы по торговле", () => {
   test("клик по названию в секции «Покупки» открывает карточку облигации", async ({ page }) => {
     await gotoPortfolio(page, PORTFOLIO_ID);
 
-    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
     await page.getByTestId(`suggestion-bond-title-${SUGGESTION_ID}`).click();
 
     const sheet = page.getByRole("dialog");
@@ -383,7 +383,7 @@ test.describe("Советы по торговле", () => {
 
     await page.goto(`/portfolio/${PORTFOLIO_ID}?suggestion_confirm=suggestion-mts`);
 
-    const confirmDialog = page.getByRole("dialog", { name: "Подтвердить покупку" });
+    const confirmDialog = page.getByRole("dialog", { name: "Отправить заявку BUY" });
     await expect(confirmDialog).toBeVisible({ timeout: 10_000 });
     await expect(confirmDialog.getByText("Лимит (чистая цена), %")).toBeVisible();
     await expect(confirmDialog.getByText(/≈.*1.*004.*чистая.*1.*289.*с НКД за лот/)).toBeVisible();
@@ -420,7 +420,7 @@ test.describe("Советы по торговле", () => {
 
     await gotoPortfolio(page, PORTFOLIO_ID);
 
-    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/предъявите бумаги/i)).toBeVisible();
     await expect(page.getByText("Пут-оферта", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Копировать текст" })).toBeVisible();
@@ -453,7 +453,7 @@ test.describe("Советы по торговле", () => {
 
     await expect(page.getByText("Песочница · добавить средства")).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Добавить средства" }).click();
-    await expect(page.getByText(/Свободный кэш.*₽ — рекомендуем/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Свободный кэш.*₽ — алгоритмический отбор кандидатов/i).first()).toBeVisible({ timeout: 10_000 });
     expect(adviceCalls).toBeGreaterThanOrEqual(2);
   });
 
@@ -494,11 +494,11 @@ test.describe("Советы по торговле", () => {
 
     await page.goto(`/portfolio/${PORTFOLIO_ID}?suggestion_confirm=${SUGGESTION_ID}`);
 
-    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Свободно/)).toBeVisible();
     await expect(page.getByText(/заблокировано/)).toBeVisible();
 
-    const confirmDialog = page.getByRole("dialog", { name: "Подтвердить покупку" });
+    const confirmDialog = page.getByRole("dialog", { name: "Отправить заявку BUY" });
     await expect(confirmDialog).toBeVisible({ timeout: 10_000 });
     await expect(confirmDialog.getByText(/может не хватить средств/i)).toBeVisible({
       timeout: 10_000,

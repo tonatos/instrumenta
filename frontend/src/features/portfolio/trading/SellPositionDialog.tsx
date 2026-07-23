@@ -86,7 +86,7 @@ export function SellPositionDialog({
     <DialogRoot open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Продать позицию</DialogTitle>
+          <DialogTitle>Заявка на продажу позиции</DialogTitle>
           <DialogDescription>
             {position.name} · на счёте {maxLots} лот(а). Заявка отправится на биржу
             сразу после подтверждения.
@@ -154,7 +154,7 @@ export function SellPositionDialog({
               className="h-7 px-2 text-xs"
               onClick={() => setPricePct(suggestedPrice.toFixed(4))}
             >
-              Сбросить к рекомендуемой ({suggestedPrice.toFixed(4)}%)
+              Сбросить к расчётной ({suggestedPrice.toFixed(4)}%)
             </Button>
           )}
 

@@ -310,7 +310,7 @@ func BuildBuySuggestions(
 	if len(allocations) == 0 {
 		return nil
 	}
-	baseReason := "Свободный кэш на счёте — рекомендуем докупить по стратегии портфеля"
+	baseReason := "Свободный кэш на счёте — алгоритмический отбор кандидатов по параметрам стратегии"
 	noteSuffix := ""
 	if len(notes) > 0 {
 		noteSuffix = " (" + notes[len(notes)-1] + ")"
@@ -451,7 +451,7 @@ func buildReinvestSuggestionsForPositions(
 			}
 			kind = SuggestionKindReinvest
 			reason = fmt.Sprintf(
-				"Погашение %s %s (≈%s ₽) — рекомендуем реинвестировать",
+				"Погашение %s %s (≈%s ₽) — алгоритмический отбор кандидатов на реинвестицию",
 				position.Name, shared.FormatDate(end), shared.FormatNumber(expectedCash, 0),
 			)
 			suggestionID = StableID(p.ID, "reinvest", position.ISIN+":"+shared.FormatISODate(*end))
@@ -509,7 +509,7 @@ func ValidateAttachSoft(snapshot BrokerSnapshot, p portfolio.Portfolio, universe
 	holdings := BuildHoldings(snapshot, universe)
 	warnings := CollectAccountWarnings(snapshot, universeByISIN, holdings)
 	if len(snapshot.BondPositions) > 0 {
-		warnings = append(warnings, "На счёте уже есть облигации — рекомендации строятся от фактических позиций.")
+		warnings = append(warnings, "На счёте уже есть облигации — расчётные варианты строятся от фактических позиций.")
 	}
 	deployed := holdingsDeployedValue(holdings, universeByISIN)
 	effective := float64(snapshot.MoneyRub) + deployed

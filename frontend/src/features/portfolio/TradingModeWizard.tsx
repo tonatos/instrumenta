@@ -613,7 +613,7 @@ export function TradingModeWizard({
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>
                   Боевой счёт: операции будут отправляться на биржу. Убедитесь, что состав
-                  портфеля соответствует вашим намерениям.
+                  портфеля совпадает с выбранными параметрами стратегии.
                 </span>
               </div>
             )}
@@ -807,7 +807,7 @@ function AccountSecuritiesPanel({
 
       {showBlockers && preview.blockers.length > 0 && kind === "production" && hasBonds && (
         <p className="text-xs text-muted-foreground">
-          Продайте бумаги вручную через брокера или выберите другой счёт.
+          Закройте бумаги вручную через брокера или выберите другой счёт.
         </p>
       )}
 

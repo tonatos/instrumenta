@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useDeploySession } from "@/features/portfolio/trading/hooks/useDeploySession";
 import { cn, formatDate, formatRub } from "@/lib/utils";
+import { ANALYTICAL_INFO_SHORT } from "@/features/portfolio/labels";
 import { ConfirmOrderDialog } from "@/features/portfolio/trading/ConfirmOrderDialog";
 import {
   ActiveOrderCard,
@@ -48,8 +49,8 @@ function ReadOnlyTokenBanner() {
       className="rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-950 dark:text-amber-100"
       data-testid="readonly-token-banner"
     >
-      Ключ только для чтения — заявки недоступны. Мониторинг и рекомендации работают. Чтобы
-      выставлять заявки, сохраните full-access токен в{" "}
+      Ключ только для чтения — заявки недоступны. Мониторинг и аналитические сигналы
+      работают. Чтобы выставлять заявки, сохраните full-access токен в{" "}
       <Link to="/account" className="underline underline-offset-2">
         кабинете
       </Link>
@@ -168,7 +169,7 @@ export function TradingActionQueue({
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
         <span className="flex items-center gap-2 text-destructive">
           <XCircle className="h-4 w-4 shrink-0" />
-          {parseApiError(error ?? new Error("Не удалось загрузить советы"))}
+          {parseApiError(error ?? new Error("Не удалось загрузить очередь действий"))}
         </span>
         <Button
           variant="outline"
@@ -195,7 +196,7 @@ export function TradingActionQueue({
         {ordersDisabled && <ReadOnlyTokenBanner />}
         <div className="flex items-center justify-between gap-3">
           <span className="text-green-800 dark:text-green-300">
-            Рекомендаций нет — портфель в порядке
+            Расчётных вариантов нет — по текущим параметрам стратегии действий нет
           </span>
           <Button
             variant="ghost"
@@ -233,13 +234,14 @@ export function TradingActionQueue({
           <div className="space-y-0.5">
             <p className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
               <Sparkles className="h-4 w-4" />
-              Советы по торговле
+              Очередь действий
               {urgentCount > 0 && (
                 <Badge className="bg-amber-500/20 text-amber-900 dark:text-amber-200">
                   {urgentCount} срочных
                 </Badge>
               )}
             </p>
+            <p className="text-xs text-muted-foreground">{ANALYTICAL_INFO_SHORT}</p>
             <p className="text-xs text-muted-foreground">
               Свободно {formatRub(freeCash)}
               {(data?.blocked_money_rub ?? 0) > 0 &&
@@ -261,7 +263,7 @@ export function TradingActionQueue({
 
         {freeCash > 0 && buySuggestions.length > 0 && !deploySession && (
           <div className="rounded-lg border border-blue-400/40 bg-blue-500/10 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
-            Свободный кэш {formatRub(freeCash)} — рекомендуем:{" "}
+            Свободный кэш {formatRub(freeCash)} — алгоритмический отбор кандидатов:{" "}
             {buySuggestions.map((s) => s.name).join(", ")}
           </div>
         )}
@@ -292,7 +294,7 @@ export function TradingActionQueue({
                 Зафиксировать план
               </Button>
               <p className="text-xs text-muted-foreground">
-                Закрепить текущие рекомендации докупки и реинвестиций на время исполнения
+                Закрепить текущие расчётные варианты докупки и реинвестиций на время исполнения
               </p>
             </div>
             {createPlanError && (

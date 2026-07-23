@@ -153,7 +153,7 @@ export function SuggestionCard({
               direction === "BUY" ? `confirm-buy-${suggestion.id}` : undefined
             }
           >
-            {direction === "BUY" ? "Подтвердить покупку" : "Подтвердить продажу"}
+            {direction === "BUY" ? "Отправить заявку BUY" : "Отправить заявку SELL"}
             {isProduction && " (боевой)"}
           </Button>
         )}
@@ -161,7 +161,7 @@ export function SuggestionCard({
           <p className="text-xs text-muted-foreground">Ключ только для чтения — заявки недоступны</p>
         )}
         {buyBlocked && !ordersDisabled && (
-          <p className="text-xs text-muted-foreground">Сначала зафиксируйте план закупки</p>
+          <p className="text-xs text-muted-foreground">Сначала зафиксируйте расчётный план</p>
         )}
         {onSkip && sessionStatus === "pending" && (
           <Button

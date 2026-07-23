@@ -521,7 +521,7 @@ export function ScreenerPage() {
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <select
-            aria-label="Риск-профиль"
+            aria-label="Стратегия"
             data-testid="screener-risk-profile"
             className="flex h-9 min-h-10 max-w-[11rem] rounded-md border border-border bg-card px-2.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring sm:min-h-9"
             value={riskProfile}

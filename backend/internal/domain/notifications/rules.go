@@ -155,7 +155,7 @@ func (RiskEscalationRule) Evaluate(ctx AlertContext) []Alert {
 		marketPrice := portfolio.ReferenceMarketPricePct(bond.LastPrice, holding.CurrentPricePct, 100)
 		buffer := portfolio.SellLimitPriceBuffer(ctx.Portfolio.AccountKind)
 		suggested := float64(portfolio.SuggestedSellLimitPricePct(marketPrice, buffer))
-		reason := "Ухудшение риск-профиля эмитента: " + strings.Join(reasons, "; ") + ". Рекомендуем продать."
+		reason := "Ухудшение риск-профиля эмитента: " + strings.Join(reasons, "; ") + ". Сигнал модели: отклонение эмитента от параметров стратегии."
 		alerts = append(alerts, Alert{
 			PortfolioID: ctx.Portfolio.ID, Kind: AlertKindRiskEscalation,
 			ISIN: holding.ISIN, Name: holding.Name, Lots: holding.Lots, FIGI: strPtr(holding.FIGI),
@@ -287,7 +287,7 @@ func (r SectorConcentrationRule) Evaluate(ctx AlertContext) []Alert {
 			Name:        "Концентрация в секторе: " + sectorLabel,
 			Lots:        0,
 			Reason: fmt.Sprintf(
-				"Сектор «%s» занимает %.1f%% портфеля (лимит %.0f%%). Рекомендуем диверсифицировать.",
+				"Сектор «%s» занимает %.1f%% портфеля (лимит %.0f%%). Сигнал модели: концентрация выше лимита стратегии.",
 				sectorLabel, sharePct, maxShare*100,
 			),
 			Urgency:   AlertUrgencyNormal,

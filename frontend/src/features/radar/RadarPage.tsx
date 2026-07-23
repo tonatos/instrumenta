@@ -27,12 +27,11 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDateTime } from "@/lib/utils";
+import { RISK_LABELS } from "@/features/portfolio/labels";
 
-const RISK_PROFILES: { value: ScreenerRiskProfile; label: string }[] = [
-  { value: "conservative", label: "Консервативный" },
-  { value: "normal", label: "Нормальный" },
-  { value: "aggressive", label: "Агрессивный" },
-];
+const RISK_PROFILES: { value: ScreenerRiskProfile; label: string }[] = (
+  Object.keys(RISK_LABELS) as ScreenerRiskProfile[]
+).map((value) => ({ value, label: RISK_LABELS[value] }));
 
 export function RadarPage() {
   const [detailSecid, setDetailSecid] = useState<string | null>(null);

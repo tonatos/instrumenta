@@ -137,7 +137,7 @@ export function ConfirmOrderDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isSell ? "Подтвердить продажу" : "Подтвердить покупку"}
+            {isSell ? "Отправить заявку SELL" : "Отправить заявку BUY"}
           </DialogTitle>
           <DialogDescription>
             {suggestion.name} · {SUGGESTION_KIND_LABELS[suggestion.kind] ?? suggestion.kind}
@@ -228,7 +228,7 @@ export function ConfirmOrderDialog({
               className="h-7 px-2 text-xs"
               onClick={() => setPricePct(suggestion.suggested_price_pct!.toFixed(4))}
             >
-              Сбросить к рекомендуемой ({suggestion.suggested_price_pct.toFixed(4)}%
+              Сбросить к расчётной ({suggestion.suggested_price_pct.toFixed(4)}%
               {suggestedLotPriceHint ? ` · ≈ ${suggestedLotPriceHint}/лот` : ""})
             </Button>
           )}

@@ -103,7 +103,7 @@ test.describe("Mobile layout", () => {
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByTestId("screener-filters-advanced-toggle")).toBeVisible();
-    await expect(page.getByLabel("Риск-профиль")).toBeVisible();
+    await expect(page.getByLabel("Стратегия")).toBeVisible();
 
     await page.getByLabel("Как считать срок").selectOption("maturity");
     await assertNoPageOverflow(page);

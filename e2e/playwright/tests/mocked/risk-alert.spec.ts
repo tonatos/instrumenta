@@ -25,14 +25,14 @@ const riskSellSuggestion = {
   market_price_pct: 96,
   due_date: null,
   reason:
-    "Ухудшение риск-профиля эмитента: Эмитент в дефолте по данным MOEX. Рекомендуем продать.",
+    "Ухудшение риск-профиля эмитента: Эмитент в дефолте по данным MOEX. Сигнал модели: отклонение эмитента от параметров стратегии.",
   urgency: "critical",
   chat_template: null,
   risk_acknowledgeable: true,
 };
 
 test.describe("Риск-алерт эмитента", () => {
-  test("показывает sell-рекомендацию и кнопку «Принять риск»", async ({ page }) => {
+  test("показывает sell-сигнал и кнопку «Принять риск»", async ({ page }) => {
     const portfolio = makeTradingPortfolio(PORTFOLIO_ID, {
       name: "Risk Alert E2E",
       positions_count: 1,
@@ -91,7 +91,7 @@ test.describe("Риск-алерт эмитента", () => {
 
     await gotoPortfolio(page, PORTFOLIO_ID);
 
-    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Ухудшение риск-профиля эмитента")).toBeVisible();
     await expect(page.getByTestId(`acknowledge-risk-${POSITION_ISIN}`)).toBeVisible();
 

@@ -33,7 +33,7 @@ export function LandingPricing() {
           <div className="price-card__amount">0 ₽</div>
           <p className="price-card__desc">Чтобы разобрать стратегию и рынок</p>
           <ul className="bullets">
-            <li>Математический подбор под риск-профиль</li>
+            <li>Алгоритмический отбор по параметрам стратегии</li>
             <li>Симуляция портфеля и реинвеста</li>
             <li>Market Radar и избранное</li>
           </ul>

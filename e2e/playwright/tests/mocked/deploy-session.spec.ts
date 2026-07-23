@@ -252,7 +252,7 @@ test.describe("Deploy session", () => {
     await setupDeploySessionMocks(page);
     await gotoPortfolio(page, PORTFOLIO_ID);
 
-    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("freeze-plan-required-hint")).toBeVisible();
     await expect(page.getByTestId("confirm-buy-deploy-item-1")).toBeDisabled();
 
@@ -265,7 +265,7 @@ test.describe("Deploy session", () => {
     await setupDeploySessionMocks(page);
     await gotoPortfolio(page, PORTFOLIO_ID);
 
-    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("freeze-deploy-plan")).toBeVisible();
     await page.getByTestId("freeze-deploy-plan").click();
 
@@ -274,8 +274,8 @@ test.describe("Deploy session", () => {
     await expect(page.getByTestId("suggestion-bond-title-deploy-item-2")).toBeVisible();
     await expect(page.getByTestId("suggestion-bond-title-deploy-item-3")).toBeVisible();
 
-    await page.getByRole("button", { name: "Подтвердить покупку" }).first().click();
-    await expect(page.getByRole("heading", { name: "Подтвердить покупку" })).toBeVisible();
+    await page.getByRole("button", { name: "Отправить заявку BUY" }).first().click();
+    await expect(page.getByRole("heading", { name: "Отправить заявку BUY" })).toBeVisible();
     await page.getByRole("button", { name: "Отправить заявку" }).click();
 
     await expect(page.getByTestId("suggestion-bond-title-deploy-item-1")).toHaveCount(0, {

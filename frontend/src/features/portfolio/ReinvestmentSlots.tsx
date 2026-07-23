@@ -237,7 +237,7 @@ function SlotCard({
                 <div className="flex items-start gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <div>
-                    <p className="font-medium">Стратегия не нашла подходящую замену</p>
+                    <p className="font-medium">Стратегия не нашла кандидата на замену</p>
                     {slot.failure_reason && (
                       <p className="mt-1 text-xs opacity-90">{slot.failure_reason}</p>
                     )}
@@ -251,7 +251,7 @@ function SlotCard({
           ) : (
             <div className="space-y-2">
               <p className="text-xs text-muted-foreground">
-                Доступны только бумаги, подходящие по профилю, горизонту и сумме реинвеста.
+                Доступны только бумаги в ограничениях выбранной стратегии, горизонта и суммы реинвеста.
               </p>
               <Combobox
                 options={bondOptions}
@@ -263,7 +263,7 @@ function SlotCard({
                 searchPlaceholder="Поиск по названию или ISIN…"
                 disabled={isPending}
                 allowDeselect={false}
-                emptyText="Нет подходящих бумаг для этого слота"
+                emptyText="Нет кандидатов для этого слота"
               />
               {selectionMode === "manual" && (
                 <Button

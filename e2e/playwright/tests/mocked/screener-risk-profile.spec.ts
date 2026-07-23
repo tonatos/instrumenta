@@ -139,7 +139,7 @@ test.describe("Скринер — риск-профиль", () => {
     const rows = page.locator("tbody tr");
     await expect(rows.nth(0)).toContainText("IG надёжная");
 
-    await page.getByLabel("Риск-профиль").selectOption("aggressive");
+    await page.getByLabel("Стратегия").selectOption("aggressive");
     await expect(rows.nth(0)).toContainText("ВДО высокий YTM", { timeout: 15_000 });
   });
   test("скор в таблице совпадает с карточкой и показывает три стратегии", async ({ page }) => {
@@ -155,9 +155,9 @@ test.describe("Скринер — риск-профиль", () => {
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByText("Итог по стратегиям")).toBeVisible();
     await expect(sheet.getByText("Итого")).toHaveCount(0);
-    await expect(sheet.getByText("Консервативный")).toBeVisible();
-    await expect(sheet.getByText("Нормальный")).toBeVisible();
-    await expect(sheet.getByText("Агрессивный")).toBeVisible();
+    await expect(sheet.getByText("Тихая гавань")).toBeVisible();
+    await expect(sheet.getByText("Умеренность")).toBeVisible();
+    await expect(sheet.getByText("Возможность")).toBeVisible();
     await expect(sheet.getByText("в скринере")).toBeVisible();
     await expect(sheet.locator(".text-2xl.font-semibold").filter({ hasText: "82" })).toBeVisible();
   });

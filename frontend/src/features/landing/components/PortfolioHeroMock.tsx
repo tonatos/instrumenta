@@ -26,7 +26,7 @@ export function PortfolioHeroMock({ onPlay }: Props) {
           <div className="product-mock__main">
             <div className="mock-toolbar">
               <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                <h3>Стратегия · Normal</h3>
+                <h3>Стратегия · Умеренность</h3>
                 <span className="chip chip--profile">Горизонт 18 мес</span>
               </div>
               <div className="chips">
@@ -103,8 +103,8 @@ export function PortfolioHeroMock({ onPlay }: Props) {
 
             <div className="mock-alert">
               <div>
-                <strong>План закупок зафиксирован</strong>
-                {" · "}3 покупки · Deploy Session 24ч
+                <strong>Расчётный план зафиксирован</strong>
+                {" · "}3 кандидата · Deploy Session 24ч
               </div>
               <span className="btn btn--primary" aria-hidden="true">
                 К очереди

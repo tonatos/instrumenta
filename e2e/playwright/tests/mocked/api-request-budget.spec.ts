@@ -71,7 +71,7 @@ test.describe("Бюджет API-запросов", () => {
 
     const counter = countApiRequests(page);
     await page.goto(`/portfolio/${PORTFOLIO_ID}`);
-    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
 
     expect(counter.get(/account-operations/)).toBe(0);
     expect(counter.get(/\/trading-state$/)).toBeGreaterThanOrEqual(1);
@@ -119,7 +119,7 @@ test.describe("Бюджет API-запросов", () => {
     });
 
     await page.goto(`/portfolio/${PORTFOLIO_ID}`);
-    await expect(page.getByText("Советы по торговле")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Очередь действий")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByRole("button", { name: "Отменить заявку" })).toBeVisible();
 
     const counter = countApiRequests(page);

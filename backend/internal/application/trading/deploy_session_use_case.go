@@ -123,7 +123,7 @@ func (u *DeploySessionUseCase) buildAndSave(ctx context.Context, portfolioID str
 		keyRate, taxRate, domainPortfolio.DefaultBondSelectionPolicy, domainPortfolio.DefaultPlanningPolicy, durationPolicy, u.policy, nil, sessionID,
 	)
 	if len(session.Items) == 0 {
-		return trading.DeploySession{}, DeploySessionEmptyError{Message: "Нет рекомендаций для фиксации плана"}
+		return trading.DeploySession{}, DeploySessionEmptyError{Message: "Нет расчётных вариантов для фиксации плана"}
 	}
 	return u.repo.Save(ctx, session)
 }
