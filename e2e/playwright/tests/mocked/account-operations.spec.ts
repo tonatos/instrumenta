@@ -3,7 +3,7 @@
  */
 
 import { test, expect } from "@playwright/test";
-import { mockAuthMe } from "./fixtures";
+import { mockAuthMe, mockBillingStatus } from "./fixtures";
 
 const PORTFOLIO_ID = "ops-history-portfolio-1";
 
@@ -121,6 +121,7 @@ test.describe("История операций", () => {
       });
     });
     await mockAuthMe(page, { sandbox: true });
+    await mockBillingStatus(page, { hasAccess: true });
 
     await page.route("**/api/v1/bonds/**", async (route) => {
       await route.fulfill({ json: { bonds: [], source: "mock", count: 0 } });

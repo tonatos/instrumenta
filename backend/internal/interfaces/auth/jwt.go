@@ -18,11 +18,12 @@ type contextKey string
 const userContextKey contextKey = "auth_user"
 
 var authExcludedPaths = map[string]bool{
-	"/health":                          true,
-	"/api/v1/auth/telegram/login":      true,
-	"/api/v1/auth/telegram/callback":   true,
-	"/api/v1/config":                   true,
-	"/api/v1/config/":                  true,
+	"/health":                            true,
+	"/api/v1/auth/telegram/login":        true,
+	"/api/v1/auth/telegram/callback":     true,
+	"/api/v1/config":                     true,
+	"/api/v1/config/":                    true,
+	"/api/v1/billing/webhooks/yookassa":  true,
 }
 
 // JWTManager issues and validates access tokens.

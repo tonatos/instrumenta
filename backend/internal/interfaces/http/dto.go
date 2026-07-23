@@ -22,6 +22,14 @@ type AuthMeResponse struct {
 	TelegramID  int64                     `json:"telegram_id"`
 	DisplayName string                    `json:"display_name"`
 	Credentials AuthMeCredentialsResponse `json:"credentials"`
+	TelegramBot *TelegramBotStatus        `json:"telegram_bot,omitempty"`
+}
+
+type TelegramBotStatus struct {
+	Configured  bool   `json:"configured"`
+	Connected   bool   `json:"connected"`
+	BotUsername string `json:"bot_username,omitempty"`
+	DeepLink    string `json:"deep_link,omitempty"`
 }
 
 type BondResponse struct {
@@ -183,6 +191,7 @@ type PortfolioResponse struct {
 	PositionsCount       int                   `json:"positions_count"`
 	ClosedPositionsCount int                   `json:"closed_positions_count"`
 	InvestedCapitalRub   float64               `json:"invested_capital_rub"`
+	AccessLocked         bool                  `json:"access_locked"`
 	Data                 PortfolioDataResponse `json:"data"`
 }
 

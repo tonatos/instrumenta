@@ -8,6 +8,9 @@ import (
 
 func (h *Handler) ListNotifications(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	if h.deps.Portfolios != nil {
 		if p, err := h.deps.Portfolios.GetPortfolio(r.Context(), portfolioID); err != nil || p == nil {
 			WriteNotFound(w, "Portfolio not found")

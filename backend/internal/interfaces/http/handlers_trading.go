@@ -7,11 +7,15 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/tonatos/bond-monitor/backend/internal/application"
+	"github.com/tonatos/bond-monitor/backend/internal/domain/billing"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
 )
 
 func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request) {
+	if !h.requireFeature(w, r, billing.FeaturePortfolioAttach) {
+		return
+	}
 	kind := r.URL.Query().Get("kind")
 	if kind == "" {
 		kind = "sandbox"
@@ -28,6 +32,9 @@ func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CreateSandboxAccount(w http.ResponseWriter, r *http.Request) {
+	if !h.requireFeature(w, r, billing.FeaturePortfolioAttach) {
+		return
+	}
 	var req struct {
 		InitialAmountRub float64 `json:"initial_amount_rub"`
 		Name             *string `json:"name"`
@@ -48,6 +55,9 @@ func (h *Handler) CreateSandboxAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteSandboxAccount(w http.ResponseWriter, r *http.Request) {
+	if !h.requireFeature(w, r, billing.FeaturePortfolioAttach) {
+		return
+	}
 	accountID := chi.URLParam(r, "account_id")
 	result, err := h.deps.Trading.DeleteSandboxAccount(r.Context(), accountID)
 	if err != nil {
@@ -58,6 +68,9 @@ func (h *Handler) DeleteSandboxAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AccountPreview(w http.ResponseWriter, r *http.Request) {
+	if !h.requireFeature(w, r, billing.FeaturePortfolioAttach) {
+		return
+	}
 	portfolioID := chi.URLParam(r, "portfolio_id")
 	accountID := r.URL.Query().Get("account_id")
 	kind := r.URL.Query().Get("kind")
@@ -85,6 +98,9 @@ func (h *Handler) AccountPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) ClearAccount(w http.ResponseWriter, r *http.Request) {
+	if !h.requireFeature(w, r, billing.FeaturePortfolioAttach) {
+		return
+	}
 	portfolioID := chi.URLParam(r, "portfolio_id")
 	var req struct {
 		AccountID string   `json:"account_id"`
@@ -119,6 +135,9 @@ func (h *Handler) ClearAccount(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AttachAccount(w http.ResponseWriter, r *http.Request) {
+	if !h.requireFeature(w, r, billing.FeaturePortfolioAttach) {
+		return
+	}
 	portfolioID := chi.URLParam(r, "portfolio_id")
 	var req map[string]any
 	if err := DecodeBody(r, &req); err != nil {
@@ -165,6 +184,9 @@ func (h *Handler) DetachAccount(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) SandboxPayIn(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	var req struct {
 		AmountRub float64 `json:"amount_rub"`
 	}
@@ -192,6 +214,9 @@ func (h *Handler) GetAdvice(w http.ResponseWriter, r *http.Request) {
 	p, err := h.deps.Portfolios.GetPortfolio(r.Context(), portfolioID)
 	if err != nil || p == nil {
 		WriteNotFound(w, "Portfolio not found")
+		return
+	}
+	if !h.requireTradingPortfolioAccess(w, r, p) {
 		return
 	}
 	durationPolicy := DurationPolicyForPortfolio(*p, r.URL.Query().Get("rate_scenario"))
@@ -226,6 +251,9 @@ func (h *Handler) GetTradingState(w http.ResponseWriter, r *http.Request) {
 		WriteNotFound(w, "Portfolio not found")
 		return
 	}
+	if !h.requireTradingPortfolioAccess(w, r, p) {
+		return
+	}
 	durationPolicy := DurationPolicyForPortfolio(*p, r.URL.Query().Get("rate_scenario"))
 	universe, err := h.deps.Bonds.LoadUniverse(r.Context())
 	if err != nil {
@@ -256,6 +284,9 @@ func (h *Handler) GetTradingState(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateDeploySession(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	universe, err := h.deps.Bonds.LoadUniverse(r.Context())
 	if err != nil {
 		WriteClientError(w, http.StatusBadRequest, err.Error())
@@ -287,6 +318,9 @@ func (h *Handler) CreateDeploySession(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetActiveDeploySession(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	session, err := h.deps.Trading.GetActiveDeploySession(r.Context(), portfolioID)
 	if err != nil {
 		if WriteAppError(w, err) {
@@ -308,6 +342,9 @@ func (h *Handler) GetActiveDeploySession(w http.ResponseWriter, r *http.Request)
 
 func (h *Handler) RefreshDeploySession(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	sessionID := chi.URLParam(r, "session_id")
 	universe, err := h.deps.Bonds.LoadUniverse(r.Context())
 	if err != nil {
@@ -339,6 +376,9 @@ func (h *Handler) RefreshDeploySession(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CancelDeploySession(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	sessionID := chi.URLParam(r, "session_id")
 	session, err := h.deps.Trading.CancelDeploySession(r.Context(), portfolioID, sessionID)
 	if err != nil {
@@ -358,6 +398,9 @@ func (h *Handler) CancelDeploySession(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) SkipDeploySessionItem(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	sessionID := chi.URLParam(r, "session_id")
 	itemID := chi.URLParam(r, "item_id")
 	session, err := h.deps.Trading.SkipDeploySessionItem(r.Context(), portfolioID, sessionID, itemID)
@@ -378,6 +421,9 @@ func (h *Handler) SkipDeploySessionItem(w http.ResponseWriter, r *http.Request) 
 
 func (h *Handler) AcknowledgeRiskAlert(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	isin := chi.URLParam(r, "isin")
 	universe, err := h.deps.Bonds.LoadUniverse(r.Context())
 	if err != nil {
@@ -397,6 +443,9 @@ func (h *Handler) AcknowledgeRiskAlert(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) PreviewOrder(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	var req PlaceOrderRequest
 	if err := DecodeBody(r, &req); err != nil {
 		WriteValidationError(w, err.Error(), nil)
@@ -424,6 +473,9 @@ func (h *Handler) PreviewOrder(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	var req PlaceOrderRequest
 	if err := DecodeBody(r, &req); err != nil {
 		WriteValidationError(w, err.Error(), nil)
@@ -451,6 +503,9 @@ func (h *Handler) PlaceOrder(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	orderID := chi.URLParam(r, "order_id")
 	if err := h.deps.Trading.CancelOrder(r.Context(), portfolioID, orderID); err != nil {
 		if errors.Is(err, application.ErrPortfolioNotFound) {
@@ -465,6 +520,9 @@ func (h *Handler) CancelOrder(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) SellPositionPreview(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	isin := chi.URLParam(r, "isin")
 	var req SellPositionRequest
 	if err := DecodeBody(r, &req); err != nil {
@@ -493,6 +551,9 @@ func (h *Handler) SellPositionPreview(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) SellQuote(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	isin := chi.URLParam(r, "isin")
 	universe, err := h.deps.Bonds.LoadUniverse(r.Context())
 	if err != nil {
@@ -516,6 +577,9 @@ func (h *Handler) SellQuote(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Performance(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	result, err := h.deps.Trading.GetPerformance(r.Context(), portfolioID)
 	if err != nil {
 		if WriteAppError(w, err) {
@@ -533,6 +597,9 @@ func (h *Handler) Performance(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) AccountOperations(w http.ResponseWriter, r *http.Request) {
 	portfolioID := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, portfolioID) {
+		return
+	}
 	universe, err := h.deps.Bonds.LoadUniverse(r.Context())
 	if err != nil {
 		WriteClientError(w, http.StatusBadRequest, err.Error())

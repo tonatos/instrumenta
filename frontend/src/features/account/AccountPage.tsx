@@ -5,21 +5,33 @@ import { api, ApiError } from "@/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useSubscriptionPaywall } from "@/features/billing/SubscriptionPaywallProvider";
 
 const TOKEN_DOCS = "https://developer.tbank.ru/invest/intro/intro/token";
 
-export function AccountPage() {
+export function AccountKeysPage() {
   const [params] = useSearchParams();
   const highlightKind = params.get("kind");
   const queryClient = useQueryClient();
+  const { openPaywall } = useSubscriptionPaywall();
   const { data: me, isLoading } = useQuery({
     queryKey: ["auth-me"],
     queryFn: () => api.getMe(),
+  });
+  const { data: billing } = useQuery({
+    queryKey: ["billing-status"],
+    queryFn: () => api.getBillingStatus(),
   });
 
   const [productionToken, setProductionToken] = useState("");
   const [sandboxToken, setSandboxToken] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const canWriteKeys = Boolean(
+    billing?.complimentary ||
+      billing?.entitlements?.includes("broker_credentials.write") ||
+      billing?.has_active_access,
+  );
 
   const saveMutation = useMutation({
     mutationFn: ({ kind, token }: { kind: "sandbox" | "production"; token: string }) =>
@@ -31,6 +43,11 @@ export function AccountPage() {
       await queryClient.invalidateQueries({ queryKey: ["auth-me"] });
     },
     onError: (err: unknown) => {
+      if (err instanceof ApiError && err.extra?.code === "subscription_required") {
+        openPaywall({ reason: "broker_credentials.write" });
+        setError(null);
+        return;
+      }
       setError(err instanceof ApiError ? err.message : "Не удалось сохранить ключ");
     },
   });
@@ -48,7 +65,7 @@ export function AccountPage() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-xl space-y-4 p-4">
+      <div className="space-y-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-40 w-full" />
       </div>
@@ -59,14 +76,29 @@ export function AccountPage() {
   const sandbox = me?.credentials?.sandbox;
 
   return (
-    <div className="mx-auto max-w-xl space-y-8 p-4 pb-24 md:pb-8">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Личный кабинет</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {me?.display_name ? `${me.display_name} · ` : ""}
           Telegram ID {me?.telegram_id ?? "—"}
         </p>
       </div>
+
+      {!canWriteKeys && billing && (
+        <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+          <p className="text-sm font-medium">Сохранение ключей доступно по подписке</p>
+          <p className="text-sm text-muted-foreground">
+            Удалить уже сохранённые ключи можно без оплаты. Чтобы добавить или обновить токен —
+            подключите тариф Pro.
+          </p>
+          <Button
+            className="min-h-10"
+            onClick={() => openPaywall({ reason: "broker_credentials.write" })}
+          >
+            Подключить тариф
+          </Button>
+        </div>
+      )}
 
       <section className="space-y-3">
         <h2 className="text-lg font-medium">Брокерские ключи T‑Invest</h2>
@@ -98,35 +130,49 @@ export function AccountPage() {
               <span className="text-xs text-amber-700 dark:text-amber-400">не задан</span>
             )}
           </div>
-          <Input
-            type="password"
-            autoComplete="off"
-            placeholder="Вставьте production-токен"
-            value={productionToken}
-            onChange={(e) => setProductionToken(e.target.value)}
-            className="min-h-10"
-          />
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              className="min-h-10"
-              disabled={!productionToken.trim() || saveMutation.isPending}
-              onClick={() =>
-                saveMutation.mutate({ kind: "production", token: productionToken.trim() })
-              }
-            >
-              Сохранить production
-            </Button>
-            {production && (
-              <Button
-                variant="outline"
+          {canWriteKeys && (
+            <>
+              <Input
+                type="password"
+                autoComplete="off"
+                placeholder="Вставьте production-токен"
+                value={productionToken}
+                onChange={(e) => setProductionToken(e.target.value)}
                 className="min-h-10"
-                disabled={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate("production")}
-              >
-                Удалить
-              </Button>
-            )}
-          </div>
+              />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button
+                  className="min-h-10"
+                  disabled={!productionToken.trim() || saveMutation.isPending}
+                  onClick={() =>
+                    saveMutation.mutate({ kind: "production", token: productionToken.trim() })
+                  }
+                >
+                  Сохранить production
+                </Button>
+                {production && (
+                  <Button
+                    variant="outline"
+                    className="min-h-10"
+                    disabled={deleteMutation.isPending}
+                    onClick={() => deleteMutation.mutate("production")}
+                  >
+                    Удалить
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
+          {!canWriteKeys && production && (
+            <Button
+              variant="outline"
+              className="min-h-10"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate("production")}
+            >
+              Удалить
+            </Button>
+          )}
         </div>
 
         <details
@@ -152,35 +198,49 @@ export function AccountPage() {
                 <span className="text-xs text-muted-foreground">не задан</span>
               )}
             </div>
-            <Input
-              type="password"
-              autoComplete="off"
-              placeholder="Вставьте sandbox-токен"
-              value={sandboxToken}
-              onChange={(e) => setSandboxToken(e.target.value)}
-              className="min-h-10"
-            />
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button
-                className="min-h-10"
-                disabled={!sandboxToken.trim() || saveMutation.isPending}
-                onClick={() =>
-                  saveMutation.mutate({ kind: "sandbox", token: sandboxToken.trim() })
-                }
-              >
-                Сохранить sandbox
-              </Button>
-              {sandbox && (
-                <Button
-                  variant="outline"
+            {canWriteKeys && (
+              <>
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  placeholder="Вставьте sandbox-токен"
+                  value={sandboxToken}
+                  onChange={(e) => setSandboxToken(e.target.value)}
                   className="min-h-10"
-                  disabled={deleteMutation.isPending}
-                  onClick={() => deleteMutation.mutate("sandbox")}
-                >
-                  Удалить
-                </Button>
-              )}
-            </div>
+                />
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    className="min-h-10"
+                    disabled={!sandboxToken.trim() || saveMutation.isPending}
+                    onClick={() =>
+                      saveMutation.mutate({ kind: "sandbox", token: sandboxToken.trim() })
+                    }
+                  >
+                    Сохранить sandbox
+                  </Button>
+                  {sandbox && (
+                    <Button
+                      variant="outline"
+                      className="min-h-10"
+                      disabled={deleteMutation.isPending}
+                      onClick={() => deleteMutation.mutate("sandbox")}
+                    >
+                      Удалить
+                    </Button>
+                  )}
+                </div>
+              </>
+            )}
+            {!canWriteKeys && sandbox && (
+              <Button
+                variant="outline"
+                className="min-h-10"
+                disabled={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate("sandbox")}
+              >
+                Удалить
+              </Button>
+            )}
           </div>
         </details>
 
@@ -190,7 +250,10 @@ export function AccountPage() {
       <section className="space-y-2">
         <h2 className="text-lg font-medium">Как мы защищаем ключи</h2>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-          <li>Токены хранятся только в зашифрованном виде (envelope AES‑GCM), ключ шифрования находится отдельно от базы.</li>
+          <li>
+            Токены хранятся только в зашифрованном виде (envelope AES‑GCM), ключ шифрования находится
+            отдельно от базы.
+          </li>
           <li>Plaintext токена не возвращается API и не пишется в логи.</li>
           <li>Вы можете удалить ключ здесь в любой момент и отозвать его в T‑Банке.</li>
         </ul>
@@ -198,3 +261,6 @@ export function AccountPage() {
     </div>
   );
 }
+
+/** @deprecated use AccountKeysPage via AccountLayout */
+export const AccountPage = AccountKeysPage;

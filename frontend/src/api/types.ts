@@ -110,6 +110,12 @@ export interface AuthMeResponse {
     sandbox?: { fingerprint: string; updated_at: string };
     production?: { fingerprint: string; updated_at: string };
   };
+  telegram_bot?: {
+    configured: boolean;
+    connected: boolean;
+    bot_username?: string;
+    deep_link?: string;
+  };
 }
 
 export interface BrokerCredentialStatus {
@@ -213,6 +219,7 @@ export interface Portfolio {
   positions_count: number;
   closed_positions_count?: number;
   invested_capital_rub: number;
+  access_locked?: boolean;
   api_trade_only?: boolean;
   max_weighted_duration_years?: number | null;
   data: PortfolioData;
@@ -626,4 +633,57 @@ export interface SellQuoteResponse {
   suggested_price_pct: number;
   available_lots: number;
   sell_buffer_label: string;
+}
+
+export type BillingPeriod = "month" | "year";
+
+export interface BillingCatalogItem {
+  period: BillingPeriod;
+  amount_kopecks: number;
+  monthly_kopecks: number;
+  savings_kopecks: number;
+  savings_percent: number;
+  features: string[];
+  plan_version_id: string;
+}
+
+export interface BillingCatalogResponse {
+  plans: BillingCatalogItem[];
+  payment_enabled: boolean;
+}
+
+export interface BillingSubscriptionStatus {
+  status: string;
+  period: string;
+  amount_kopecks: number;
+  current_period_end: string;
+  cancel_at_period_end: boolean;
+  features: string[];
+}
+
+export interface BillingStatusResponse {
+  complimentary: boolean;
+  payment_enabled: boolean;
+  entitlements: string[];
+  has_active_access: boolean;
+  subscription?: BillingSubscriptionStatus | null;
+}
+
+export interface BillingCheckoutResponse {
+  payment_id: string;
+  confirmation_url: string;
+  status: string;
+}
+
+export interface BillingLedgerEntry {
+  id: string;
+  kind: "credit" | "debit";
+  amount_kopecks: number;
+  reason: string;
+  payment_id?: string;
+  created_at: string;
+}
+
+export interface BillingLedgerResponse {
+  entries: BillingLedgerEntry[];
 }

@@ -38,6 +38,7 @@ func NewRouter(deps Deps, logger *slog.Logger) http.Handler {
 		r.Route("/me", func(r chi.Router) {
 			r.Put("/broker-credentials/{kind}", h.PutBrokerCredential)
 			r.Delete("/broker-credentials/{kind}", h.DeleteBrokerCredential)
+			r.Delete("/telegram-bot", h.DeleteTelegramBot)
 		})
 
 		r.Route("/bonds", func(r chi.Router) {
@@ -105,6 +106,16 @@ func NewRouter(deps Deps, logger *slog.Logger) http.Handler {
 
 		r.Post("/notifications/{notification_id}/read", h.MarkNotificationRead)
 		r.Post("/notifications/{notification_id}/dismiss", h.DismissNotification)
+
+		r.Route("/billing", func(r chi.Router) {
+			r.Get("/catalog", h.GetBillingCatalog)
+			r.Get("/status", h.GetBillingStatus)
+			r.Get("/ledger", h.GetBillingLedger)
+			r.Post("/checkout", h.PostBillingCheckout)
+			r.Post("/cancel", h.PostBillingCancel)
+			r.Post("/change-period", h.PostBillingChangePeriod)
+			r.Post("/webhooks/yookassa", h.PostYooKassaWebhook)
+		})
 	})
 
 	return r

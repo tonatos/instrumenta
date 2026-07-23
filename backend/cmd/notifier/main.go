@@ -21,12 +21,17 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	scanner, _, cleanup, err := app.WireNotifier(ctx, settings, logger)
+	scanner, billing, inbox, _, cleanup, err := app.WireNotifier(ctx, settings, logger)
 	if err != nil {
 		logger.Error("wire notifier failed", "error", err)
 		os.Exit(1)
 	}
 	defer cleanup()
+
+	if inbox != nil {
+		go inbox.Run(ctx)
+		logger.Info("telegram bot inbox started")
+	}
 
 	interval := settings.NotifierScanIntervalSec
 	if interval < 60 {
@@ -37,23 +42,32 @@ func main() {
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	defer ticker.Stop()
 
-	runScan := func() {
-		count, err := scanner.Run(ctx, time.Now())
+	runCycle := func() {
+		now := time.Now()
+		count, err := scanner.Run(ctx, now)
 		if err != nil {
 			logger.Error("scan failed", "error", err)
-			return
+		} else {
+			logger.Info("scan complete", "alerts_processed", count)
 		}
-		logger.Info("scan complete", "alerts_processed", count)
+		if billing != nil {
+			renewed, failed, expired, err := billing.RenewDue(ctx, now.UTC())
+			if err != nil {
+				logger.Error("billing renew failed", "error", err)
+			} else if renewed > 0 || failed > 0 || expired > 0 {
+				logger.Info("billing renew", "renewed", renewed, "failed", failed, "expired", expired)
+			}
+		}
 	}
 
-	runScan()
+	runCycle()
 	for {
 		select {
 		case <-ctx.Done():
 			logger.Info("notifier stopped")
 			return
 		case <-ticker.C:
-			runScan()
+			runCycle()
 		}
 	}
 }

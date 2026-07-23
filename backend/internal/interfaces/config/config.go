@@ -27,9 +27,8 @@ type Settings struct {
 	AuthSecret   string
 	PublicAppURL string
 
-	DevTelegramID            int64
-	TenantBackfillTelegramID int64
-	BrokerKEK                string
+	DevTelegramID int64
+	BrokerKEK     string
 
 	TelegramOIDCClientID     string
 	TelegramOIDCClientSecret string
@@ -48,9 +47,14 @@ type Settings struct {
 	RedisURL                 string
 	NotifierScanIntervalSec  int
 	TelegramBotToken         string
-	TelegramNotifyUserID     int64
+	TelegramBotUsername      string // optional override; otherwise resolved via getMe
 	NotifierLedgerPath       string
 	NotificationsDev         bool
+
+	YooKassaShopID     string
+	YooKassaSecretKey  string
+	YooKassaReturnURL  string
+	ComplimentaryTelegramIDs []int64
 }
 
 func repoRoot() string {
@@ -106,9 +110,8 @@ func Load() Settings {
 		AuthSecret:   strings.TrimSpace(os.Getenv("AUTH_SECRET")),
 		PublicAppURL: strings.TrimSpace(envString("PUBLIC_APP_URL", "http://localhost:5173")),
 
-		DevTelegramID:            envInt64("DEV_TELEGRAM_ID", 1),
-		TenantBackfillTelegramID: envInt64("TENANT_BACKFILL_TELEGRAM_ID", 0),
-		BrokerKEK:                strings.TrimSpace(os.Getenv("BROKER_KEK")),
+		DevTelegramID: envInt64("DEV_TELEGRAM_ID", 1),
+		BrokerKEK:     strings.TrimSpace(os.Getenv("BROKER_KEK")),
 
 		TelegramOIDCClientID:     strings.TrimSpace(os.Getenv("TELEGRAM_OIDC_CLIENT_ID")),
 		TelegramOIDCClientSecret: strings.TrimSpace(os.Getenv("TELEGRAM_OIDC_CLIENT_SECRET")),
@@ -127,11 +130,25 @@ func Load() Settings {
 		RedisURL:                envString("REDIS_URL", "redis://localhost:6379/0"),
 		NotifierScanIntervalSec: envInt("NOTIFIER_SCAN_INTERVAL_SEC", 3600),
 		TelegramBotToken:        os.Getenv("TELEGRAM_BOT_TOKEN"),
-		TelegramNotifyUserID:    envInt64("TELEGRAM_NOTIFY_USER_ID", 0),
+		TelegramBotUsername:     strings.TrimPrefix(strings.TrimSpace(os.Getenv("TELEGRAM_BOT_USERNAME")), "@"),
 		NotifierLedgerPath:      envString("NOTIFIER_LEDGER_PATH", defaultNotifierLedgerPath(root)),
 		NotificationsDev:        envBool("NOTIFICATIONS_DEV", false),
+
+		YooKassaShopID:           strings.TrimSpace(os.Getenv("YOOKASSA_SHOP_ID")),
+		YooKassaSecretKey:        strings.TrimSpace(os.Getenv("YOOKASSA_SECRET_KEY")),
+		YooKassaReturnURL:        strings.TrimSpace(os.Getenv("YOOKASSA_RETURN_URL")),
+		// Empty = nobody complimentary. Prod default lives in deploy/inventory.go.
+		ComplimentaryTelegramIDs: envInt64CSV("COMPLIMENTARY_TELEGRAM_IDS", nil),
 	}
 	return s
+}
+
+// YooKassaReturnURLResolved defaults to PUBLIC_APP_URL/account/plan?payment=return.
+func (s Settings) YooKassaReturnURLResolved() string {
+	if s.YooKassaReturnURL != "" {
+		return s.YooKassaReturnURL
+	}
+	return strings.TrimRight(s.PublicAppURL, "/") + "/account/plan?payment=return"
 }
 
 func (s Settings) AuthEnabled() bool {
@@ -153,20 +170,6 @@ func (s Settings) TelegramOIDCConfigured() bool {
 
 func (s Settings) TaxRateFraction() float64 {
 	return s.TaxRate / 100.0
-}
-
-// TenantBackfillID resolves the telegram id used to own pre-multi-tenant rows.
-func (s Settings) TenantBackfillID() int64 {
-	if s.TenantBackfillTelegramID != 0 {
-		return s.TenantBackfillTelegramID
-	}
-	if s.TelegramNotifyUserID != 0 {
-		return s.TelegramNotifyUserID
-	}
-	if s.DevTelegramID != 0 {
-		return s.DevTelegramID
-	}
-	return 1
 }
 
 func envString(key, fallback string) string {
@@ -239,6 +242,30 @@ func envStringSlice(key string, fallback []string) []string {
 		if p != "" {
 			out = append(out, p)
 		}
+	}
+	if len(out) == 0 {
+		return fallback
+	}
+	return out
+}
+
+func envInt64CSV(key string, fallback []int64) []int64 {
+	v := os.Getenv(key)
+	if strings.TrimSpace(v) == "" {
+		return fallback
+	}
+	parts := strings.Split(v, ",")
+	out := make([]int64, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		n, err := strconv.ParseInt(p, 10, 64)
+		if err != nil {
+			continue
+		}
+		out = append(out, n)
 	}
 	if len(out) == 0 {
 		return fallback

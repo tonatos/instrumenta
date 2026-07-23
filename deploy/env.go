@@ -31,13 +31,16 @@ type envTemplateData struct {
 	TelegramOIDCClientID     string
 	TelegramOIDCClientSecret string
 	DevTelegramID            string
-	TenantBackfillTelegramID string
 	NotifierScanIntervalSec  string
 	TelegramBotToken         string
-	TelegramNotifyUserID     string
+	TelegramBotUsername      string
+	YooKassaShopID           string
+	YooKassaSecretKey        string
+	ComplimentaryTelegramIDs string
 }
 
 func renderEnv(inv Inventory) (string, error) {
+	inv.applyDefaults()
 	tmpl, err := template.New("env.prod").Parse(envProdTemplate)
 	if err != nil {
 		return "", fmt.Errorf("parse env template: %w", err)
@@ -62,10 +65,12 @@ func renderEnv(inv Inventory) (string, error) {
 		TelegramOIDCClientID:     inv.TelegramOIDCClientID,
 		TelegramOIDCClientSecret: inv.TelegramOIDCClientSecret,
 		DevTelegramID:            strconv.FormatInt(inv.DevTelegramID, 10),
-		TenantBackfillTelegramID: strconv.FormatInt(inv.TenantBackfillTelegramID, 10),
 		NotifierScanIntervalSec:  strconv.Itoa(inv.NotifierScanIntervalSec),
 		TelegramBotToken:         inv.TelegramBotToken,
-		TelegramNotifyUserID:     strconv.Itoa(inv.TelegramNotifyUserID),
+		TelegramBotUsername:      inv.TelegramBotUsername,
+		YooKassaShopID:           inv.YooKassaShopID,
+		YooKassaSecretKey:        inv.YooKassaSecretKey,
+		ComplimentaryTelegramIDs: inv.ComplimentaryTelegramIDs,
 	}
 
 	var buf bytes.Buffer

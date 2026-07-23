@@ -124,7 +124,7 @@ func runScan() int {
 	}
 	logger := applogging.New(settings.LogLevel, settings.Debug)
 	ctx := context.Background()
-	scanner, _, cleanup, err := app.WireNotifier(ctx, settings, logger)
+	scanner, _, _, _, cleanup, err := app.WireNotifier(ctx, settings, logger)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "wire notifier: %v\n", err)
 		return 1
@@ -195,10 +195,11 @@ func resolveHoldingISIN(ctx context.Context, settings config.Settings, portfolio
 		moex.NewDefaultFlagsService(bondRefRepo),
 	)
 
-	ctx = auth.WithOwnerTelegramID(ctx, settings.TenantBackfillID())
-	if settings.DevTelegramID != 0 {
-		ctx = auth.WithOwnerTelegramID(ctx, settings.DevTelegramID)
+	ownerID := settings.DevTelegramID
+	if ownerID == 0 {
+		ownerID = 1
 	}
+	ctx = auth.WithOwnerTelegramID(ctx, ownerID)
 	p, err := tradingCtx.GetTradingPortfolio(ctx, portfolioID)
 	if err != nil {
 		return "", err

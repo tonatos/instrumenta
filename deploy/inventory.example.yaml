@@ -43,14 +43,18 @@ telegram_oidc_client_id: ""
 telegram_oidc_client_secret: ""
 # Synthetic owner when AUTH_DISABLED=true (local/e2e)
 dev_telegram_id: 1
-# Owner for portfolios/favorites created before multi-tenant migration
-# tenant_backfill_telegram_id: 139693774
 
 # Notifier worker
 notifier_scan_interval_sec: 3600
 telegram_bot_token: ""
-# Legacy fallback chat; prefer per-user owner telegram_id
-telegram_notify_user_id: 0
+# Optional username for deep link (otherwise API resolves via getMe)
+# telegram_bot_username: ""
+
+# Billing / YooKassa (leave empty until shop is ready — catalog/UI still work)
+yookassa_shop_id: ""
+yookassa_secret_key: ""
+# Comma-separated Telegram IDs with free Pro (empty = nobody)
+complimentary_telegram_ids: ""
 
 # GHCR (only for private packages; public images pull without login)
 # ghcr_username: tonatos
