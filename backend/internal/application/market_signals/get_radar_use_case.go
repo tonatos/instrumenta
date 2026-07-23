@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	appportfolio "github.com/tonatos/instrumenta/backend/internal/application/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
 )
 
 type RadarResponse struct {

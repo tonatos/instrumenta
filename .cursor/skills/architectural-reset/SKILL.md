@@ -1,13 +1,13 @@
 ---
-name: architectural-reset-bond-monitor
+name: architectural-reset-instrumenta
 description: >-
-  Project overlay for architectural-reset in bond-monitor. Applies DDD layer
+  Project overlay for architectural-reset in instrumenta. Applies DDD layer
   constraints and unified entry points from AGENTS.md. Use together with the
   personal architectural-reset skill when working in this repository.
 disable-model-invocation: true
 ---
 
-# Architectural Reset — bond-monitor overlay
+# Architectural Reset — instrumenta overlay
 
 **Сначала** прочитай и следуй персональному скиллу:
 `~/.cursor/skills/architectural-reset/SKILL.md`
@@ -16,7 +16,7 @@ disable-model-invocation: true
 
 ---
 
-## DDD-слои (`backend/src/bond_monitor/`)
+## DDD-слои (`backend/src/instrumenta/`)
 
 | Слой | Путь | Правило reset |
 |------|------|---------------|
@@ -114,7 +114,7 @@ P0-покрытие (ориентир): `test_planner.py`, `test_plan_simulation
 
 ## Success metrics (дополнение)
 
-Помимо общих метрик из personal skill, для bond-monitor проверь:
+Помимо общих метрик из personal skill, для instrumenta проверь:
 
 - Нет новых нарушений dependency rule (`domain/` → `infrastructure/`)
 - Число вызовов `collect_alerts()` / `deploy_cash()` не размножилось

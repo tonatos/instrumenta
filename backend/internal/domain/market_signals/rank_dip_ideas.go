@@ -3,7 +3,7 @@ package market_signals
 import (
 	"sort"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 )
 
 func bondChangePct(now, past *float64) (float64, bool) {

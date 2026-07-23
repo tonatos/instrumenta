@@ -77,8 +77,8 @@ test.describe("Скринер — риск-профиль", () => {
   test.beforeEach(async ({ page }) => {
     await mockConfig(page);
     await page.addInitScript(() => {
-      localStorage.setItem("bond_monitor_screener_risk_profile", "conservative");
-      localStorage.setItem("bond_monitor_rate_scenario", "hold");
+      localStorage.setItem("instrumenta_screener_risk_profile", "conservative");
+      localStorage.setItem("instrumenta_rate_scenario", "hold");
     });
     await page.route("**/api/v1/bonds/**", async (route) => {
       const url = new URL(route.request().url());
@@ -129,7 +129,7 @@ test.describe("Скринер — риск-профиль", () => {
 
   test("агрессивный профиль поднимает ВДО выше IG", async ({ page }) => {
     await page.addInitScript(() => {
-      localStorage.setItem("bond_monitor_screener_risk_profile", "normal");
+      localStorage.setItem("instrumenta_screener_risk_profile", "normal");
     });
     await page.goto("/");
     await expect(page.getByRole("button", { name: "IG надёжная" })).toBeVisible({

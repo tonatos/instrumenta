@@ -3,8 +3,8 @@ package adapters
 import (
 	"context"
 
-	"github.com/tonatos/bond-monitor/backend/internal/application"
-	appmarketsignals "github.com/tonatos/bond-monitor/backend/internal/application/market_signals"
+	"github.com/tonatos/instrumenta/backend/internal/application"
+	appmarketsignals "github.com/tonatos/instrumenta/backend/internal/application/market_signals"
 )
 
 type MarketRadarService struct {

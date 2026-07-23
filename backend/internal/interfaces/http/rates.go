@@ -3,9 +3,9 @@ package httpapi
 import (
 	"context"
 
-	appmarket "github.com/tonatos/bond-monitor/backend/internal/application/market"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/preferences"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	appmarket "github.com/tonatos/instrumenta/backend/internal/application/market"
+	"github.com/tonatos/instrumenta/backend/internal/domain/preferences"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 // resolveMarketRates returns key rate (pp) and tax fraction for the request tenant.

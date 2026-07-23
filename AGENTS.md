@@ -1,4 +1,4 @@
-# AGENTS.md — Гайд по проекту bond-monitor для AI-агентов
+# AGENTS.md — Гайд по проекту instrumenta для AI-агентов
 
 Монорепозиторий: **Go API** (`backend/cmd/api`) + **React SPA** + **notifier worker** (`backend/cmd/notifier`). Читай этот файл перед изменениями кода.
 
@@ -73,7 +73,7 @@ Domain: `backend/internal/domain/billing/`. Application: `application/billing`. 
 | **Interfaces** | `internal/interfaces/` | HTTP handlers, auth, config |
 | **Entrypoints** | `cmd/api`, `cmd/notifier` | HTTP server + фоновый воркер |
 
-**Legacy:** `backend/src/bond_monitor/` — устаревший Python-код (reference), **не используется в runtime**. Активный backend только Go (`backend/cmd`, `backend/internal`).
+**Legacy:** `backend/src/instrumenta/` — устаревший Python-код (reference), **не используется в runtime**. Активный backend только Go (`backend/cmd`, `backend/internal`).
 
 ### Bounded contexts
 
@@ -157,7 +157,7 @@ fetch MOEX (unfiltered) → enrich (defaults, T-Invest, ratings, put offers)
 
 **Ratings:** smart-lab scrape → `bond_credit_ratings` (ISIN, source=`smartlab`); fallback `issuer_rating_patterns`; manual override `source=manual`. Refresh: `POST /ratings/refresh` + auto if stale >7d.
 
-**Defaults:** MOEX ISS `HASDEFAULT`/`HASTECHNICALDEFAULT` → `bond_default_flags` (source=`moex`, TTL 24h); manual override `source=manual`. Таблицы в `bond_monitor.db`, миграция `004_bond_reference.sql`.
+**Defaults:** MOEX ISS `HASDEFAULT`/`HASTECHNICALDEFAULT` → `bond_default_flags` (source=`moex`, TTL 24h); manual override `source=manual`. Таблицы в `instrumenta.db`, миграция `004_bond_reference.sql`.
 
 Ликвидность и min-volume: `BondRecord.filter_volume_rub` = `prev_volume_rub` ?? `volume_rub` (вчерашний оборот MOEX предпочтительнее для фильтра и `liquidity_score`).
 
@@ -391,9 +391,9 @@ internal/application/notifications/
 
 | Модуль | Ответственность |
 |--------|-----------------|
-| `redis_bus.go` | Redis Stream `bond-monitor:notifications`, consumer group `api` |
+| `redis_bus.go` | Redis Stream `instrumenta:notifications`, consumer group `api` |
 | `ledger_repository.go` | SQLite outbox `cache/notifier_ledger.db`, идемпотентность |
-| `notifications_repository.go` | Read-model `user_notifications` в `bond_monitor.db` |
+| `notifications_repository.go` | Read-model `user_notifications` в `instrumenta.db` |
 | `telegram_client.go` | Telegram Bot API push |
 
 При недоступности Redis воркер пишет напрямую в `user_notifications`.
@@ -532,7 +532,7 @@ Golden snapshots: `backend/testdata/golden/` (эталон HTTP-контракт
 
 ## Деплой (Docker Compose)
 
-Сервисы: `api`, `web`, `redis`, `notifier`, опционально `caddy` (prod). Notifier и API — один образ `bond-monitor-api`.
+Сервисы: `api`, `web`, `redis`, `notifier`, опционально `caddy` (prod). Notifier и API — один образ `instrumenta-api`.
 
 Env notifier (общий `.env`): `REDIS_URL`, `NOTIFIER_SCAN_INTERVAL_SEC`, `TELEGRAM_BOT_TOKEN`, опционально `TELEGRAM_BOT_USERNAME`, `NOTIFIER_LEDGER_PATH`.
 

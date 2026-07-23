@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/paths"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/paths"
 )
 
 const (

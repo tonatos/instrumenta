@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	pb "github.com/russianinvestments/invest-api-go-sdk/proto"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

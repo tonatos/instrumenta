@@ -3,12 +3,12 @@ package bonds
 import (
 	"context"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/screening"
-	infraBonds "github.com/tonatos/bond-monitor/backend/internal/infrastructure/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/moex"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/screening"
+	infraBonds "github.com/tonatos/instrumenta/backend/internal/infrastructure/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/moex"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/tinvest"
 )
 
 // LoadResult is the result of bond loading pipeline.

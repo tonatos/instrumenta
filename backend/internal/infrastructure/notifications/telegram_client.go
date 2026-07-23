@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/domain/notifications"
 )
 
 // TelegramClient sends messages and receives updates via Telegram Bot API.

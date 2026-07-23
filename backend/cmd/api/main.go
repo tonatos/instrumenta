@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/app"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/config"
-	applogging "github.com/tonatos/bond-monitor/backend/internal/interfaces/logging"
-	httpapi "github.com/tonatos/bond-monitor/backend/internal/interfaces/http"
+	"github.com/tonatos/instrumenta/backend/internal/app"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/config"
+	applogging "github.com/tonatos/instrumenta/backend/internal/interfaces/logging"
+	httpapi "github.com/tonatos/instrumenta/backend/internal/interfaces/http"
 )
 
 func main() {
@@ -24,7 +24,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	logger.Info("starting bond-monitor API",
+	logger.Info("starting instrumenta API",
 		"host", settings.Host,
 		"port", settings.Port,
 		"log_level", settings.LogLevel,

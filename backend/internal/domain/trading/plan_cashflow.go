@@ -4,8 +4,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
 )
 
 const cashReconcileEpsilonRub = 0.01

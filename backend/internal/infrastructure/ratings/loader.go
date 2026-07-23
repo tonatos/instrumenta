@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 )
 
 // Loader applies credit ratings from SQLite reference tables.

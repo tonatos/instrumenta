@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
 )
 
 const portfolioSelectCols = `id, name, created_at, updated_at, owner_telegram_id, initial_amount_rub, horizon_date, risk_profile, cash_balance_rub, mode, account_id, account_kind, data`

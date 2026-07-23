@@ -43,13 +43,13 @@ func main() {
 		if envErr != nil {
 			log.Fatalf("render env: %v", envErr)
 		}
-		stats, runErr := executor.Run("Bootstrap Bond Monitor", buildBootstrapTasks(inv, envContent), vars)
+		stats, runErr := executor.Run("Bootstrap Instrumenta", buildBootstrapTasks(inv, envContent), vars)
 		if runErr != nil {
 			log.Fatalf("bootstrap failed: %v", runErr)
 		}
 		log.Printf("bootstrap complete: %d ok, %d changed, %d failed", stats.OK, stats.Changed, stats.Failed)
 	case "update":
-		stats, runErr := executor.Run("Update Bond Monitor", buildUpdateTasks(inv), vars)
+		stats, runErr := executor.Run("Update Instrumenta", buildUpdateTasks(inv), vars)
 		if runErr != nil {
 			log.Fatalf("update failed: %v", runErr)
 		}

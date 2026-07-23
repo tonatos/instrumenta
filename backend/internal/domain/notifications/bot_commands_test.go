@@ -18,7 +18,7 @@ func TestParseBotCommand(t *testing.T) {
 }
 
 func TestBotDeepLink(t *testing.T) {
-	if got := BotDeepLink("bond_monitor_bot"); got != "https://t.me/bond_monitor_bot" {
+	if got := BotDeepLink("instrumenta_bot"); got != "https://t.me/instrumenta_bot" {
 		t.Fatalf("got %q", got)
 	}
 	if got := BotDeepLink("@x"); got != "https://t.me/x" {

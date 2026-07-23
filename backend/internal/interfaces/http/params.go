@@ -3,7 +3,7 @@ package httpapi
 import (
 	"strings"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
 )
 
 func ParseRiskProfile(value string) portfolio.RiskProfile {

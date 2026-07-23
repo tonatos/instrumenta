@@ -3,8 +3,8 @@ package trading
 import (
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
 )
 
 // TradingAdviceResult is the API-facing trading advice DTO.

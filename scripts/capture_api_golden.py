@@ -31,10 +31,10 @@ os.environ.setdefault("DATABASE_URL", f"sqlite+aiosqlite:///{REPO_ROOT / 'cache'
 
 from litestar.testing import TestClient  # noqa: E402
 
-from bond_monitor.application.bonds.bond_service import BondLoadResult, BondService  # noqa: E402
-from bond_monitor.interfaces.auth.jwt_auth import reset_jwt_auth_cache  # noqa: E402
-from bond_monitor.interfaces.config import get_settings  # noqa: E402
-from bond_monitor.main import create_app  # noqa: E402
+from instrumenta.application.bonds.bond_service import BondLoadResult, BondService  # noqa: E402
+from instrumenta.interfaces.auth.jwt_auth import reset_jwt_auth_cache  # noqa: E402
+from instrumenta.interfaces.config import get_settings  # noqa: E402
+from instrumenta.main import create_app  # noqa: E402
 from conftest import attach_trading_portfolio  # noqa: E402
 from factories import (  # noqa: E402
     aa19dfd_portfolio,
@@ -121,7 +121,7 @@ def _universe():
 
 def _mock_bond_service(bonds: list | None = None) -> MagicMock:
     items = bonds if bonds is not None else aa19dfd_universe()
-    from bond_monitor.domain.screening.scorer import score_bonds_all_profiles
+    from instrumenta.domain.screening.scorer import score_bonds_all_profiles
 
     scored = score_bonds_all_profiles(items, key_rate=14.5, tax_rate=0.13)
     svc = MagicMock(spec=BondService)
@@ -136,13 +136,13 @@ def _mock_bond_service(bonds: list | None = None) -> MagicMock:
 def bond_service_patch(bonds: list | None = None):
     mock_svc = _mock_bond_service(bonds)
     with patch(
-        "bond_monitor.interfaces.api.controllers.bonds.provide_bond_service",
+        "instrumenta.interfaces.api.controllers.bonds.provide_bond_service",
         return_value=mock_svc,
     ), patch(
-        "bond_monitor.interfaces.api.controllers.portfolio.provide_bond_service",
+        "instrumenta.interfaces.api.controllers.portfolio.provide_bond_service",
         return_value=mock_svc,
     ), patch(
-        "bond_monitor.interfaces.api.controllers.trading.provide_bond_service",
+        "instrumenta.interfaces.api.controllers.trading.provide_bond_service",
         return_value=mock_svc,
     ):
         yield mock_svc
@@ -153,19 +153,19 @@ def trading_patches(money_rub: float = 500_000.0):
     with (
         bond_service_patch(),
         patch(
-            "bond_monitor.application.trading.broker.get_account_snapshot",
+            "instrumenta.application.trading.broker.get_account_snapshot",
             return_value=make_account_snapshot(money_rub),
         ),
         patch(
-            "bond_monitor.application.trading.broker.get_account_operations",
+            "instrumenta.application.trading.broker.get_account_operations",
             return_value=[],
         ),
         patch(
-            "bond_monitor.application.trading.broker.get_active_orders",
+            "instrumenta.application.trading.broker.get_active_orders",
             return_value=[],
         ),
         patch(
-            "bond_monitor.application.trading.broker.resolve_figi_for_isin",
+            "instrumenta.application.trading.broker.resolve_figi_for_isin",
             return_value="FIGI-TEST",
         ),
     ):
@@ -254,7 +254,7 @@ def capture() -> None:
         # Order preview
         with trading_patches(80_000.0):
             with patch(
-                "bond_monitor.application.trading.broker.preview_order_price",
+                "instrumenta.application.trading.broker.preview_order_price",
                 return_value=None,
             ):
                 resp = client.post(

@@ -3,7 +3,7 @@ package tinvest
 import (
 	"testing"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 	pb "github.com/russianinvestments/invest-api-go-sdk/proto"
 )
 

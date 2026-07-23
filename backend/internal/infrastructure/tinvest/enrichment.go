@@ -10,8 +10,8 @@ import (
 	"time"
 
 	pb "github.com/russianinvestments/invest-api-go-sdk/proto"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/paths"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/paths"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/billing"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/yookassa"
+	"github.com/tonatos/instrumenta/backend/internal/domain/billing"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/yookassa"
 )
 
 var (

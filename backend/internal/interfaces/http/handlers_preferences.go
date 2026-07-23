@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/preferences"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	"github.com/tonatos/instrumenta/backend/internal/domain/preferences"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 type PutPreferencesRequest struct {

@@ -3,7 +3,7 @@ package notifications
 import (
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
 )
 
 // AlertDetailKey returns the stable detail key for an alert.

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"time"
 
-	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	domainPortfolio "github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 // ErrBrokerCredentialsRequired is returned when the owner has no token for the account kind.

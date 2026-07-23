@@ -3,10 +3,10 @@ package bonds_test
 import (
 	"testing"
 
-	appbonds "github.com/tonatos/bond-monitor/backend/internal/application/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	infraBonds "github.com/tonatos/bond-monitor/backend/internal/infrastructure/bonds"
+	appbonds "github.com/tonatos/instrumenta/backend/internal/application/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	infraBonds "github.com/tonatos/instrumenta/backend/internal/infrastructure/bonds"
 )
 
 func TestListBondsScoreSortDescPutsHighestFirst(t *testing.T) {

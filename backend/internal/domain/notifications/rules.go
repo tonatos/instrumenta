@@ -5,10 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/market_signals"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/market_signals"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
 )
 
 // HoldingSnapshot is a minimal holding view for alert rules.

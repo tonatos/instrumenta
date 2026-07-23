@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tonatos/bond-monitor/backend/internal/application"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	"github.com/tonatos/instrumenta/backend/internal/application"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 // FavoritesRepository adapts persistence.FavoritesRepository to application.FavoritesRepository.

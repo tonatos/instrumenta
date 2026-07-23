@@ -1,4 +1,4 @@
-const AUTH_TOKEN_KEY = "bond_monitor_auth_token";
+const AUTH_TOKEN_KEY = "instrumenta_auth_token";
 
 let authToken: string | null =
   typeof localStorage !== "undefined" ? localStorage.getItem(AUTH_TOKEN_KEY) : null;

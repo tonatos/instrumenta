@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/tonatos/bond-monitor-api:${IMAGE_TAG:-main}
+    image: ghcr.io/tonatos/instrumenta-api:${IMAGE_TAG:-main}
     build: !reset null
     ports: !reset []
     environment:
@@ -8,13 +8,13 @@ services:
       REDIS_URL: redis://redis:6379/0
 
   notifier:
-    image: ghcr.io/tonatos/bond-monitor-api:${IMAGE_TAG:-main}
+    image: ghcr.io/tonatos/instrumenta-api:${IMAGE_TAG:-main}
     environment:
       LOG_LEVEL: INFO
       REDIS_URL: redis://redis:6379/0
 
   web:
-    image: ghcr.io/tonatos/bond-monitor-web:${IMAGE_TAG:-main}
+    image: ghcr.io/tonatos/instrumenta-web:${IMAGE_TAG:-main}
     build: !reset null
     ports: !reset []
 
@@ -23,7 +23,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: bond-monitor-caddy
+    container_name: instrumenta-caddy
     ports:
       - "80:80"
       - "443:443"

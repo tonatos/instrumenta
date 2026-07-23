@@ -4,7 +4,7 @@ import (
 	"context"
 
 	pb "github.com/russianinvestments/invest-api-go-sdk/proto"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
 )
 
 func (c *SDKClient) ListAccounts(kind trading.AccountKind) ([]trading.AccountInfo, error) {

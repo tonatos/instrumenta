@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/domain/notifications"
 )
 
 const (
-	streamKey      = "bond-monitor:notifications"
+	streamKey      = "instrumenta:notifications"
 	consumerGroup  = "api"
 )
 

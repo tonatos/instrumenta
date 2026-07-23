@@ -7,13 +7,13 @@ import (
 	"encoding/json"
 	"time"
 
-	appbonds "github.com/tonatos/bond-monitor/backend/internal/application/bonds"
-	appmarket "github.com/tonatos/bond-monitor/backend/internal/application/market"
-	domain "github.com/tonatos/bond-monitor/backend/internal/domain/market_signals"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/screening"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	appbonds "github.com/tonatos/instrumenta/backend/internal/application/bonds"
+	appmarket "github.com/tonatos/instrumenta/backend/internal/application/market"
+	domain "github.com/tonatos/instrumenta/backend/internal/domain/market_signals"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/screening"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
 )
 
 type ScanRadarUseCase struct {

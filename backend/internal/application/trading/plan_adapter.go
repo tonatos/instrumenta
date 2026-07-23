@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
-	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
+	domainPortfolio "github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
+	appportfolio "github.com/tonatos/instrumenta/backend/internal/application/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/tinvest"
 )
 
 // BrokerPlanAdapter implements portfolio.BrokerPlanPort via BrokerFacade.

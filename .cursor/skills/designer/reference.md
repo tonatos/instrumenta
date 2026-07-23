@@ -1,4 +1,4 @@
-# Designer reference — Instrumenta / bond-monitor
+# Designer reference — Instrumenta / instrumenta
 
 Read after `SKILL.md` when you need tokens or the widget list. Code is source of
 truth — re-check files below before a large visual change; don’t invent hex from memory.

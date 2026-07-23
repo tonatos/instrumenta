@@ -1,6 +1,6 @@
 package market_signals
 
-import "github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+import "github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 
 func FilterRadarUniverse(list []bonds.BondRecord, policy SpreadAnomalyPolicy) []bonds.BondRecord {
 	minLiq := policy.MinLiquidityRub

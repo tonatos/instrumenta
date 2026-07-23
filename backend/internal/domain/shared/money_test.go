@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
 )
 
 func approxEqual(t *testing.T, got, want float64) {

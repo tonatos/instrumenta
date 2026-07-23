@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	domainBonds "github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	domainBonds "github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 )
 
 const defaultTTL = 120 * time.Second

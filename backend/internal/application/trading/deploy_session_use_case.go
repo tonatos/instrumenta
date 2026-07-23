@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	domainPortfolio "github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/tinvest"
 )
 
 // DeploySessionConflictError indicates an active deploy session already exists.

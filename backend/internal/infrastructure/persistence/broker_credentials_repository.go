@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/crypto"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/crypto"
 )
 
 // BrokerCredentialMeta is non-secret credential metadata for UI.

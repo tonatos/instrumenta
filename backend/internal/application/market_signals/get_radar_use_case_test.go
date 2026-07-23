@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	appmarketsignals "github.com/tonatos/bond-monitor/backend/internal/application/market_signals"
-	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
-	domain "github.com/tonatos/bond-monitor/backend/internal/domain/market_signals"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	appmarketsignals "github.com/tonatos/instrumenta/backend/internal/application/market_signals"
+	appportfolio "github.com/tonatos/instrumenta/backend/internal/application/portfolio"
+	domain "github.com/tonatos/instrumenta/backend/internal/domain/market_signals"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 func TestGetRadarUseCaseOverlaysPortfolios(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/preferences"
+	"github.com/tonatos/instrumenta/backend/internal/domain/preferences"
 )
 
 // UserRepository persists Telegram users.

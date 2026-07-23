@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
 )
 
 // FavoritesRepository is the SQL implementation of portfolio.FavoritesRepository.

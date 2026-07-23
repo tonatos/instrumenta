@@ -9,7 +9,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/domain/notifications"
 )
 
 // LedgerRepository is the SQLite outbox for notifier delivery guarantees.

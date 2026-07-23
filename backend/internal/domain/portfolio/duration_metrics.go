@@ -1,7 +1,7 @@
 package portfolio
 
 import (
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 )
 
 // RateSensitiveDuration returns duration for rate-risk (floaters ≈ policy floater years).

@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
 )
 
 func TestRunMigrationsAppliesAllSQLFiles(t *testing.T) {
 	root := repoRootForTest(t)
-	t.Setenv("BOND_MONITOR_REPO_ROOT", root)
+	t.Setenv("INSTRUMENTA_REPO_ROOT", root)
 
 	db, err := persistence.Open("file:memdb_migrate?mode=memory&cache=shared")
 	if err != nil {

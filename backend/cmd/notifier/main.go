@@ -8,9 +8,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/app"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/config"
-	applogging "github.com/tonatos/bond-monitor/backend/internal/interfaces/logging"
+	"github.com/tonatos/instrumenta/backend/internal/app"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/config"
+	applogging "github.com/tonatos/instrumenta/backend/internal/interfaces/logging"
 )
 
 func main() {

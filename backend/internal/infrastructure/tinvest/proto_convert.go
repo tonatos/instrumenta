@@ -5,7 +5,7 @@ import (
 	"time"
 
 	pb "github.com/russianinvestments/invest-api-go-sdk/proto"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
 )
 
 func moneyValueToRub(mv *pb.MoneyValue) *shared.Rub {

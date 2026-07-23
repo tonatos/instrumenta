@@ -3,7 +3,7 @@ package trading
 import (
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
 )
 
 // BrokerBondPosition is a bond lot on the broker account.

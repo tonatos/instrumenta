@@ -93,16 +93,16 @@ func (inv *Inventory) applyDefaults() {
 		inv.SSHKey = "~/.ssh/id_ed25519"
 	}
 	if inv.AppDir == "" {
-		inv.AppDir = "/opt/bond-monitor"
+		inv.AppDir = "/opt/instrumenta"
 	}
 	if inv.ProjectName == "" {
-		inv.ProjectName = "bond-monitor"
+		inv.ProjectName = "instrumenta"
 	}
 	if len(inv.ComposeFiles) == 0 {
 		inv.ComposeFiles = []string{"docker-compose.yml", "docker-compose.prod.yml"}
 	}
 	if inv.GitRepo == "" {
-		inv.GitRepo = "git@github.com:tonatos/bond-monitor.git"
+		inv.GitRepo = "git@github.com:tonatos/instrumenta.git"
 	}
 	if inv.GitBranch == "" {
 		inv.GitBranch = "main"

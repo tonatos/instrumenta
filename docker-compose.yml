@@ -3,8 +3,8 @@ services:
     build:
       context: .
       dockerfile: backend/Dockerfile
-    image: bond-monitor-api:latest
-    container_name: bond-monitor-api
+    image: instrumenta-api:latest
+    container_name: instrumenta-api
     ports:
       - "8000:8000"
     env_file:
@@ -13,7 +13,7 @@ services:
     environment:
       CACHE_DIR: "/app/cache"
       REDIS_URL: "redis://redis:6379/0"
-      BOND_MONITOR_REPO_ROOT: "/app"
+      INSTRUMENTA_REPO_ROOT: "/app"
     volumes:
       - ./cache:/app/cache
     depends_on:
@@ -31,8 +31,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    image: bond-monitor-web:latest
-    container_name: bond-monitor-web
+    image: instrumenta-web:latest
+    container_name: instrumenta-web
     ports:
       - "3000:80"
     depends_on:
@@ -42,7 +42,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: bond-monitor-redis
+    container_name: instrumenta-redis
     volumes:
       - redisdata:/data
     restart: unless-stopped
@@ -55,8 +55,8 @@ services:
       retries: 5
 
   notifier:
-    image: bond-monitor-api:latest
-    container_name: bond-monitor-notifier
+    image: instrumenta-api:latest
+    container_name: instrumenta-notifier
     command: ["/app/notifier"]
     env_file:
       - path: .env
@@ -64,7 +64,7 @@ services:
     environment:
       CACHE_DIR: "/app/cache"
       REDIS_URL: "redis://redis:6379/0"
-      BOND_MONITOR_REPO_ROOT: "/app"
+      INSTRUMENTA_REPO_ROOT: "/app"
     volumes:
       - ./cache:/app/cache
     depends_on:
@@ -76,12 +76,12 @@ services:
 
   db:
     image: postgres:16-alpine
-    container_name: bond-monitor-db
+    container_name: instrumenta-db
     profiles: ["postgres"]
     environment:
-      POSTGRES_USER: bondmonitor
-      POSTGRES_PASSWORD: bondmonitor
-      POSTGRES_DB: bondmonitor
+      POSTGRES_USER: instrumenta
+      POSTGRES_PASSWORD: instrumenta
+      POSTGRES_DB: instrumenta
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:

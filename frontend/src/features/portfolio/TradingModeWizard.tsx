@@ -157,7 +157,7 @@ export function TradingModeWizard({
       }
       return api.createSandboxAccount({
         initial_amount_rub: payIn,
-        name: `bond-monitor · ${portfolio.name}`,
+        name: `instrumenta · ${portfolio.name}`,
       });
     },
     onSuccess: (account) => {

@@ -5,7 +5,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 )
 
 // Defaults; overridden via env / app config.

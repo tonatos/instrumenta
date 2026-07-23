@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/tonatos/bond-monitor/backend/internal/application"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/billing"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/application"
+	"github.com/tonatos/instrumenta/backend/internal/domain/billing"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
 )
 
 func (h *Handler) ListAccounts(w http.ResponseWriter, r *http.Request) {

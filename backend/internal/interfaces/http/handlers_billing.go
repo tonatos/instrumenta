@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	appbilling "github.com/tonatos/bond-monitor/backend/internal/application/billing"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/billing"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	appbilling "github.com/tonatos/instrumenta/backend/internal/application/billing"
+	"github.com/tonatos/instrumenta/backend/internal/domain/billing"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 func (h *Handler) requireFeature(w http.ResponseWriter, r *http.Request, feature billing.Feature) bool {

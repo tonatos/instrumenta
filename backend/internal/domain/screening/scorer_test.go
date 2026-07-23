@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/screening"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/screening"
 )
 
 func ptr[T any](v T) *T { return &v }

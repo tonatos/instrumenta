@@ -64,7 +64,7 @@ func defaultHTTPFetcher(url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("User-Agent", "bond-monitor/1.0")
+	req.Header.Set("User-Agent", "instrumenta/1.0")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err

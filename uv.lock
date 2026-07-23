@@ -8,8 +8,8 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "bond-monitor",
-    "bond-monitor-backend",
+    "instrumenta",
+    "instrumenta-backend",
 ]
 
 [[package]]
@@ -205,7 +205,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bond-monitor"
+name = "instrumenta"
 version = "0.2.0"
 source = { virtual = "." }
 
@@ -220,7 +220,7 @@ deploy = [
 deploy = [{ name = "pyinfra", specifier = ">=3.0" }]
 
 [[package]]
-name = "bond-monitor-backend"
+name = "instrumenta-backend"
 version = "0.2.0"
 source = { editable = "backend" }
 dependencies = [

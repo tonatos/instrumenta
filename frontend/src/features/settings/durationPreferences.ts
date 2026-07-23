@@ -1,6 +1,6 @@
 export type RateScenario = "hold" | "cut" | "hike";
 
-const STORAGE_KEY = "bond_monitor_rate_scenario";
+const STORAGE_KEY = "instrumenta_rate_scenario";
 const DEFAULT_SCENARIO: RateScenario = "hold";
 
 type Listener = () => void;

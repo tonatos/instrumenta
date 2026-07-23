@@ -6,16 +6,16 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/tonatos/bond-monitor/backend/internal/application"
-	appbilling "github.com/tonatos/bond-monitor/backend/internal/application/billing"
-	apptrading "github.com/tonatos/bond-monitor/backend/internal/application/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/billing"
-	domainnotifications "github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/yookassa"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	"github.com/tonatos/instrumenta/backend/internal/application"
+	appbilling "github.com/tonatos/instrumenta/backend/internal/application/billing"
+	apptrading "github.com/tonatos/instrumenta/backend/internal/application/trading"
+	"github.com/tonatos/instrumenta/backend/internal/domain/billing"
+	domainnotifications "github.com/tonatos/instrumenta/backend/internal/domain/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/tinvest"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/yookassa"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 type CredentialStatusResponse struct {

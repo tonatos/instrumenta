@@ -36,7 +36,7 @@ export function bondsListResponse(
 
 export async function seedAuth(page: Page, token = "mock-e2e-token"): Promise<void> {
   await page.addInitScript((authToken) => {
-    localStorage.setItem("bond_monitor_auth_token", authToken);
+    localStorage.setItem("instrumenta_auth_token", authToken);
   }, token);
 }
 

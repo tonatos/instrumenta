@@ -28,7 +28,7 @@ func tbankTLSCAFile() (string, error) {
 		return override, nil
 	}
 	tbankCAPathOnce.Do(func() {
-		path := filepath.Join(os.TempDir(), "bond-monitor-russian-trusted-root-ca.pem")
+		path := filepath.Join(os.TempDir(), "instrumenta-russian-trusted-root-ca.pem")
 		tbankCAPathErr = os.WriteFile(path, russianTrustedRootCAPEM, 0o644)
 		tbankCAPath = path
 	})

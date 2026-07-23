@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/config"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/config"
 )
 
 func CORSMiddleware(settings config.Settings) func(http.Handler) http.Handler {

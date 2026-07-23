@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 )
 
 // BuyAllocation is one buy when deploying available cash.

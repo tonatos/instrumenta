@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/jmoiron/sqlx"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
 )
 
 func TestDefaultFlagsServiceApply(t *testing.T) {

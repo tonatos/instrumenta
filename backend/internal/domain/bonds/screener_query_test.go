@@ -3,7 +3,7 @@ package bonds_test
 import (
 	"testing"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 )
 
 func bondFixture(segid, isin, name string, opts ...func(*bonds.BondRecord)) bonds.BondRecord {

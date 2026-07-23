@@ -1,8 +1,8 @@
 package trading
 
 import (
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/tinvest"
 )
 
 func init() {

@@ -9,7 +9,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Settings mirrors backend/src/bond_monitor/interfaces/config.py.
+// Settings mirrors backend/src/instrumenta/interfaces/config.py.
 type Settings struct {
 	Host string
 	Port int
@@ -56,7 +56,7 @@ type Settings struct {
 }
 
 func repoRoot() string {
-	if v := os.Getenv("BOND_MONITOR_REPO_ROOT"); v != "" {
+	if v := os.Getenv("INSTRUMENTA_REPO_ROOT"); v != "" {
 		return v
 	}
 	wd, err := os.Getwd()
@@ -78,7 +78,7 @@ func repoRoot() string {
 }
 
 func defaultDatabaseURL(root string) string {
-	return "sqlite://" + filepath.Join(root, "cache", "bond_monitor.db")
+	return "sqlite://" + filepath.Join(root, "cache", "instrumenta.db")
 }
 
 func defaultNotifierLedgerPath(root string) string {

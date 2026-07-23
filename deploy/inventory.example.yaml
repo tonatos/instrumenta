@@ -6,12 +6,12 @@ ssh_user: root
 ssh_key: ~/.ssh/id_ed25519
 
 domain: bond.example.com
-app_dir: /opt/bond-monitor
-project_name: bond-monitor
+app_dir: /opt/instrumenta
+project_name: instrumenta
 compose_files:
   - docker-compose.yml
   - docker-compose.prod.yml
-git_repo: git@github.com:tonatos/bond-monitor.git
+git_repo: git@github.com:tonatos/instrumenta.git
 git_branch: main
 image_tag: main
 tls_caddy_data_dir: /opt/tls/caddy

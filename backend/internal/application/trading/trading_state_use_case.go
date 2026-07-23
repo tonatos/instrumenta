@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/application"
-	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
+	"github.com/tonatos/instrumenta/backend/internal/application"
+	appportfolio "github.com/tonatos/instrumenta/backend/internal/application/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	domainPortfolio "github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/tinvest"
 )
 
 const operationsLookbackDays = 365

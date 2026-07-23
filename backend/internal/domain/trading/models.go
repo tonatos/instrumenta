@@ -3,7 +3,7 @@ package trading
 import (
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
 )
 
 // AccountKind is the T-Invest API contour (sandbox vs production).

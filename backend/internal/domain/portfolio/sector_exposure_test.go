@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 )
 
 func TestExposureBySector_AggregatesAndSorts(t *testing.T) {

@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	devnotify "github.com/tonatos/bond-monitor/backend/internal/dev/notifications"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading/testutil"
+	devnotify "github.com/tonatos/instrumenta/backend/internal/dev/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading/testutil"
 )
 
 func adoptedPosition(isin, figi string, today time.Time) portfolio.PortfolioPosition {

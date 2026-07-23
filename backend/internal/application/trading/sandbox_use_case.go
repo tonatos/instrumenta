@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	domainPortfolio "github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 // SandboxUseCase manages sandbox accounts.
@@ -61,7 +61,7 @@ func (u *SandboxUseCase) CreateSandboxAccount(ctx context.Context, initialAmount
 	}
 	accountName := name
 	if accountName == "" {
-		accountName = "bond-monitor"
+		accountName = "instrumenta"
 	}
 	accountID, err := u.broker.OpenSandboxAccount(ctx, accountName)
 	if err != nil {

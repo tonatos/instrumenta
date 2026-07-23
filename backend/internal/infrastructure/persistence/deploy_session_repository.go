@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
 )
 
 // DeploySessionRepository is the SQL implementation of trading.DeploySessionRepository.

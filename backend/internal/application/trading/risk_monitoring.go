@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	domainPortfolio "github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
 )
 
 // PrepareTradingRiskMonitoring syncs risk baselines for holdings at attach time.

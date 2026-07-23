@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
 )
 
 func runMigrations(ctx context.Context, db *persistence.DB) error {
@@ -34,7 +34,7 @@ func runMigrations(ctx context.Context, db *persistence.DB) error {
 }
 
 func migrationFiles() ([]string, error) {
-	if p := os.Getenv("BOND_MONITOR_MIGRATIONS"); p != "" {
+	if p := os.Getenv("INSTRUMENTA_MIGRATIONS"); p != "" {
 		info, err := os.Stat(p)
 		if err != nil {
 			return nil, fmt.Errorf("stat migration path %s: %w", p, err)
@@ -82,7 +82,7 @@ func applyMigrationFile(ctx context.Context, db *persistence.DB, path string) er
 }
 
 func repoRoot() string {
-	if v := os.Getenv("BOND_MONITOR_REPO_ROOT"); v != "" {
+	if v := os.Getenv("INSTRUMENTA_REPO_ROOT"); v != "" {
 		return v
 	}
 	wd, err := os.Getwd()

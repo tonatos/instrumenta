@@ -7,10 +7,10 @@ import (
 )
 
 func repoRoot() string {
-	if v := os.Getenv("BOND_MONITOR_REPO_ROOT"); v != "" {
+	if v := os.Getenv("INSTRUMENTA_REPO_ROOT"); v != "" {
 		return v
 	}
-	if root := os.Getenv("BOND_MONITOR_ROOT"); root != "" {
+	if root := os.Getenv("INSTRUMENTA_ROOT"); root != "" {
 		return root
 	}
 	if wd, err := os.Getwd(); err == nil {

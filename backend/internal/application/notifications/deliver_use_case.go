@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"time"
 
-	domain "github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/notifications"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	domain "github.com/tonatos/instrumenta/backend/internal/domain/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
 )
 
 // TelegramDeliveryGate decides whether the owner may receive Telegram push.

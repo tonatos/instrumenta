@@ -1,7 +1,7 @@
 package portfolio
 
 import (
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
 )
 
 const (

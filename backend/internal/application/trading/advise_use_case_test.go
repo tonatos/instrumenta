@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	domainNotifications "github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
-	domainTrading "github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	domainNotifications "github.com/tonatos/instrumenta/backend/internal/domain/notifications"
+	domainTrading "github.com/tonatos/instrumenta/backend/internal/domain/trading"
 )
 
 func TestTurboEntrySuggestionsFromNotifications(t *testing.T) {

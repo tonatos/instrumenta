@@ -2,7 +2,7 @@
 # Run on VPS: git pull + pull images + compose up. Does not modify .env.
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/opt/bond-monitor}"
+APP_DIR="${APP_DIR:-/opt/instrumenta}"
 IMAGE_TAG="${IMAGE_TAG:-main}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
 

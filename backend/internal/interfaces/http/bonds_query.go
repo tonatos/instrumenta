@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	domainBonds "github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	domainBonds "github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 )
 
 func ParseBondListQuery(r *http.Request) domainBonds.BondListQuery {

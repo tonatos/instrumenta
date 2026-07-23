@@ -3,7 +3,7 @@ package preferences_test
 import (
 	"testing"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/preferences"
+	"github.com/tonatos/instrumenta/backend/internal/domain/preferences"
 )
 
 func TestNormalizeTaxRatePct(t *testing.T) {

@@ -22,11 +22,8 @@ func buildBootstrapTasks(inv Inventory, envContent string) []porter.Task {
 
 		porter.Run(gitBootstrapCommand(inv)).Name("Clone or update application from GitHub").Sudo(),
 
-		porter.Run(fmt.Sprintf(
-			"mkdir -p %s && (test -d /tmp/bond-monitor-cache-migrate && cp -a /tmp/bond-monitor-cache-migrate/. %s/cache/ && rm -rf /tmp/bond-monitor-cache-migrate || true)",
-			shellQuote(inv.AppDir),
-			shellQuote(inv.AppDir),
-		)).Name("Restore persisted cache after migration").Sudo(),
+		porter.Run(fmt.Sprintf("mkdir -p %s/cache", shellQuote(inv.AppDir))).
+			Name("Ensure application cache directory").Sudo(),
 
 		porter.Run(tlsDirectoriesCommand(inv)).Name("Ensure shared TLS directories exist").Sudo(),
 
@@ -47,7 +44,7 @@ func buildBootstrapTasks(inv Inventory, envContent string) []porter.Task {
 	}
 
 	builders = append(builders,
-		porter.Run(composeDeployCommand(inv)).Name("Deploy Bond Monitor stack").Sudo(),
+		porter.Run(composeDeployCommand(inv)).Name("Deploy Instrumenta stack").Sudo(),
 	)
 
 	return porter.Tasks(builders...)
@@ -67,8 +64,8 @@ func tlsDirectoriesCommand(inv Inventory) string {
 	dataDir := shellQuote(inv.TLSCaddyDataDir)
 	configDir := shellQuote(inv.TLSCaddyConfigDir)
 	return fmt.Sprintf(
-		`mkdir -p %s %s && chmod 755 %s %s && (docker volume inspect bond-monitor_caddy_data >/dev/null 2>&1 && docker run --rm -v bond-monitor_caddy_data:/from -v %s:/to alpine sh -c 'cp -an /from/. /to/' || true)`,
-		dataDir, configDir, dataDir, configDir, dataDir,
+		`mkdir -p %s %s && chmod 755 %s %s`,
+		dataDir, configDir, dataDir, configDir,
 	)
 }
 

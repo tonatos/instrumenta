@@ -5,12 +5,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/application"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
-	domainNotifications "github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
-	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/application"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	appportfolio "github.com/tonatos/instrumenta/backend/internal/application/portfolio"
+	domainNotifications "github.com/tonatos/instrumenta/backend/internal/domain/notifications"
+	domainPortfolio "github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
 )
 
 // Service is the application facade for trading mode operations.

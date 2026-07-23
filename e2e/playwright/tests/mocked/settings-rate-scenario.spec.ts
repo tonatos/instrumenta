@@ -74,7 +74,7 @@ test.describe("Настройки — сценарий дюрации", () => {
   test.beforeEach(async ({ page }) => {
     await mockConfig(page);
     await page.addInitScript(() => {
-      localStorage.setItem("bond_monitor_rate_scenario", "hold");
+      localStorage.setItem("instrumenta_rate_scenario", "hold");
     });
     await page.route("**/api/v1/bonds/**", async (route) => {
       const url = new URL(route.request().url());

@@ -1,4 +1,4 @@
-module github.com/tonatos/bond-monitor/backend
+module github.com/tonatos/instrumenta/backend
 
 go 1.25.7
 

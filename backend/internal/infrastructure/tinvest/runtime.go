@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/russianinvestments/invest-api-go-sdk/investgo"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
 )
 
 const (
 	sandboxEndpoint    = "sandbox-invest-public-api.tbank.ru:443"
 	productionEndpoint = "invest-public-api.tbank.ru:443"
-	appName            = "bond-monitor"
+	appName            = "instrumenta"
 )
 
 var packageLogger = slog.Default()

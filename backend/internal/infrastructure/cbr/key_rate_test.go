@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/cbr"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/cbr"
 )
 
 func TestParseKeyRateSOAP_LatestByDate(t *testing.T) {

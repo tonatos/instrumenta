@@ -1,6 +1,6 @@
 package portfolio
 
-import "github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+import "github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 
 // OpenPosition tracks one open lot with lifecycle metadata.
 type OpenPosition struct {

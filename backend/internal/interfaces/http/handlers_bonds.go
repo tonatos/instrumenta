@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/screening"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/screening"
 )
 
 func (h *Handler) ListBonds(w http.ResponseWriter, r *http.Request) {

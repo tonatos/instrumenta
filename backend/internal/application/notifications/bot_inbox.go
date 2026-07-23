@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	appbilling "github.com/tonatos/bond-monitor/backend/internal/application/billing"
-	domain "github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/notifications"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	appbilling "github.com/tonatos/instrumenta/backend/internal/application/billing"
+	domain "github.com/tonatos/instrumenta/backend/internal/domain/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
 )
 
 // BotInbox polls getUpdates and handles /start, /stop, and bot block.

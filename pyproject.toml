@@ -1,5 +1,5 @@
 [project]
-name = "bond-monitor"
+name = "instrumenta"
 version = "0.2.0"
 description = "Short-term Russian bond screener with portfolio planning"
 requires-python = ">=3.12"
@@ -16,7 +16,7 @@ select = ["E", "F", "I", "UP", "B", "SIM", "N"]
 ignore = ["B008", "N803", "N806", "E501"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["bond_monitor"]
+known-first-party = ["instrumenta"]
 
 [tool.ruff.format]
 quote-style = "double"

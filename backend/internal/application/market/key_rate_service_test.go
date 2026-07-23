@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/application/market"
+	"github.com/tonatos/instrumenta/backend/internal/application/market"
 )
 
 type memStore struct {

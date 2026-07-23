@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 func (h *Handler) TelegramLogin(w http.ResponseWriter, r *http.Request) {

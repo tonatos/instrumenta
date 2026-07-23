@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/tonatos/bond-monitor/backend/internal/application"
+	"github.com/tonatos/instrumenta/backend/internal/application"
 )
 
 func (h *Handler) GetMarketRadar(w http.ResponseWriter, r *http.Request) {

@@ -7,8 +7,8 @@ import (
 
 	"github.com/russianinvestments/invest-api-go-sdk/investgo"
 	pb "github.com/russianinvestments/invest-api-go-sdk/proto"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
 )
 
 func (c *SDKClient) GetAccountOperations(kind trading.AccountKind, accountID string, fromDate time.Time) ([]trading.InfraOperationRecord, error) {

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	domain "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	domain "github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 // BrokerPlanPort loads live broker data required for trading plan builds.

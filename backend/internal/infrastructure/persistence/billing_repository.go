@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/billing"
+	"github.com/tonatos/instrumenta/backend/internal/domain/billing"
 )
 
 // BillingRepository persists plans, subscriptions, payments, and ledger.

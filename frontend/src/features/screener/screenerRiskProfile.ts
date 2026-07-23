@@ -1,6 +1,6 @@
 export type ScreenerRiskProfile = "conservative" | "normal" | "aggressive";
 
-const STORAGE_KEY = "bond_monitor_screener_risk_profile";
+const STORAGE_KEY = "instrumenta_screener_risk_profile";
 const DEFAULT_PROFILE: ScreenerRiskProfile = "normal";
 
 type Listener = () => void;

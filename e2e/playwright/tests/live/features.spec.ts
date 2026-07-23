@@ -1,5 +1,5 @@
 /**
- * Business-scenario E2E tests for bond-monitor features.
+ * Business-scenario E2E tests for instrumenta features.
  *
  * These tests focus on user-visible behaviour, not implementation details.
  * They require a running API + frontend (dev server or BASE_URL env).

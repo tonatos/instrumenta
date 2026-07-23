@@ -6,12 +6,12 @@ import (
 	"sort"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/application"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	domainNotifications "github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
-	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
+	"github.com/tonatos/instrumenta/backend/internal/application"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	domainNotifications "github.com/tonatos/instrumenta/backend/internal/domain/notifications"
+	domainPortfolio "github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/tinvest"
 )
 
 // AdviseUseCase builds stateless trading advice from broker snapshot + market.

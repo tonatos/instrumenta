@@ -8,10 +8,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/config"
-	httpapi "github.com/tonatos/bond-monitor/backend/internal/interfaces/http"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/config"
+	httpapi "github.com/tonatos/instrumenta/backend/internal/interfaces/http"
 )
 
 func TestPutPreferencesTaxRate(t *testing.T) {

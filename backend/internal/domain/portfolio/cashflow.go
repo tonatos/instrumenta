@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
 )
 
 // CashflowEvent is an atomic cashflow line in the portfolio plan.

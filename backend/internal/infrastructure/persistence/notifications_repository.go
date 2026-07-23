@@ -7,8 +7,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/domain/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
 )
 
 // NotificationsRepository is the SQL implementation of notifications.Repository.

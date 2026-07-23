@@ -1,7 +1,7 @@
 package trading
 
 import (
-	"github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/domain/notifications"
 )
 
 // AlertsToSuggestions maps domain alerts to trading suggestions.

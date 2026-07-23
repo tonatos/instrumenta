@@ -3,7 +3,7 @@ package trading
 import (
 	"strconv"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
 )
 
 // DeploySessionPolicy controls TTL and staleness thresholds for frozen plans.

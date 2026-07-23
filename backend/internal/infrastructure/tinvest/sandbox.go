@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/russianinvestments/invest-api-go-sdk/investgo"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
 )
 
 func (c *SDKClient) OpenSandboxAccount(name string) (string, error) {

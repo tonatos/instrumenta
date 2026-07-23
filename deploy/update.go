@@ -19,6 +19,6 @@ func buildUpdateTasks(inv Inventory) []porter.Task {
 	)
 
 	return porter.Tasks(
-		porter.Run(cmd).Name("Update Bond Monitor on VPS").Sudo(),
+		porter.Run(cmd).Name("Update Instrumenta on VPS").Sudo(),
 	)
 }

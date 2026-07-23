@@ -1,4 +1,4 @@
-# Multi-stage Go build for bond-monitor API and notifier.
+# Multi-stage Go build for instrumenta API and notifier.
 FROM golang:1.25-bookworm AS builder
 
 WORKDIR /src
@@ -22,7 +22,7 @@ COPY --from=builder /out/api /app/api
 COPY --from=builder /out/notifier /app/notifier
 COPY --from=builder /src/backend/migrations /app/backend/migrations
 
-ENV BOND_MONITOR_REPO_ROOT=/app
+ENV INSTRUMENTA_REPO_ROOT=/app
 ENV HOST=0.0.0.0
 ENV PORT=8000
 

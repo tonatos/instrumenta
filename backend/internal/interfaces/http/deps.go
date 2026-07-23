@@ -3,13 +3,13 @@ package httpapi
 import (
 	"net/http"
 
-	"github.com/tonatos/bond-monitor/backend/internal/application"
-	appbilling "github.com/tonatos/bond-monitor/backend/internal/application/billing"
-	apptrading "github.com/tonatos/bond-monitor/backend/internal/application/trading"
-	appmarket "github.com/tonatos/bond-monitor/backend/internal/application/market"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/config"
+	"github.com/tonatos/instrumenta/backend/internal/application"
+	appbilling "github.com/tonatos/instrumenta/backend/internal/application/billing"
+	apptrading "github.com/tonatos/instrumenta/backend/internal/application/trading"
+	appmarket "github.com/tonatos/instrumenta/backend/internal/application/market"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/config"
 )
 
 // Deps wires application services into HTTP handlers.

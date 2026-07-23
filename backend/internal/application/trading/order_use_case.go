@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
+	appportfolio "github.com/tonatos/instrumenta/backend/internal/application/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	domainPortfolio "github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/tinvest"
 )
 
 // OrderPreviewResult is a broker order cost preview.
@@ -266,7 +266,7 @@ func (u *AttachUseCase) ClearAccountForAttach(ctx context.Context, portfolioID, 
 	}
 	if len(snapshot.BondPositions) > 0 || len(snapshot.OtherInstruments) > 0 {
 		_ = u.broker.CloseSandboxAccount(ctx, activeAccountID)
-		newID, err := u.broker.OpenSandboxAccount(ctx, "bond-monitor-cleared")
+		newID, err := u.broker.OpenSandboxAccount(ctx, "instrumenta-cleared")
 		if err != nil {
 			return nil, err
 		}

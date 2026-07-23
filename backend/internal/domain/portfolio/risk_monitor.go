@@ -3,7 +3,7 @@ package portfolio
 import (
 	"fmt"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 )
 
 type RiskUrgency string

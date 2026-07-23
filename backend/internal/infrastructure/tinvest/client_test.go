@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
+	"github.com/tonatos/instrumenta/backend/internal/domain/trading"
 )
 
 func TestSDKClient_RequiresToken(t *testing.T) {

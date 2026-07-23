@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/tonatos/bond-monitor/backend/internal/application"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	"github.com/tonatos/instrumenta/backend/internal/application"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 func (h *Handler) ListPortfolios(w http.ResponseWriter, r *http.Request) {

@@ -3,8 +3,8 @@ package notifications
 import (
 	"context"
 
-	appbilling "github.com/tonatos/bond-monitor/backend/internal/application/billing"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	appbilling "github.com/tonatos/instrumenta/backend/internal/application/billing"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
 )
 
 // SubscriptionTelegramGate requires Pro (or complimentary) + bot /start opt-in.

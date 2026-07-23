@@ -1,14 +1,14 @@
 ---
 name: designer
 description: >-
-  Designer mode for Instrumenta/bond-monitor UI: brand style, visual polish,
+  Designer mode for Instrumenta/instrumenta UI: brand style, visual polish,
   UX journeys, mobile-first layout, honest marketing copy, UI-kit reuse
   (Radix/shadcn-style). Use when the user asks for designer mode, дизайн,
   landing, лендинг, hero, UI/UX polish, copywriting, or visual redesign.
 disable-model-invocation: true
 ---
 
-# Designer mode — bond-monitor / Instrumenta
+# Designer mode — instrumenta / Instrumenta
 
 Use for frontend UI/marketing work. Goals: on-brand, visually strong, mobile-friendly,
 honest selling copy, reuse existing widgets.

@@ -24,7 +24,7 @@ func TestRenderEnv(t *testing.T) {
 		DevTelegramID:            1,
 		NotifierScanIntervalSec:  3600,
 		TelegramBotToken:         "bot-token",
-		TelegramBotUsername:      "bond_monitor_bot",
+		TelegramBotUsername:      "instrumenta_bot",
 		ComplimentaryTelegramIDs: "111999777",
 	}
 
@@ -43,7 +43,7 @@ func TestRenderEnv(t *testing.T) {
 		"AUTH_SECRET=secret-value",
 		"PUBLIC_APP_URL=https://bond.example.com",
 		"TELEGRAM_BOT_TOKEN=bot-token",
-		"TELEGRAM_BOT_USERNAME=bond_monitor_bot",
+		"TELEGRAM_BOT_USERNAME=instrumenta_bot",
 		"DEV_TELEGRAM_ID=1",
 		"NOTIFIER_SCAN_INTERVAL_SEC=3600",
 		"COMPLIMENTARY_TELEGRAM_IDS=111999777",

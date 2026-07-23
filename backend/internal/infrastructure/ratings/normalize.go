@@ -3,7 +3,7 @@ package ratings
 import (
 	"strings"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
 )
 
 // NormalizeRating maps smart-lab / MOEX rating labels to internal ru-scale keys.

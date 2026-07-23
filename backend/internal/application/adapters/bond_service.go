@@ -3,15 +3,15 @@ package adapters
 import (
 	"context"
 
-	"github.com/tonatos/bond-monitor/backend/internal/application"
-	appbonds "github.com/tonatos/bond-monitor/backend/internal/application/bonds"
-	appmarket "github.com/tonatos/bond-monitor/backend/internal/application/market"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
-	"github.com/tonatos/bond-monitor/backend/internal/domain/preferences"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
-	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
+	"github.com/tonatos/instrumenta/backend/internal/application"
+	appbonds "github.com/tonatos/instrumenta/backend/internal/application/bonds"
+	appmarket "github.com/tonatos/instrumenta/backend/internal/application/market"
+	"github.com/tonatos/instrumenta/backend/internal/domain/bonds"
+	"github.com/tonatos/instrumenta/backend/internal/domain/portfolio"
+	"github.com/tonatos/instrumenta/backend/internal/domain/preferences"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/tinvest"
+	"github.com/tonatos/instrumenta/backend/internal/interfaces/auth"
 )
 
 // BondService adapts bonds.Service to application.BondService.

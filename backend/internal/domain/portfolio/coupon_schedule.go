@@ -3,7 +3,7 @@ package portfolio
 import (
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/instrumenta/backend/internal/domain/shared"
 )
 
 // CouponDatesInRange returns coupon payment dates in (purchase_date, end_date].

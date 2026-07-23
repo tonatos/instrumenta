@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/tonatos/bond-monitor/backend/internal/application"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/notifications"
-	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
+	"github.com/tonatos/instrumenta/backend/internal/application"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/notifications"
+	"github.com/tonatos/instrumenta/backend/internal/infrastructure/persistence"
 )
 
 // Consumer reads Redis notification stream into SQLite read-model.
