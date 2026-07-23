@@ -23,8 +23,14 @@ import type {
   DeploySessionResponse,
   MarketRadarResponse,
   NotificationsListResponse,
+  BillingCatalogResponse,
+  BillingStatusResponse,
+  BillingCheckoutResponse,
+  BillingLedgerResponse,
+  BillingPeriod,
 } from "./types";
 import { getAuthToken, notifyUnauthorized } from "@/features/auth/authStorage";
+import { notifySubscriptionRequired } from "@/features/billing/subscriptionPaywallBus";
 import { getRateScenario } from "@/features/settings/durationPreferences";
 import type { BondRiskProfile } from "@/features/bonds/bondScore";
 
@@ -99,6 +105,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ) {
       window.location.assign("/account");
     }
+    if (typeof window !== "undefined" && err.extra?.code === "subscription_required") {
+      notifySubscriptionRequired();
+    }
     throw err;
   }
   if (res.status === 204) return undefined as T;
@@ -144,6 +153,8 @@ export const api = {
     }),
   deleteBrokerCredential: (kind: "sandbox" | "production") =>
     request<void>(`/me/broker-credentials/${kind}`, { method: "DELETE" }),
+  disconnectTelegramBot: () =>
+    request<void>("/me/telegram-bot", { method: "DELETE" }),
 
   getBonds: (params: BondListParams = {}, riskProfile: BondRiskProfile = "normal") => {
     const path = `/bonds/${buildBondsQuery(params)}`;
@@ -376,5 +387,22 @@ export const api = {
     request<CalculatorResponse>("/calculator/portfolio", {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+
+  getBillingCatalog: () => request<BillingCatalogResponse>("/billing/catalog"),
+  getBillingStatus: () => request<BillingStatusResponse>("/billing/status"),
+  getBillingLedger: (limit = 50) =>
+    request<BillingLedgerResponse>(`/billing/ledger?limit=${limit}`),
+  createBillingCheckout: (period: BillingPeriod) =>
+    request<BillingCheckoutResponse>("/billing/checkout", {
+      method: "POST",
+      body: JSON.stringify({ period }),
+    }),
+  cancelBillingSubscription: () =>
+    request<{ ok: boolean }>("/billing/cancel", { method: "POST" }),
+  changeBillingPeriod: (period: BillingPeriod = "year") =>
+    request<BillingCheckoutResponse>("/billing/change-period", {
+      method: "POST",
+      body: JSON.stringify({ period }),
     }),
 };

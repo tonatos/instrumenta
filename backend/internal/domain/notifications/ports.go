@@ -78,6 +78,5 @@ type LedgerRepository interface {
 // TelegramNotifier sends push messages via Telegram Bot API.
 type TelegramNotifier interface {
 	Configured() bool
-	SendMessage(text string) bool
 	SendToChat(chatID int64, text string) bool
 }

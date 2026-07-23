@@ -145,17 +145,16 @@ func portfoliosFromRows(rows []portfolioRow) ([]portfolio.Portfolio, error) {
 var _ portfolio.Repository = (*PortfolioRepository)(nil)
 
 // EnsureMultiTenantSchema adds owner columns / favorites reshaping idempotently.
-func EnsureMultiTenantSchema(ctx context.Context, db *sqlx.DB, backfillTelegramID int64) error {
-	if backfillTelegramID == 0 {
-		backfillTelegramID = 1
-	}
-	if err := ensureColumn(ctx, db, "portfolios", "owner_telegram_id", fmt.Sprintf("BIGINT NOT NULL DEFAULT %d", backfillTelegramID)); err != nil {
+// Legacy rows without an owner get DEFAULT 1 (synthetic); real ownership is set at write time.
+func EnsureMultiTenantSchema(ctx context.Context, db *sqlx.DB) error {
+	const legacyOwnerTelegramID int64 = 1
+	if err := ensureColumn(ctx, db, "portfolios", "owner_telegram_id", fmt.Sprintf("BIGINT NOT NULL DEFAULT %d", legacyOwnerTelegramID)); err != nil {
 		return err
 	}
 	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_portfolios_owner ON portfolios(owner_telegram_id)`); err != nil {
 		return err
 	}
-	if err := migrateFavoritesToMultiTenant(ctx, db, backfillTelegramID); err != nil {
+	if err := migrateFavoritesToMultiTenant(ctx, db, legacyOwnerTelegramID); err != nil {
 		return err
 	}
 	return nil
@@ -249,7 +248,8 @@ CREATE TABLE IF NOT EXISTS users (
     telegram_id INTEGER PRIMARY KEY,
     display_name TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    bot_connected_at TEXT
 );
 CREATE TABLE IF NOT EXISTS portfolios (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
@@ -319,7 +319,65 @@ CREATE TABLE IF NOT EXISTS issuer_rating_patterns (
     pattern TEXT PRIMARY KEY,
     rating TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS billing_plan_versions (
+    id TEXT PRIMARY KEY,
+    catalog_group TEXT NOT NULL,
+    code TEXT NOT NULL UNIQUE,
+    period TEXT NOT NULL,
+    amount_kopecks INTEGER NOT NULL,
+    features_json TEXT NOT NULL,
+    effective_from TEXT NOT NULL,
+    is_current INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS billing_subscriptions (
+    id TEXT PRIMARY KEY,
+    owner_telegram_id INTEGER NOT NULL UNIQUE,
+    status TEXT NOT NULL,
+    plan_version_id TEXT NOT NULL,
+    period TEXT NOT NULL,
+    amount_kopecks INTEGER NOT NULL,
+    features_json TEXT NOT NULL,
+    current_period_start TEXT NOT NULL,
+    current_period_end TEXT NOT NULL,
+    cancel_at_period_end INTEGER NOT NULL DEFAULT 0,
+    payment_method_id TEXT NOT NULL DEFAULT '',
+    past_due_since TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS billing_payments (
+    id TEXT PRIMARY KEY,
+    owner_telegram_id INTEGER NOT NULL,
+    plan_version_id TEXT NOT NULL,
+    period TEXT NOT NULL,
+    amount_kopecks INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL UNIQUE,
+    yookassa_payment_id TEXT NOT NULL DEFAULT '',
+    confirmation_url TEXT NOT NULL DEFAULT '',
+    purpose TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS billing_ledger (
+    id TEXT PRIMARY KEY,
+    owner_telegram_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    amount_kopecks INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    payment_id TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL
+);
 `
-	_, err := db.Exec(schema)
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+	_, err := db.Exec(`
+INSERT OR IGNORE INTO billing_plan_versions (
+    id, catalog_group, code, period, amount_kopecks, features_json, effective_from, is_current
+) VALUES
+('pro_month_v1','pro','pro_month','month',79500,'["broker_credentials.write","portfolio.attach","trading_portfolio.access"]','2026-01-01T00:00:00Z',1),
+('pro_year_v1','pro','pro_year','year',594000,'["broker_credentials.write","portfolio.attach","trading_portfolio.access"]','2026-01-01T00:00:00Z',1)
+`)
 	return err
 }

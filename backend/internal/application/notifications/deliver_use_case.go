@@ -10,17 +10,32 @@ import (
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
 )
 
+// TelegramDeliveryGate decides whether the owner may receive Telegram push.
+type TelegramDeliveryGate interface {
+	CanReceiveTelegram(ctx context.Context, ownerTelegramID int64) bool
+}
+
 // DeliverUseCase publishes alerts to bus, ledger, and Telegram.
 type DeliverUseCase struct {
 	ledger   *notifications.LedgerRepository
 	bus      *notifications.RedisBus
 	telegram *notifications.TelegramClient
 	repo     *persistence.NotificationsRepository
+	gate     TelegramDeliveryGate
 	policy   domain.NotificationPolicy
 }
 
-func NewDeliverUseCase(ledger *notifications.LedgerRepository, bus *notifications.RedisBus, telegram *notifications.TelegramClient, repo *persistence.NotificationsRepository) *DeliverUseCase {
-	return &DeliverUseCase{ledger: ledger, bus: bus, telegram: telegram, repo: repo, policy: domain.DefaultNotificationPolicy}
+func NewDeliverUseCase(
+	ledger *notifications.LedgerRepository,
+	bus *notifications.RedisBus,
+	telegram *notifications.TelegramClient,
+	repo *persistence.NotificationsRepository,
+	gate TelegramDeliveryGate,
+) *DeliverUseCase {
+	return &DeliverUseCase{
+		ledger: ledger, bus: bus, telegram: telegram, repo: repo, gate: gate,
+		policy: domain.DefaultNotificationPolicy,
+	}
 }
 
 func (d *DeliverUseCase) ProcessAlert(ctx context.Context, alert domain.Alert, portfolioName string, ownerTelegramID int64) error {
@@ -31,7 +46,7 @@ func (d *DeliverUseCase) ProcessAlert(ctx context.Context, alert domain.Alert, p
 	if err := d.publishBus(ctx, fingerprint, alert); err != nil {
 		return err
 	}
-	d.sendTelegramIfNeeded(fingerprint, alert, portfolioName, ownerTelegramID)
+	d.sendTelegramIfNeeded(ctx, fingerprint, alert, portfolioName, ownerTelegramID)
 	return nil
 }
 
@@ -60,7 +75,7 @@ func (d *DeliverUseCase) RetryPending(ctx context.Context, portfolioNames map[st
 		if name == "" {
 			name = alert.PortfolioID
 		}
-		d.sendTelegramIfNeeded(entry.Fingerprint, alert, name, ownerByPortfolio[alert.PortfolioID])
+		d.sendTelegramIfNeeded(ctx, entry.Fingerprint, alert, name, ownerByPortfolio[alert.PortfolioID])
 	}
 	return nil
 }
@@ -89,8 +104,14 @@ func (d *DeliverUseCase) publishBus(ctx context.Context, fingerprint string, ale
 	return nil
 }
 
-func (d *DeliverUseCase) sendTelegramIfNeeded(fingerprint string, alert domain.Alert, portfolioName string, ownerTelegramID int64) {
+func (d *DeliverUseCase) sendTelegramIfNeeded(ctx context.Context, fingerprint string, alert domain.Alert, portfolioName string, ownerTelegramID int64) {
 	if d.telegram == nil || !d.telegram.Configured() || !domain.TelegramAllowedForAlert(alert, d.policy) {
+		return
+	}
+	if ownerTelegramID == 0 {
+		return
+	}
+	if d.gate != nil && !d.gate.CanReceiveTelegram(ctx, ownerTelegramID) {
 		return
 	}
 	entry, _ := d.ledger.Get(fingerprint)
@@ -106,13 +127,7 @@ func (d *DeliverUseCase) sendTelegramIfNeeded(fingerprint string, alert domain.A
 		prefix = "🔴"
 	}
 	text := prefix + " " + portfolioName + "\n" + alert.Name + " (" + alert.ISIN + ")\n" + alert.Reason
-	sent := false
-	if ownerTelegramID != 0 {
-		sent = d.telegram.SendToChat(ownerTelegramID, text)
-	} else {
-		sent = d.telegram.SendMessage(text)
-	}
-	if sent {
+	if d.telegram.SendToChat(ownerTelegramID, text) {
 		_, _ = d.ledger.MarkTelegramSent(fingerprint, time.Now().UTC())
 	}
 }

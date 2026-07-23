@@ -19,12 +19,13 @@ smart-lab ──► infrastructure/ratings/ ──► SQLite bond_credit_ratings
     domain/trading (advisory, deploy_session, ports, …)
     domain/notifications (CollectAlerts, fingerprint)
     domain/market_signals (spread anomaly, attribution, radar scan)
+    domain/billing (plans, entitlements, subscription lifecycle)
                     ▼
          application/ (use cases)
                     ▼
     interfaces/http (chi)              cmd/notifier (воркер)
                     │                         │
-                    │    portfolio scan + market radar scan
+                    │    portfolio scan + market radar scan + billing renew
                     └──── Redis Stream ◄──────┘
                               ▼
                     infrastructure/persistence (SQLite read-model)
@@ -41,11 +42,26 @@ smart-lab ──► infrastructure/ratings/ ──► SQLite bond_credit_ratings
 | Broker keys | `broker_credentials` envelope AES-GCM + `BROKER_KEK`; API `PUT/DELETE /me/broker-credentials/{kind}` |
 | Enrich | `TINKOFF_TOKEN` остаётся process env |
 | Trading | `TokenFor(owner, kind)`; env `T_TRADING_TOKEN_*` только как fallback при `AUTH_DISABLED` |
-| UI | `/account` — ключи + trust copy; wizard без ключей → «Настроить ключи» |
-| Notifier | scan с токеном владельца; Telegram на `owner_telegram_id` |
+| UI | `/account` — ключи + тариф/финансы + подключение Telegram-бота; wizard без ключей → «Настроить ключи»; без подписки → «Привязать счёт» → paywall-диалог |
+| Notifier | scan с токеном владельца; Telegram на `owner_telegram_id` после `/start` в боте; `RenewDue` биллинга |
 | Isolation | чужой `portfolio_id` → 404; тесты `isolation_test.go`, e2e tenant |
+| Billing | `domain/billing` + ЮKassa; платные фичи v1: ключи write + attach + доступ к trading-портфелю; `COMPLIMENTARY_TELEGRAM_IDS` |
 
-Миграция `005_multi_tenant.sql` + `EnsureMultiTenantSchema`. Вход через Telegram OIDC открыт для любого пользователя (без allowlist).
+Миграция `005_multi_tenant.sql` + `EnsureMultiTenantSchema`. Вход через Telegram OIDC открыт для любого пользователя (без allowlist). Billing: `006_billing.sql`.
+
+### Billing / подписка
+
+| Аспект | Поведение |
+|--------|-----------|
+| Бесплатно | Скринер, симуляция, radar, избранное, calculator после Telegram-логина |
+| Платно (entitlements) | `broker_credentials.write`, `portfolio.attach`, `trading_portfolio.access` |
+| Тариф | Pro: 795 ₽/мес или 5940 ₽/год; версии в `billing_plan_versions` (grandfathering цены) |
+| Эквайринг | ЮKassa рекуррент (`save_payment_method`); без `YOOKASSA_*` — UI/каталог работают, checkout → `payment_unavailable` |
+| Complimentary | `COMPLIMENTARY_TELEGRAM_IDS` (пусто = никто) — полный доступ без платежей; задаётся только в `.env` / `deploy/inventory.yaml` |
+| UI | `/account` ключи, `/account/notifications` Telegram-бот, `/account/plan` тариф (+ ROI), `/account/finance` ledger; paywall-диалог на платных действиях |
+| Истечение | Ключи не трогаем; trading-портфели `access_locked` / 402 `subscription_required` |
+
+Domain: `backend/internal/domain/billing/`. Application: `application/billing`. Infra: `infrastructure/yookassa`, `persistence/billing_repository.go`.
 
 ### DDD-слои (`backend/internal/`)
 
@@ -518,7 +534,7 @@ Golden snapshots: `backend/testdata/golden/` (эталон HTTP-контракт
 
 Сервисы: `api`, `web`, `redis`, `notifier`, опционально `caddy` (prod). Notifier и API — один образ `bond-monitor-api`.
 
-Env notifier (общий `.env`): `REDIS_URL`, `NOTIFIER_SCAN_INTERVAL_SEC`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_NOTIFY_USER_ID`, `NOTIFIER_LEDGER_PATH`.
+Env notifier (общий `.env`): `REDIS_URL`, `NOTIFIER_SCAN_INTERVAL_SEC`, `TELEGRAM_BOT_TOKEN`, опционально `TELEGRAM_BOT_USERNAME`, `NOTIFIER_LEDGER_PATH`.
 
 ---
 

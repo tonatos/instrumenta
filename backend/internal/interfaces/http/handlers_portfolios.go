@@ -10,6 +10,7 @@ import (
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/shared"
+	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
 )
 
 func (h *Handler) ListPortfolios(w http.ResponseWriter, r *http.Request) {
@@ -20,8 +21,11 @@ func (h *Handler) ListPortfolios(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]PortfolioResponse, 0, len(portfolios))
 	today := time.Now()
+	owner, _ := auth.OwnerTelegramID(r.Context())
 	for _, p := range portfolios {
-		out = append(out, PortfolioToResponse(p, today))
+		resp := PortfolioToResponse(p, today)
+		resp.AccessLocked = h.accessLockedForOwner(r, owner, p)
+		out = append(out, resp)
 	}
 	WriteJSON(w, http.StatusOK, out)
 }
@@ -69,6 +73,9 @@ func (h *Handler) GetPortfolio(w http.ResponseWriter, r *http.Request) {
 		WriteNotFound(w, "Portfolio not found")
 		return
 	}
+	if !h.requireTradingPortfolioAccess(w, r, p) {
+		return
+	}
 	WriteJSON(w, http.StatusOK, PortfolioToResponse(*p, time.Now()))
 }
 
@@ -88,6 +95,9 @@ func (h *Handler) DeletePortfolio(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) UpdatePortfolio(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, id) {
+		return
+	}
 	var req UpdatePortfolioRequest
 	if err := DecodeBody(r, &req); err != nil {
 		WriteValidationError(w, err.Error(), nil)
@@ -296,6 +306,9 @@ func (h *Handler) AutoCompose(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetPlan(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "portfolio_id")
+	if !h.gateTradingPortfolioID(w, r, id) {
+		return
+	}
 	p, err := h.deps.Portfolios.GetPortfolio(r.Context(), id)
 	if err != nil || p == nil {
 		WriteNotFound(w, "Portfolio not found")

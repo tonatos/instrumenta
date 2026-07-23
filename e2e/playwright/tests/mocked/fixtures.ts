@@ -48,11 +48,90 @@ export async function mockConfig(page: Page): Promise<void> {
     sandbox: MOCK_CONFIG.sandbox_configured,
     production: MOCK_CONFIG.production_configured,
   });
+  await mockBillingStatus(page, { hasAccess: true });
+}
+
+export async function mockBillingStatus(
+  page: Page,
+  opts: { hasAccess?: boolean; complimentary?: boolean } = {},
+): Promise<void> {
+  const hasAccess = opts.hasAccess ?? false;
+  const complimentary = opts.complimentary ?? false;
+  const entitlements = hasAccess || complimentary
+    ? [
+        "broker_credentials.write",
+        "portfolio.attach",
+        "trading_portfolio.access",
+      ]
+    : [];
+  await page.unroute("**/api/v1/billing/status").catch(() => undefined);
+  await page.route("**/api/v1/billing/status", async (route) => {
+    await route.fulfill({
+      json: {
+        complimentary,
+        payment_enabled: false,
+        entitlements,
+        has_active_access: hasAccess || complimentary,
+        subscription: hasAccess && !complimentary
+          ? {
+              status: "active",
+              period: "month",
+              amount_kopecks: 79500,
+              current_period_end: "2027-01-01T00:00:00Z",
+              cancel_at_period_end: false,
+              features: entitlements,
+            }
+          : null,
+      },
+    });
+  });
+}
+
+export async function mockBillingCatalog(page: Page): Promise<void> {
+  await page.route("**/api/v1/billing/catalog", async (route) => {
+    await route.fulfill({
+      json: {
+        payment_enabled: false,
+        plans: [
+          {
+            period: "month",
+            amount_kopecks: 79500,
+            monthly_kopecks: 79500,
+            savings_kopecks: 0,
+            savings_percent: 0,
+            features: [
+              "broker_credentials.write",
+              "portfolio.attach",
+              "trading_portfolio.access",
+            ],
+            plan_version_id: "pro_month_v1",
+          },
+          {
+            period: "year",
+            amount_kopecks: 594000,
+            monthly_kopecks: 49500,
+            savings_kopecks: 360000,
+            savings_percent: 37.73584905660377,
+            features: [
+              "broker_credentials.write",
+              "portfolio.attach",
+              "trading_portfolio.access",
+            ],
+            plan_version_id: "pro_year_v1",
+          },
+        ],
+      },
+    });
+  });
 }
 
 export async function mockAuthMe(
   page: Page,
-  flags: { sandbox?: boolean; production?: boolean } = {},
+  flags: {
+    sandbox?: boolean;
+    production?: boolean;
+    telegramBot?: { configured?: boolean; connected?: boolean; username?: string };
+  } = {},
 ): Promise<void> {
   await page.unroute("**/api/v1/auth/me").catch(() => undefined);
   const credentials: Record<string, { fingerprint: string; updated_at: string }> = {};
@@ -62,12 +141,21 @@ export async function mockAuthMe(
   if (flags.production) {
     credentials.production = { fingerprint: "mockprod", updated_at: "2026-01-01T00:00:00Z" };
   }
+  const botConfigured = flags.telegramBot?.configured ?? true;
+  const botConnected = flags.telegramBot?.connected ?? false;
+  const botUsername = flags.telegramBot?.username ?? "instrumenta_bot";
   await page.route("**/api/v1/auth/me", async (route) => {
     await route.fulfill({
       json: {
         telegram_id: 1,
         display_name: "E2E User",
         credentials,
+        telegram_bot: {
+          configured: botConfigured,
+          connected: botConnected,
+          bot_username: botUsername,
+          deep_link: botConfigured ? `https://t.me/${botUsername}` : "",
+        },
       },
     });
   });

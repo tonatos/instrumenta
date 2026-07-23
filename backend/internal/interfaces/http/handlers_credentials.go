@@ -7,10 +7,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/tonatos/bond-monitor/backend/internal/application"
+	appbilling "github.com/tonatos/bond-monitor/backend/internal/application/billing"
 	apptrading "github.com/tonatos/bond-monitor/backend/internal/application/trading"
+	"github.com/tonatos/bond-monitor/backend/internal/domain/billing"
+	domainnotifications "github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
+	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/yookassa"
 	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
 )
 
@@ -65,13 +69,47 @@ func (h *Handler) AuthMe(w http.ResponseWriter, r *http.Request) {
 			resp.Credentials.Production = &CredentialStatusResponse{Fingerprint: "env", UpdatedAt: ""}
 		}
 	}
+	botUsername := h.deps.TelegramBotUsername
+	botConfigured := h.deps.Settings.TelegramBotToken != ""
+	botStatus := &TelegramBotStatus{
+		Configured:  botConfigured,
+		BotUsername: botUsername,
+		DeepLink:    domainnotifications.BotDeepLink(botUsername),
+	}
+	if h.deps.Users != nil {
+		connected, err := h.deps.Users.IsBotConnected(r.Context(), user.TelegramID)
+		if err == nil {
+			botStatus.Connected = connected
+		}
+	}
+	resp.TelegramBot = botStatus
 	WriteJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) DeleteTelegramBot(w http.ResponseWriter, r *http.Request) {
+	user, ok := auth.UserFromContext(r.Context())
+	if !ok || user == nil {
+		WriteUnauthorized(w, "")
+		return
+	}
+	if h.deps.Users == nil {
+		WriteClientError(w, http.StatusServiceUnavailable, "users store unavailable")
+		return
+	}
+	if err := h.deps.Users.MarkBotDisconnected(r.Context(), user.TelegramID); err != nil {
+		WriteClientError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *Handler) PutBrokerCredential(w http.ResponseWriter, r *http.Request) {
 	user, ok := auth.UserFromContext(r.Context())
 	if !ok || user == nil {
 		WriteUnauthorized(w, "")
+		return
+	}
+	if !h.requireFeature(w, r, billing.FeatureBrokerCredentialsWrite) {
 		return
 	}
 	kind, err := parseAccountKind(chi.URLParam(r, "kind"))
@@ -153,6 +191,22 @@ func WriteAppError(w http.ResponseWriter, err error) bool {
 	}
 	if errors.Is(err, application.ErrBrokerCredentialsRequired) || errors.Is(err, apptrading.ErrBrokerCredentialsRequired) || errors.Is(err, persistence.ErrBrokerCredentialMissing) {
 		WriteError(w, http.StatusConflict, "Broker credentials required", map[string]any{"code": "broker_credentials_required"})
+		return true
+	}
+	if errors.Is(err, appbilling.ErrSubscriptionRequired) {
+		WriteError(w, http.StatusPaymentRequired, "Subscription required", map[string]any{"code": "subscription_required"})
+		return true
+	}
+	if errors.Is(err, appbilling.ErrPaymentUnavailable) || errors.Is(err, yookassa.ErrPaymentUnavailable) {
+		WriteError(w, http.StatusServiceUnavailable, "Payment unavailable", map[string]any{"code": "payment_unavailable"})
+		return true
+	}
+	if errors.Is(err, appbilling.ErrNoSubscription) {
+		WriteError(w, http.StatusBadRequest, "No subscription", map[string]any{"code": "no_subscription"})
+		return true
+	}
+	if errors.Is(err, appbilling.ErrInvalidPeriod) || errors.Is(err, appbilling.ErrInvalidChange) {
+		WriteValidationError(w, err.Error(), map[string]any{"code": "invalid_period"})
 		return true
 	}
 	if errors.Is(err, application.ErrPortfolioNotFound) {

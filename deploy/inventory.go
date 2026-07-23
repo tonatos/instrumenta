@@ -45,11 +45,14 @@ type Inventory struct {
 	TelegramOIDCClientID     string `yaml:"telegram_oidc_client_id"`
 	TelegramOIDCClientSecret string `yaml:"telegram_oidc_client_secret"`
 	DevTelegramID            int64  `yaml:"dev_telegram_id"`
-	TenantBackfillTelegramID int64  `yaml:"tenant_backfill_telegram_id"`
 
 	NotifierScanIntervalSec int    `yaml:"notifier_scan_interval_sec"`
 	TelegramBotToken        string `yaml:"telegram_bot_token"`
-	TelegramNotifyUserID    int    `yaml:"telegram_notify_user_id"`
+	TelegramBotUsername     string `yaml:"telegram_bot_username"`
+
+	YooKassaShopID           string `yaml:"yookassa_shop_id"`
+	YooKassaSecretKey        string `yaml:"yookassa_secret_key"`
+	ComplimentaryTelegramIDs string `yaml:"complimentary_telegram_ids"`
 
 	GHCRUsername string `yaml:"ghcr_username"`
 	GHCRToken    string `yaml:"ghcr_token"`

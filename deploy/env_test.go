@@ -24,10 +24,10 @@ func TestRenderEnv(t *testing.T) {
 		TelegramOIDCClientID:     "oidc-id",
 		TelegramOIDCClientSecret: "oidc-secret",
 		DevTelegramID:            1,
-		TenantBackfillTelegramID: 139693774,
 		NotifierScanIntervalSec:  3600,
 		TelegramBotToken:         "bot-token",
-		TelegramNotifyUserID:     139693774,
+		TelegramBotUsername:      "bond_monitor_bot",
+		ComplimentaryTelegramIDs: "111999777",
 	}
 
 	out, err := renderEnv(inv)
@@ -47,9 +47,10 @@ func TestRenderEnv(t *testing.T) {
 		"AUTH_SECRET=secret-value",
 		"PUBLIC_APP_URL=https://bond.example.com",
 		"TELEGRAM_BOT_TOKEN=bot-token",
+		"TELEGRAM_BOT_USERNAME=bond_monitor_bot",
 		"DEV_TELEGRAM_ID=1",
-		"TENANT_BACKFILL_TELEGRAM_ID=139693774",
 		"NOTIFIER_SCAN_INTERVAL_SEC=3600",
+		"COMPLIMENTARY_TELEGRAM_IDS=111999777",
 	}
 	for _, want := range checks {
 		if !strings.Contains(out, want) {
@@ -58,6 +59,12 @@ func TestRenderEnv(t *testing.T) {
 	}
 	if strings.Contains(out, "ALLOWED_TELEGRAM_IDS") {
 		t.Fatal("ALLOWED_TELEGRAM_IDS should be removed from prod env")
+	}
+	if strings.Contains(out, "TELEGRAM_NOTIFY_USER_ID") {
+		t.Fatal("TELEGRAM_NOTIFY_USER_ID should be removed from prod env")
+	}
+	if strings.Contains(out, "TENANT_BACKFILL_TELEGRAM_ID") {
+		t.Fatal("TENANT_BACKFILL_TELEGRAM_ID should be removed from prod env")
 	}
 }
 

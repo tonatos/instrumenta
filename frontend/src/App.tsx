@@ -7,11 +7,16 @@ import { FavoritesPage } from "@/features/favorites/FavoritesPage";
 import { PortfolioPage } from "@/features/portfolio/PortfolioPage";
 import { RadarPage } from "@/features/radar/RadarPage";
 import { CalculatorPage } from "@/features/calculator/CalculatorPage";
-import { AccountPage } from "@/features/account/AccountPage";
+import { AccountLayout } from "@/features/account/AccountLayout";
+import { AccountKeysPage } from "@/features/account/AccountPage";
+import { NotificationsPage } from "@/features/account/NotificationsPage";
+import { PlanPage } from "@/features/account/PlanPage";
+import { FinancePage } from "@/features/account/FinancePage";
 import { AuthProvider } from "@/features/auth/AuthContext";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { LoginCallbackPage } from "@/features/auth/LoginCallbackPage";
 import { ProtectedRoute } from "@/features/auth/ProtectedRoute";
+import { SubscriptionPaywallProvider } from "@/features/billing/SubscriptionPaywallProvider";
 import { RateScenarioProvider } from "@/features/settings/RateScenarioProvider";
 
 const queryClient = new QueryClient({
@@ -26,24 +31,31 @@ export function App() {
       <ThemeProvider>
         <RateScenarioProvider>
           <AuthProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/login/callback" element={<LoginCallbackPage />} />
-              <Route element={<ProtectedRoute />}>
-                <Route element={<AppShell />}>
-                  <Route index element={<ScreenerPage />} />
-                  <Route path="favorites" element={<FavoritesPage />} />
-                  <Route path="portfolio/:portfolioId?" element={<PortfolioPage />} />
-                  <Route path="radar" element={<RadarPage />} />
-                  <Route path="calculator" element={<CalculatorPage />} />
-                  <Route path="account" element={<AccountPage />} />
-                  <Route path="*" element={<Navigate to="/" replace />} />
-                </Route>
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </AuthProvider>
+            <SubscriptionPaywallProvider>
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/login/callback" element={<LoginCallbackPage />} />
+                  <Route element={<ProtectedRoute />}>
+                    <Route element={<AppShell />}>
+                      <Route index element={<ScreenerPage />} />
+                      <Route path="favorites" element={<FavoritesPage />} />
+                      <Route path="portfolio/:portfolioId?" element={<PortfolioPage />} />
+                      <Route path="radar" element={<RadarPage />} />
+                      <Route path="calculator" element={<CalculatorPage />} />
+                      <Route path="account" element={<AccountLayout />}>
+                        <Route index element={<AccountKeysPage />} />
+                        <Route path="notifications" element={<NotificationsPage />} />
+                        <Route path="plan" element={<PlanPage />} />
+                        <Route path="finance" element={<FinancePage />} />
+                      </Route>
+                      <Route path="*" element={<Navigate to="/" replace />} />
+                    </Route>
+                  </Route>
+                </Routes>
+              </BrowserRouter>
+            </SubscriptionPaywallProvider>
+          </AuthProvider>
         </RateScenarioProvider>
       </ThemeProvider>
     </QueryClientProvider>

@@ -6,6 +6,7 @@ import {
   ChevronUp,
   Edit2,
   Loader2,
+  Lock,
   Plus,
   RefreshCw,
   Trash2,
@@ -26,6 +27,7 @@ import { TradingActionQueue } from "@/features/portfolio/trading/TradingActionQu
 import { NotificationsPanel } from "@/features/portfolio/NotificationsPanel";
 import { TradingModeBadge, TradingModeWizard } from "@/features/portfolio/TradingModeWizard";
 import { portfolioFreeCashRub, portfolioInvestedCapitalRub, portfolioPath } from "@/features/portfolio/utils";
+import { useSubscriptionPaywall } from "@/features/billing/SubscriptionPaywallProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -43,6 +45,7 @@ import { cn, formatDate, formatRub } from "@/lib/utils";
 
 export function PortfolioPage() {
   const navigate = useNavigate();
+  const { openPaywall } = useSubscriptionPaywall();
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
@@ -65,6 +68,7 @@ export function PortfolioPage() {
     positions,
     slots,
     isTrading,
+    accessLocked,
     tradingAdvice,
     tradingStateFetching,
     tradingStateError,
@@ -143,6 +147,7 @@ export function PortfolioPage() {
               )}
             >
               <span className="max-w-[140px] truncate">{p.name}</span>
+              {p.access_locked && <Lock className="h-3.5 w-3.5 opacity-70" aria-hidden />}
               <TradingModeBadge portfolio={p} />
             </button>
           ))}
@@ -162,7 +167,39 @@ export function PortfolioPage() {
         </Card>
       )}
 
-      {active && (
+      {active && accessLocked && (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
+            <Lock className="h-10 w-10 text-muted-foreground" />
+            <div className="space-y-2">
+              <p className="font-medium">Портфель заблокирован</p>
+              <p className="max-w-md text-sm text-muted-foreground">
+                Для доступа к привязанному торговому портфелю нужна действующая подписка. Ключи
+                брокера не удаляются — после оплаты доступ восстановится.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                className="min-h-10"
+                onClick={() => openPaywall({ reason: "trading_portfolio.access" })}
+              >
+                Подключить тариф
+              </Button>
+              <TradingModeWizard
+                portfolio={active}
+                sandboxConfigured={sandboxConfigured}
+                productionConfigured={productionConfigured}
+                tradingConfigLoaded={tradingCredentialsLoaded}
+                onPortfolioDeleted={(id) => {
+                  if (id === activeId) navigate("/portfolio");
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {active && !accessLocked && (
         <div className="space-y-5">
           <div className="overflow-hidden rounded-2xl border-2 border-primary/20 bg-card shadow-sm">
             <div className="bg-gradient-to-r from-primary/5 to-transparent px-6 py-5">

@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { useSubscriptionPaywall } from "@/features/billing/SubscriptionPaywallProvider";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 
@@ -220,7 +221,18 @@ export function TradingModeWizard({
   };
 
   const isTrading = portfolio.mode === "trading";
-  const canAttach = sandboxConfigured || productionConfigured;
+  const { openPaywall } = useSubscriptionPaywall();
+  const { data: billing } = useQuery({
+    queryKey: ["billing-status"],
+    queryFn: () => api.getBillingStatus(),
+    staleTime: 60_000,
+  });
+  const hasAttachEntitlement = Boolean(
+    billing?.complimentary ||
+      billing?.entitlements?.includes("portfolio.attach") ||
+      billing?.has_active_access,
+  );
+  const canAttach = (sandboxConfigured || productionConfigured) && hasAttachEntitlement;
 
   if (isTrading) {
     return (
@@ -259,11 +271,24 @@ export function TradingModeWizard({
     );
   }
 
-  if (!tradingConfigLoaded) {
+  if (!tradingConfigLoaded || billing === undefined) {
     return (
       <Button size="sm" className="gap-1.5" disabled>
         <Loader2 className="h-4 w-4 animate-spin" />
         Перевести в торговлю
+      </Button>
+    );
+  }
+
+  if (!hasAttachEntitlement) {
+    return (
+      <Button
+        size="sm"
+        className="min-h-10 gap-1.5"
+        onClick={() => openPaywall({ reason: "portfolio.attach" })}
+      >
+        <Wifi className="h-4 w-4" />
+        Привязать счёт
       </Button>
     );
   }

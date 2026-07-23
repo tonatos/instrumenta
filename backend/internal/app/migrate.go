@@ -11,7 +11,7 @@ import (
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
 )
 
-func runMigrations(ctx context.Context, db *persistence.DB, backfillTelegramID int64) error {
+func runMigrations(ctx context.Context, db *persistence.DB) error {
 	paths, err := migrationFiles()
 	if err != nil {
 		return err
@@ -21,8 +21,11 @@ func runMigrations(ctx context.Context, db *persistence.DB, backfillTelegramID i
 			return fmt.Errorf("%s: %w", filepath.Base(path), err)
 		}
 	}
-	if err := persistence.EnsureMultiTenantSchema(ctx, db.DB, backfillTelegramID); err != nil {
+	if err := persistence.EnsureMultiTenantSchema(ctx, db.DB); err != nil {
 		return fmt.Errorf("ensure multi-tenant schema: %w", err)
+	}
+	if err := persistence.EnsureUsersNotifySchema(ctx, db.DB); err != nil {
+		return fmt.Errorf("ensure users notify schema: %w", err)
 	}
 	return nil
 }

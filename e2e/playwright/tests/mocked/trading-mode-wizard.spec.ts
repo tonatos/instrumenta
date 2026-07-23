@@ -62,6 +62,20 @@ test.describe("Мастер режима торговли", () => {
         json: { telegram_id: 1, display_name: "E2E User", credentials },
       });
     });
+    await page.route("**/api/v1/billing/status", async (route) => {
+      await route.fulfill({
+        json: {
+          complimentary: true,
+          payment_enabled: false,
+          entitlements: [
+            "broker_credentials.write",
+            "portfolio.attach",
+            "trading_portfolio.access",
+          ],
+          has_active_access: true,
+        },
+      });
+    });
     // Expose mutable flags for tests that need other credential shapes.
     (page as unknown as { __credFlags: typeof credFlags }).__credFlags = credFlags;
 
@@ -73,6 +87,27 @@ test.describe("Мастер режима торговли", () => {
       const { pathname } = new URL(route.request().url());
       if (route.request().method() === "GET" && pathname === "/api/v1/portfolios/") {
         await route.fulfill({ json: [simulationPortfolio] });
+        return;
+      }
+      if (pathname.includes("/account-preview")) {
+        const url = new URL(route.request().url());
+        const accountId = url.searchParams.get("account_id") ?? "";
+        const linked =
+          accountId === "acc-linked"
+            ? { id: LINKED_PORTFOLIO_ID, name: "Уже в торговле" }
+            : null;
+        await route.fulfill({
+          json: {
+            money_rub: 100_000,
+            bond_positions: [],
+            other_instruments: [],
+            has_securities: false,
+            can_attach: linked == null,
+            blockers: linked ? ["Счёт уже привязан к другому портфелю"] : [],
+            warnings: [],
+            linked_portfolio: linked,
+          },
+        });
         return;
       }
       await route.continue();

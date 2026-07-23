@@ -63,7 +63,7 @@ task run:notifier
 ```env
 T_TRADING_TOKEN_SANDBOX=...    # sandbox T-Invest (режим торговли)
 TELEGRAM_BOT_TOKEN=...
-TELEGRAM_NOTIFY_USER_ID=139693774
+# TELEGRAM_BOT_USERNAME=...    # опционально; иначе API берёт из getMe
 REDIS_URL=redis://localhost:6379/0
 LOG_LEVEL=DEBUG
 ```
@@ -132,7 +132,7 @@ cache/                      # MOEX cache, SQLite DB, notifier ledger
 
 **Каналы доставки (portfolio alerts):**
 
-- **Telegram** — push на `TELEGRAM_NOTIFY_USER_ID` (critical risk + put-offer action)
+- **Telegram** — push на `owner_telegram_id` портфеля после `/start` в боте (critical risk + put-offer action; нужна подписка Pro / complimentary)
 - **Redis Stream** → API consumer → `GET /api/v1/portfolios/{id}/notifications` (пут-оферта, риск, market signals по holdings)
 - **Market Radar UI** — `GET /api/v1/market-radar` (без Telegram в v1)
 
@@ -220,7 +220,7 @@ task deploy:bootstrap
 | `REDIS_URL` | Шина между notifier и API, напр. `redis://redis:6379/0` |
 | `NOTIFIER_SCAN_INTERVAL_SEC` | Интервал скана (default `3600`) |
 | `TELEGRAM_BOT_TOKEN` | Токен бота для push-уведомлений |
-| `TELEGRAM_NOTIFY_USER_ID` | Telegram user id получателя |
+| `TELEGRAM_BOT_USERNAME` | Username бота для deep link (опционально; иначе getMe) |
 | `NOTIFIER_LEDGER_PATH` | Путь к SQLite-ledger (default `cache/notifier_ledger.db`) |
 
 **3. Deploy key VPS → GitHub** (для `git pull` на сервере):

@@ -50,7 +50,8 @@ export function usePortfolioQueries() {
 
   const active = activeFromList ?? directPortfolio;
   const isTrading = active?.mode === "trading";
-  const tradingEnabled = isTrading && Boolean(active?.account_id);
+  const accessLocked = Boolean(active?.access_locked);
+  const tradingEnabled = isTrading && Boolean(active?.account_id) && !accessLocked;
 
   const searchQuery = searchParams.toString();
 
@@ -192,6 +193,7 @@ export function usePortfolioQueries() {
     positions,
     slots,
     isTrading,
+    accessLocked,
     tradingEnabled,
     tradingAdvice: tradingState?.advice,
     tradingStateFetching,

@@ -10,6 +10,7 @@ import (
 
 	"github.com/tonatos/bond-monitor/backend/internal/application"
 	"github.com/tonatos/bond-monitor/backend/internal/application/adapters"
+	appbilling "github.com/tonatos/bond-monitor/backend/internal/application/billing"
 	appbonds "github.com/tonatos/bond-monitor/backend/internal/application/bonds"
 	appmarketsignals "github.com/tonatos/bond-monitor/backend/internal/application/market_signals"
 	appnotifications "github.com/tonatos/bond-monitor/backend/internal/application/notifications"
@@ -21,6 +22,7 @@ import (
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/ratings"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
+	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/yookassa"
 	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
 	"github.com/tonatos/bond-monitor/backend/internal/interfaces/config"
 	httpapi "github.com/tonatos/bond-monitor/backend/internal/interfaces/http"
@@ -81,7 +83,7 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 		_ = db.Close()
 		return nil, fmt.Errorf("ping db: %w", err)
 	}
-	if err := runMigrations(ctx, db, settings.TenantBackfillID()); err != nil {
+	if err := runMigrations(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
@@ -138,26 +140,54 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 
 	getRadar := appmarketsignals.NewGetRadarUseCase(radarRepo, portfolioInner)
 
+	billingRepo := persistence.NewBillingRepository(db)
+	yooGateway := yookassa.NewClient(settings.YooKassaShopID, settings.YooKassaSecretKey, &http.Client{Timeout: 20 * time.Second})
+	billingSvc := appbilling.NewService(
+		billingRepo,
+		yooGateway,
+		settings.ComplimentaryTelegramIDs,
+		settings.YooKassaReturnURLResolved(),
+	)
+
+	botUsername := settings.TelegramBotUsername
+	if botUsername == "" && settings.TelegramBotToken != "" {
+		tg := notifications.NewTelegramClient(settings.TelegramBotToken)
+		if me, err := tg.GetMe(ctx); err == nil {
+			botUsername = me.Username
+		} else {
+			logger.Warn("telegram getMe failed; set TELEGRAM_BOT_USERNAME for deep links", "error", err)
+		}
+	}
+
 	deps := httpapi.Deps{
-		Settings:      settings,
-		JWT:           jwtManager,
-		Bonds:         adapters.NewBondService(bondInner),
-		Favorites:     adapters.NewFavoritesRepository(favoritesRepo),
-		Portfolios:    adapters.NewPortfolioService(portfolioInner),
-		Trading:       tradingInner,
-		Notifications: adapters.NewNotificationsRepository(notificationsRepo),
-		MarketRadar:   adapters.NewMarketRadarService(getRadar),
-		Credentials:   credRepo,
-		Users:         usersRepo,
-		TokenSource:   tokens,
-		HTTPClient:    &http.Client{Timeout: 20 * time.Second},
+		Settings:            settings,
+		JWT:                 jwtManager,
+		Bonds:               adapters.NewBondService(bondInner),
+		Favorites:           adapters.NewFavoritesRepository(favoritesRepo),
+		Portfolios:          adapters.NewPortfolioService(portfolioInner),
+		Trading:             tradingInner,
+		Notifications:       adapters.NewNotificationsRepository(notificationsRepo),
+		MarketRadar:         adapters.NewMarketRadarService(getRadar),
+		Credentials:         credRepo,
+		Users:               usersRepo,
+		TokenSource:         tokens,
+		Billing:             billingSvc,
+		TelegramBotUsername: botUsername,
+		HTTPClient:          &http.Client{Timeout: 20 * time.Second},
 	}
 
 	return &App{Deps: deps, DB: db, Consumer: consumer}, nil
 }
 
-// WireNotifier builds notifier scan dependencies.
-func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Logger) (*appnotifications.ScanUseCase, *persistence.DB, func(), error) {
+// WireNotifier builds notifier scan, billing renewal, and Telegram bot inbox.
+func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Logger) (
+	*appnotifications.ScanUseCase,
+	*appbilling.Service,
+	*appnotifications.BotInbox,
+	*persistence.DB,
+	func(),
+	error,
+) {
 	if logger == nil {
 		logger = slog.Default()
 	}
@@ -165,25 +195,26 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 	dsn := NormalizeDSN(settings.DatabaseURL)
 	db, err := persistence.Open(dsn)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("open db: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("open db: %w", err)
 	}
 	if err := db.Ping(ctx); err != nil {
 		_ = db.Close()
-		return nil, nil, nil, fmt.Errorf("ping db: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("ping db: %w", err)
 	}
-	if err := runMigrations(ctx, db, settings.TenantBackfillID()); err != nil {
+	if err := runMigrations(ctx, db); err != nil {
 		_ = db.Close()
-		return nil, nil, nil, fmt.Errorf("migrate: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("migrate: %w", err)
 	}
 
 	credRepo, err := buildCredentialRepo(settings, db)
 	if err != nil {
 		_ = db.Close()
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	tokens := buildTokenSource(settings, credRepo)
 
 	portfolioRepo := persistence.NewPortfolioRepository(db)
+	usersRepo := persistence.NewUserRepository(db)
 	notificationsRepo := persistence.NewNotificationsRepository(db)
 	spreadRepo := persistence.NewSpreadSnapshotsRepository(db.DB)
 	radarRepo := persistence.NewMarketRadarRepository(db.DB)
@@ -208,8 +239,16 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 			bus = nil
 		}
 	}
-	telegram := notifications.NewTelegramClient(settings.TelegramBotToken, settings.TelegramNotifyUserID)
-	deliver := appnotifications.NewDeliverUseCase(ledger, bus, telegram, notificationsRepo)
+	billingRepo := persistence.NewBillingRepository(db)
+	billingSvc := appbilling.NewService(
+		billingRepo,
+		yookassa.NewClient(settings.YooKassaShopID, settings.YooKassaSecretKey, &http.Client{Timeout: 20 * time.Second}),
+		settings.ComplimentaryTelegramIDs,
+		settings.YooKassaReturnURLResolved(),
+	)
+	telegram := notifications.NewTelegramClient(settings.TelegramBotToken)
+	gate := &appnotifications.SubscriptionTelegramGate{Users: usersRepo, Billing: billingSvc}
+	deliver := appnotifications.NewDeliverUseCase(ledger, bus, telegram, notificationsRepo, gate)
 	radarScan := appmarketsignals.NewScanRadarUseCase(
 		bondSvc, spreadRepo, radarRepo, settings.KeyRate, settings.TaxRateFraction(),
 	)
@@ -217,8 +256,9 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 		tradingCtx, bondSvc, deliver, spreadRepo, radarScan, logger, settings.NotificationsDev,
 		settings.KeyRate, settings.TaxRateFraction(),
 	)
+	inbox := appnotifications.NewBotInbox(telegram, usersRepo, billingSvc, logger)
 	cleanup := func() { _ = db.Close() }
-	return scanner, db, cleanup, nil
+	return scanner, billingSvc, inbox, db, cleanup, nil
 }
 
 type noopConsumer struct{}
