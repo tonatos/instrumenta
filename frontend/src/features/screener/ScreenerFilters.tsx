@@ -236,131 +236,129 @@ export function ScreenerFilters({
       </CardHeader>
 
       {filtersExpanded && (
-        <CardContent className="border-t border-border pt-3">
-          <div className="rounded-md border border-border">
-            <button
-              type="button"
-              className="flex min-h-10 w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm"
-              onClick={() => onAdvancedOpenChange(!advancedOpen)}
-              aria-expanded={advancedOpen}
-              data-testid="screener-filters-advanced-toggle"
-            >
-              <span className="flex items-center gap-2 font-medium">
-                Дополнительно
-                {advancedActiveCount > 0 && !advancedOpen && (
-                  <Badge variant="secondary" className="text-[10px] tabular-nums">
-                    {advancedActiveCount}
-                  </Badge>
-                )}
-              </span>
-              {advancedOpen ? (
-                <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden />
-              ) : (
-                <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden />
+        <CardContent className="space-y-3 border-t border-border pt-3">
+          <button
+            type="button"
+            className="flex min-h-10 w-full items-center justify-between gap-2 text-left text-sm"
+            onClick={() => onAdvancedOpenChange(!advancedOpen)}
+            aria-expanded={advancedOpen}
+            data-testid="screener-filters-advanced-toggle"
+          >
+            <span className="flex items-center gap-2 font-medium">
+              Дополнительно
+              {advancedActiveCount > 0 && !advancedOpen && (
+                <Badge variant="secondary" className="text-[10px] tabular-nums">
+                  {advancedActiveCount}
+                </Badge>
               )}
-            </button>
+            </span>
+            {advancedOpen ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" aria-hidden />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden />
+            )}
+          </button>
 
-            {advancedOpen && (
-              <div className="space-y-4 border-t border-border px-3 py-4">
-                {/* Ликвидность / инструмент */}
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="min-w-0">
-                    <FieldLabel htmlFor="screener-min-volume">Мин. объём, ₽</FieldLabel>
-                    <Input
-                      id="screener-min-volume"
-                      type="number"
-                      min={0}
-                      value={minVolume}
-                      onChange={(e) =>
-                        onMinVolumeChange(e.target.value === "" ? "" : Number(e.target.value))
-                      }
-                      placeholder="0"
-                      className="h-10"
-                      aria-label="Мин. объём торгов"
-                    />
-                  </div>
-                  <div className="min-w-0">
-                    <FieldLabel htmlFor="screener-max-lot">Макс. стоимость лота, ₽</FieldLabel>
-                    <Input
-                      id="screener-max-lot"
-                      type="number"
-                      min={0}
-                      value={maxLotPrice}
-                      onChange={(e) =>
-                        onMaxLotPriceChange(e.target.value === "" ? "" : Number(e.target.value))
-                      }
-                      placeholder="0 — без ограничения"
-                      className="h-10"
-                      aria-label="Макс. стоимость лота"
-                    />
-                  </div>
-                  <div className="min-w-0 sm:col-span-2 lg:col-span-1">
-                    <FieldLabel>Тип купона</FieldLabel>
-                    <MultiSelect
-                      options={COUPON_OPTIONS}
-                      values={couponTypes}
-                      onChange={onCouponTypesChange}
-                      placeholder="Все типы"
-                      aria-label="Тип купона"
-                      data-testid="screener-filter-coupon"
-                    />
-                  </div>
-                  <div className="min-w-0 sm:col-span-2 lg:col-span-1">
-                    <FieldLabel>Сектор</FieldLabel>
-                    <MultiSelect
-                      options={SECTOR_FILTER_OPTIONS}
-                      values={sectors}
-                      onChange={onSectorsChange}
-                      placeholder="Все секторы"
-                      searchable
-                      searchPlaceholder="Найти сектор…"
-                      aria-label="Сектор"
-                      data-testid="screener-filter-sector"
-                    />
-                  </div>
+          {advancedOpen && (
+            <div className="space-y-4">
+              {/* Ликвидность / инструмент */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="min-w-0">
+                  <FieldLabel htmlFor="screener-min-volume">Мин. объём, ₽</FieldLabel>
+                  <Input
+                    id="screener-min-volume"
+                    type="number"
+                    min={0}
+                    value={minVolume}
+                    onChange={(e) =>
+                      onMinVolumeChange(e.target.value === "" ? "" : Number(e.target.value))
+                    }
+                    placeholder="0"
+                    className="h-10"
+                    aria-label="Мин. объём торгов"
+                  />
                 </div>
-
-                {/* Риск / исключения */}
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="min-w-0">
-                    <FieldLabel>Уровень риска</FieldLabel>
-                    <MultiSelect
-                      options={RISK_LEVEL_OPTIONS}
-                      values={riskLevels.map(String)}
-                      onChange={(vals) => onRiskLevelsChange(vals.map(Number))}
-                      placeholder="Все уровни"
-                      aria-label="Уровень риска"
-                      data-testid="screener-filter-risk"
-                    />
-                  </div>
-                  <div className="flex min-w-0 flex-col justify-end">
-                    <span className="mb-1.5 block text-xs leading-none opacity-0" aria-hidden>
-                      &nbsp;
-                    </span>
-                    <label className="flex h-10 cursor-pointer items-center gap-2.5 text-sm">
-                      <Checkbox
-                        checked={hideDefault}
-                        onCheckedChange={(c) => onHideDefaultChange(!!c)}
-                      />
-                      Скрыть дефолтные
-                    </label>
-                  </div>
-                  <div className="flex min-w-0 flex-col justify-end sm:col-span-2 lg:col-span-1">
-                    <span className="mb-1.5 block text-xs leading-none opacity-0" aria-hidden>
-                      &nbsp;
-                    </span>
-                    <label className="flex h-10 cursor-pointer items-center gap-2.5 text-sm">
-                      <Checkbox
-                        checked={hideSubordinated}
-                        onCheckedChange={(c) => onHideSubordinatedChange(!!c)}
-                      />
-                      Скрыть субординированные
-                    </label>
-                  </div>
+                <div className="min-w-0">
+                  <FieldLabel htmlFor="screener-max-lot">Макс. стоимость лота, ₽</FieldLabel>
+                  <Input
+                    id="screener-max-lot"
+                    type="number"
+                    min={0}
+                    value={maxLotPrice}
+                    onChange={(e) =>
+                      onMaxLotPriceChange(e.target.value === "" ? "" : Number(e.target.value))
+                    }
+                    placeholder="0 — без ограничения"
+                    className="h-10"
+                    aria-label="Макс. стоимость лота"
+                  />
+                </div>
+                <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+                  <FieldLabel>Тип купона</FieldLabel>
+                  <MultiSelect
+                    options={COUPON_OPTIONS}
+                    values={couponTypes}
+                    onChange={onCouponTypesChange}
+                    placeholder="Все типы"
+                    aria-label="Тип купона"
+                    data-testid="screener-filter-coupon"
+                  />
+                </div>
+                <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+                  <FieldLabel>Сектор</FieldLabel>
+                  <MultiSelect
+                    options={SECTOR_FILTER_OPTIONS}
+                    values={sectors}
+                    onChange={onSectorsChange}
+                    placeholder="Все секторы"
+                    searchable
+                    searchPlaceholder="Найти сектор…"
+                    aria-label="Сектор"
+                    data-testid="screener-filter-sector"
+                  />
                 </div>
               </div>
-            )}
-          </div>
+
+              {/* Риск / исключения */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="min-w-0">
+                  <FieldLabel>Уровень риска</FieldLabel>
+                  <MultiSelect
+                    options={RISK_LEVEL_OPTIONS}
+                    values={riskLevels.map(String)}
+                    onChange={(vals) => onRiskLevelsChange(vals.map(Number))}
+                    placeholder="Все уровни"
+                    aria-label="Уровень риска"
+                    data-testid="screener-filter-risk"
+                  />
+                </div>
+                <div className="flex min-w-0 flex-col justify-end">
+                  <span className="mb-1.5 block text-xs leading-none opacity-0" aria-hidden>
+                    &nbsp;
+                  </span>
+                  <label className="flex h-10 cursor-pointer items-center gap-2.5 text-sm">
+                    <Checkbox
+                      checked={hideDefault}
+                      onCheckedChange={(c) => onHideDefaultChange(!!c)}
+                    />
+                    Скрыть дефолтные
+                  </label>
+                </div>
+                <div className="flex min-w-0 flex-col justify-end sm:col-span-2 lg:col-span-1">
+                  <span className="mb-1.5 block text-xs leading-none opacity-0" aria-hidden>
+                    &nbsp;
+                  </span>
+                  <label className="flex h-10 cursor-pointer items-center gap-2.5 text-sm">
+                    <Checkbox
+                      checked={hideSubordinated}
+                      onCheckedChange={(c) => onHideSubordinatedChange(!!c)}
+                    />
+                    Скрыть субординированные
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       )}
     </Card>
