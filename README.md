@@ -1,18 +1,18 @@
-# Bond Monitor — краткосрочные облигации РФ
+# Instrumenta — краткосрочные облигации РФ
 
-Bond Monitor — веб-приложение для отбора и планирования портфеля краткосрочных облигаций РФ. Данные MOEX ISS, рейтингов и T-Invest собираются в единую базу; скринер ранжирует бумаги по YTM, ликвидности и риску. Планировщик автосоставляет портфель, прогнозирует cashflow, реинвестиции и XIRR до горизонта. В TRADING mode портфель сверяется со счётом брокера; фоновый **notifier** мониторит пут-оферты, риск эмитента и market signals, строит **Market Radar** по рынку, шлёт Telegram и публикует события в UI. Стек: **Go API** (`backend/cmd/api`) + **React SPA** + **Redis**.
+Instrumenta — веб-приложение для отбора и планирования портфеля краткосрочных облигаций РФ. Данные MOEX ISS, рейтингов и T-Invest собираются в единую базу; скринер ранжирует бумаги по YTM, ликвидности и риску. Планировщик автосоставляет портфель, прогнозирует cashflow, реинвестиции и XIRR до горизонта. В TRADING mode портфель сверяется со счётом брокера; фоновый **notifier** мониторит пут-оферты, риск эмитента и market signals, строит **Market Radar** по рынку, шлёт Telegram и публикует события в UI. Стек: **Go API** (`backend/cmd/api`) + **React SPA** + **Redis**.
 
 **Лицензия:** [PolyForm Noncommercial 1.0.0](./LICENSE) — личное и некоммерческое использование; коммерческое использование, перепродажа и продукты на базе кода запрещены. Исходники: [github.com/tonatos/instrumenta](https://github.com/tonatos/instrumenta).
 
 
 ## На чём зарабатываем
 
-- Купонный доход — основной источник, считается net после НДФЛ 13%.
+- Купонный доход — основной источник, считается net после НДФЛ (ставка задаётся в настройках приложения).
 - Дисконт к номиналу — покупка ниже 100% даёт доход при погашении (тоже с учётом налога на курсовую разницу).
 - Реинвест — сложный процент: погашения и накопленный купонный кэш каждые ~30 дней уходят в новые лучшие бумаги (цепочка до 10 хопов).
 
 
-![Портфель Bond Monitor](docs/portfolio-screenshot.png)
+![Портфель Instrumenta](docs/portfolio-screenshot.png)
 
 ## Возможности
 
@@ -140,7 +140,7 @@ cache/                      # MOEX cache, SQLite DB, notifier ledger
 
 Идемпотентность: ledger `cache/notifier_ledger.db` + fingerprint на событие. При недоступности Redis воркер пишет напрямую в SQLite.
 
-Образ notifier = образ API (`ghcr.io/tonatos/bond-monitor-api`), другой `CMD`.
+Образ notifier = образ API (`ghcr.io/tonatos/instrumenta-api`), другой `CMD`.
 
 ### Локальное тестирование уведомлений
 
@@ -198,10 +198,10 @@ Production-стек: **Caddy** (HTTPS, Let's Encrypt) → **nginx** (SPA + `/api
 Сгенерируйте отдельную пару ключей для CI (не используйте личный):
 
 ```bash
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/bond-monitor-gha -N ""
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/instrumenta-gha -N ""
 ```
 
-Публичный ключ (`bond-monitor-gha.pub`) → `authorized_keys` на VPS. Приватный → secret `VPS_SSH_KEY`.
+Публичный ключ (`instrumenta-gha.pub`) → `authorized_keys` на VPS. Приватный → secret `VPS_SSH_KEY`.
 
 **2. Bootstrap на VPS** (Docker, git clone, `.env` с секретами):
 
@@ -213,7 +213,7 @@ brew install go-task   # macOS
 task deploy:bootstrap
 ```
 
-Секреты (`TINKOFF_TOKEN`, `AUTH_SECRET`, OIDC, `TELEGRAM_BOT_TOKEN` и т.д.) записываются в `/opt/bond-monitor/.env` **только при bootstrap**. GitHub Actions их не трогает.
+Секреты (`TINKOFF_TOKEN`, `AUTH_SECRET`, OIDC, `TELEGRAM_BOT_TOKEN` и т.д.) записываются в `/opt/instrumenta/.env` **только при bootstrap**. GitHub Actions их не трогает.
 
 Переменные notifier (см. `.env.example`):
 
@@ -229,7 +229,7 @@ task deploy:bootstrap
 
 ```bash
 ssh root@<VPS-IP>
-ssh-keygen -t ed25519 -C "bond-monitor-vps" -f ~/.ssh/id_ed25519 -N ""
+ssh-keygen -t ed25519 -C "instrumenta-vps" -f ~/.ssh/id_ed25519 -N ""
 cat ~/.ssh/id_ed25519.pub
 ```
 
@@ -239,14 +239,14 @@ cat ~/.ssh/id_ed25519.pub
 
 Сборка — workflow **Docker** (push в `main`):
 
-- `ghcr.io/tonatos/bond-monitor-api:main` — API и notifier (один образ)
-- `ghcr.io/tonatos/bond-monitor-web:main`
+- `ghcr.io/tonatos/instrumenta-api:main` — API и notifier (один образ)
+- `ghcr.io/tonatos/instrumenta-web:main`
 
 ### Деплой (автоматический)
 
 После успешной сборки workflow **Deploy** по SSH:
 
-1. `git pull` в `/opt/bond-monitor`
+1. `git pull` в `/opt/instrumenta`
 2. `docker compose pull && up -d`
 3. `.env` **не изменяется**
 
@@ -285,19 +285,19 @@ volumes:
 ### Обновление
 
 1. `git push` в `main` → **Docker** (сборка) → **Deploy** (выкат на VPS)
-2. Секреты на сервере меняйте вручную в `/opt/bond-monitor/.env`, затем `docker compose up -d`
+2. Секреты на сервере меняйте вручную в `/opt/instrumenta/.env`, затем `docker compose up -d`
 
 ### Бэкап
 
 Сохраняйте volume `cache/` на сервере — в нём SQLite-база, MOEX-кэш и ledger notifier:
 
 ```bash
-tar czf bond-monitor-cache-$(date +%F).tar.gz -C /opt/bond-monitor cache/
+tar czf instrumenta-cache-$(date +%F).tar.gz -C /opt/instrumenta cache/
 ```
 
 ### Ручной запуск production compose
 
 ```bash
-DOMAIN=bond.example.com IMAGE_TAG=main docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
-DOMAIN=bond.example.com IMAGE_TAG=main docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+DOMAIN=instrumenta.example.com IMAGE_TAG=main docker compose -f docker-compose.yml -f docker-compose.prod.yml pull
+DOMAIN=instrumenta.example.com IMAGE_TAG=main docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```

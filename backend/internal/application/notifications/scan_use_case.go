@@ -7,6 +7,7 @@ import (
 	"time"
 
 	appbonds "github.com/tonatos/bond-monitor/backend/internal/application/bonds"
+	appmarket "github.com/tonatos/bond-monitor/backend/internal/application/market"
 	appmarketsignals "github.com/tonatos/bond-monitor/backend/internal/application/market_signals"
 	apptrading "github.com/tonatos/bond-monitor/backend/internal/application/trading"
 	devnotify "github.com/tonatos/bond-monitor/backend/internal/dev/notifications"
@@ -14,6 +15,7 @@ import (
 	"github.com/tonatos/bond-monitor/backend/internal/domain/market_signals"
 	domain "github.com/tonatos/bond-monitor/backend/internal/domain/notifications"
 	domainPortfolio "github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
+	"github.com/tonatos/bond-monitor/backend/internal/domain/preferences"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
@@ -28,19 +30,48 @@ type ScanUseCase struct {
 	radarScan        *appmarketsignals.ScanRadarUseCase
 	logger           *slog.Logger
 	notificationsDev bool
-	keyRatePP        float64
-	taxRateFraction  float64
+	keyRates         *appmarket.KeyRateService
+	users            *persistence.UserRepository
+	defaultTaxFrac   float64
 }
 
-func NewScanUseCase(tradingCtx *apptrading.Context, bondSvc *appbonds.Service, deliver *DeliverUseCase, snapshots *persistence.SpreadSnapshotsRepository, radarScan *appmarketsignals.ScanRadarUseCase, logger *slog.Logger, notificationsDev bool, keyRatePP, taxRateFraction float64) *ScanUseCase {
+func NewScanUseCase(
+	tradingCtx *apptrading.Context,
+	bondSvc *appbonds.Service,
+	deliver *DeliverUseCase,
+	snapshots *persistence.SpreadSnapshotsRepository,
+	radarScan *appmarketsignals.ScanRadarUseCase,
+	logger *slog.Logger,
+	notificationsDev bool,
+	keyRates *appmarket.KeyRateService,
+	users *persistence.UserRepository,
+	defaultTaxFrac float64,
+) *ScanUseCase {
 	return &ScanUseCase{
 		tradingCtx: tradingCtx, bondSvc: bondSvc, deliver: deliver, logger: logger,
 		snapshots:        snapshots,
 		radarScan:        radarScan,
 		notificationsDev: notificationsDev,
-		keyRatePP:        keyRatePP,
-		taxRateFraction:  taxRateFraction,
+		keyRates:         keyRates,
+		users:            users,
+		defaultTaxFrac:   defaultTaxFrac,
 	}
+}
+
+func (s *ScanUseCase) ratesForOwner(ctx context.Context, ownerTelegramID int64) (keyRatePP, taxFrac float64) {
+	keyRatePP, taxFrac = s.bondSvc.DefaultRates()
+	if s.keyRates != nil {
+		keyRatePP = s.keyRates.Current(ctx)
+	}
+	if s.defaultTaxFrac >= 0 {
+		taxFrac = s.defaultTaxFrac
+	}
+	if s.users != nil {
+		if pct, err := s.users.TaxRatePct(ctx, ownerTelegramID); err == nil {
+			taxFrac = preferences.TaxRateFraction(pct)
+		}
+	}
+	return keyRatePP, taxFrac
 }
 
 func (s *ScanUseCase) Run(ctx context.Context, today time.Time) (int, error) {
@@ -100,7 +131,8 @@ func (s *ScanUseCase) scanPortfolio(ctx context.Context, p domainPortfolio.Portf
 	if bondLots == 0 {
 		return 0, nil
 	}
-	universeAll := s.bondSvc.LoadUniverse().Bonds
+	keyRatePP, taxFrac := s.ratesForOwner(ctx, p.OwnerTelegramID)
+	universeAll := s.bondSvc.LoadUniverse(keyRatePP, taxFrac).Bonds
 	universeAllByISIN := make(map[string]bonds.BondRecord, len(universeAll))
 	for _, b := range universeAll {
 		universeAllByISIN[b.ISIN] = b
@@ -123,7 +155,12 @@ func (s *ScanUseCase) scanPortfolio(ctx context.Context, p domainPortfolio.Portf
 	for isin := range isinSet {
 		isinList = append(isinList, isin)
 	}
-	universe := s.bondSvc.LoadByISINs(isinList, domainPortfolio.DurationPolicyForPortfolio(p, domainPortfolio.RateScenarioHold), p.RiskProfile)
+	universe := s.bondSvc.LoadByISINs(
+		isinList,
+		domainPortfolio.DurationPolicyForPortfolio(p, domainPortfolio.RateScenarioHold),
+		p.RiskProfile,
+		keyRatePP, taxFrac,
+	)
 	universeByISIN := make(map[string]bonds.BondRecord, len(universe))
 	for _, bond := range universe {
 		universeByISIN[bond.ISIN] = bond
@@ -151,7 +188,7 @@ func (s *ScanUseCase) scanPortfolio(ctx context.Context, p domainPortfolio.Portf
 
 		// (1) Write today's snapshots (holdings + peers).
 		for _, bond := range universe {
-			spread := market_signals.CreditSpreadPP(bond, s.keyRatePP, s.taxRateFraction)
+			spread := market_signals.CreditSpreadPP(bond, keyRatePP, taxFrac)
 			if spread == nil {
 				continue
 			}
@@ -294,7 +331,7 @@ func (s *ScanUseCase) scanPortfolio(ctx context.Context, p domainPortfolio.Portf
 	alerts := domain.CollectAlerts(domain.AlertParams{
 		Portfolio: p, Holdings: holdingSnapshots, Positions: positions, Universe: universe,
 		Today: today, Rules: domain.WorkerAlertRules,
-		KeyRatePP: s.keyRatePP, TaxRateFraction: s.taxRateFraction,
+		KeyRatePP: keyRatePP, TaxRateFraction: taxFrac,
 		NotificationPolicy: domain.DefaultNotificationPolicy,
 		RiskPolicy:         domainPortfolio.DefaultRiskMonitorPolicy,
 	})

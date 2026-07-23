@@ -12,10 +12,13 @@ import (
 	"github.com/tonatos/bond-monitor/backend/internal/application/adapters"
 	appbilling "github.com/tonatos/bond-monitor/backend/internal/application/billing"
 	appbonds "github.com/tonatos/bond-monitor/backend/internal/application/bonds"
+	appmarket "github.com/tonatos/bond-monitor/backend/internal/application/market"
 	appmarketsignals "github.com/tonatos/bond-monitor/backend/internal/application/market_signals"
 	appnotifications "github.com/tonatos/bond-monitor/backend/internal/application/notifications"
 	appportfolio "github.com/tonatos/bond-monitor/backend/internal/application/portfolio"
 	apptrading "github.com/tonatos/bond-monitor/backend/internal/application/trading"
+	"github.com/tonatos/bond-monitor/backend/internal/domain/preferences"
+	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/cbr"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/crypto"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/moex"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/notifications"
@@ -107,9 +110,21 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 	ratingsLoader := ratings.NewLoader(bondRefRepo)
 	defaultFlags := moex.NewDefaultFlagsService(bondRefRepo)
 
+	keyRates := appmarket.NewKeyRateService(
+		bondRefRepo,
+		cbr.NewClient(&http.Client{Timeout: 15 * time.Second}),
+		0,
+		logger.With("component", "key_rate"),
+	)
+	keyRates.OnChange(func(_, _ float64) {
+		appbonds.InvalidateAllBondCaches()
+	})
+	keyRatePP := keyRates.Current(ctx)
+	defaultTaxFrac := preferences.TaxRateFraction(preferences.DefaultTaxRatePct)
+
 	bondInner := appbonds.NewServiceWithDeps(
-		settings.KeyRate,
-		settings.TaxRateFraction(),
+		keyRatePP,
+		defaultTaxFrac,
 		settings.TinkoffToken,
 		moex.NewClient(),
 		ratingsLoader,
@@ -117,9 +132,9 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 		defaultFlags,
 	)
 	if logger != nil {
-		logger.Info("warming bond universe cache")
+		logger.Info("warming bond universe cache", "key_rate", keyRatePP)
 	}
-	universe := bondInner.LoadUniverse()
+	universe := bondInner.LoadUniverse(keyRatePP, defaultTaxFrac)
 	logger.Info("bond cache ready", "universe", len(universe.Bonds))
 	tradingInner := apptrading.NewService(
 		portfolioRepo,
@@ -162,12 +177,13 @@ func Wire(ctx context.Context, settings config.Settings, logger *slog.Logger) (*
 	deps := httpapi.Deps{
 		Settings:            settings,
 		JWT:                 jwtManager,
-		Bonds:               adapters.NewBondService(bondInner),
+		Bonds:               adapters.NewBondService(bondInner, keyRates, usersRepo),
 		Favorites:           adapters.NewFavoritesRepository(favoritesRepo),
 		Portfolios:          adapters.NewPortfolioService(portfolioInner),
 		Trading:             tradingInner,
 		Notifications:       adapters.NewNotificationsRepository(notificationsRepo),
 		MarketRadar:         adapters.NewMarketRadarService(getRadar),
+		KeyRates:            keyRates,
 		Credentials:         credRepo,
 		Users:               usersRepo,
 		TokenSource:         tokens,
@@ -220,9 +236,22 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 	radarRepo := persistence.NewMarketRadarRepository(db.DB)
 	bondRefRepo := persistence.NewBondReferenceRepository(db.DB)
 	tradingCtx := apptrading.NewContext(portfolioRepo, tokens)
+
+	keyRates := appmarket.NewKeyRateService(
+		bondRefRepo,
+		cbr.NewClient(&http.Client{Timeout: 15 * time.Second}),
+		0,
+		logger.With("component", "key_rate"),
+	)
+	keyRates.OnChange(func(_, _ float64) {
+		appbonds.InvalidateAllBondCaches()
+	})
+	keyRatePP := keyRates.Current(ctx)
+	defaultTaxFrac := preferences.TaxRateFraction(preferences.DefaultTaxRatePct)
+
 	bondSvc := appbonds.NewServiceWithDeps(
-		settings.KeyRate,
-		settings.TaxRateFraction(),
+		keyRatePP,
+		defaultTaxFrac,
 		settings.TinkoffToken,
 		moex.NewClient(),
 		ratings.NewLoader(bondRefRepo),
@@ -250,11 +279,11 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 	gate := &appnotifications.SubscriptionTelegramGate{Users: usersRepo, Billing: billingSvc}
 	deliver := appnotifications.NewDeliverUseCase(ledger, bus, telegram, notificationsRepo, gate)
 	radarScan := appmarketsignals.NewScanRadarUseCase(
-		bondSvc, spreadRepo, radarRepo, settings.KeyRate, settings.TaxRateFraction(),
+		bondSvc, spreadRepo, radarRepo, keyRates, defaultTaxFrac,
 	)
 	scanner := appnotifications.NewScanUseCase(
 		tradingCtx, bondSvc, deliver, spreadRepo, radarScan, logger, settings.NotificationsDev,
-		settings.KeyRate, settings.TaxRateFraction(),
+		keyRates, usersRepo, defaultTaxFrac,
 	)
 	inbox := appnotifications.NewBotInbox(telegram, usersRepo, billingSvc, logger)
 	cleanup := func() { _ = db.Close() }

@@ -156,6 +156,13 @@ export const api = {
   disconnectTelegramBot: () =>
     request<void>("/me/telegram-bot", { method: "DELETE" }),
 
+  getPreferences: () => request<{ tax_rate: number }>("/me/preferences"),
+  putPreferences: (taxRate: number) =>
+    request<{ tax_rate: number }>("/me/preferences", {
+      method: "PUT",
+      body: JSON.stringify({ tax_rate: taxRate }),
+    }),
+
   getBonds: (params: BondListParams = {}, riskProfile: BondRiskProfile = "normal") => {
     const path = `/bonds/${buildBondsQuery(params)}`;
     return request<BondsListResponse>(

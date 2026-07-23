@@ -36,6 +36,8 @@ func NewRouter(deps Deps, logger *slog.Logger) http.Handler {
 		})
 
 		r.Route("/me", func(r chi.Router) {
+			r.Get("/preferences", h.GetPreferences)
+			r.Put("/preferences", h.PutPreferences)
 			r.Put("/broker-credentials/{kind}", h.PutBrokerCredential)
 			r.Delete("/broker-credentials/{kind}", h.DeleteBrokerCredential)
 			r.Delete("/telegram-bot", h.DeleteTelegramBot)

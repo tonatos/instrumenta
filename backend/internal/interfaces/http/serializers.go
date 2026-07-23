@@ -362,10 +362,10 @@ func PlanToResponse(plan portfolio.PortfolioPlan) PlanResponse {
 	}
 }
 
-func ConfigToResponse(settings config.Settings) ConfigResponse {
+func ConfigToResponse(settings config.Settings, keyRatePP, taxRatePct float64) ConfigResponse {
 	return ConfigResponse{
-		KeyRate:                settings.KeyRate,
-		TaxRate:                settings.TaxRate,
+		KeyRate:                keyRatePP,
+		TaxRate:                taxRatePct,
 		MaxDays:                settings.MaxDays,
 		MinVolumeRub:           settings.MinVolumeRub,
 		TinkoffConfigured:      settings.TinkoffToken != "",

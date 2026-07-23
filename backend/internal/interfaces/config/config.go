@@ -38,8 +38,6 @@ type Settings struct {
 	TTradingTokenSandbox    string
 	TTradingTokenProduction string
 
-	KeyRate         float64
-	TaxRate         float64
 	MaxDays         int
 	MinVolumeRub    float64
 	BondCacheTTLSec float64
@@ -121,8 +119,6 @@ func Load() Settings {
 		TTradingTokenSandbox:    os.Getenv("T_TRADING_TOKEN_SANDBOX"),
 		TTradingTokenProduction: os.Getenv("T_TRADING_TOKEN_PRODUCTION"),
 
-		KeyRate:         envFloat("KEY_RATE", 14.5),
-		TaxRate:         envFloat("TAX_RATE", 13.0),
 		MaxDays:         envInt("MAX_DAYS", 120),
 		MinVolumeRub:    envFloat("MIN_VOLUME_RUB", 500_000),
 		BondCacheTTLSec: envFloat("BOND_CACHE_TTL_SEC", 120),
@@ -166,10 +162,6 @@ func (s Settings) TelegramOIDCConfigured() bool {
 	return s.TelegramOIDCClientID != "" &&
 		s.TelegramOIDCClientSecret != "" &&
 		s.TelegramOIDCRedirectURIResolved() != ""
-}
-
-func (s Settings) TaxRateFraction() float64 {
-	return s.TaxRate / 100.0
 }
 
 func envString(key, fallback string) string {

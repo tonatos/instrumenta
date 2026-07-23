@@ -21,6 +21,9 @@ func openUserTestDB(t *testing.T) *DB {
 	if err := EnsureUsersNotifySchema(context.Background(), db.DB); err != nil {
 		t.Fatalf("ensure notify schema: %v", err)
 	}
+	if err := EnsureUsersTaxSchema(context.Background(), db.DB); err != nil {
+		t.Fatalf("ensure tax schema: %v", err)
+	}
 	return db
 }
 
@@ -64,6 +67,37 @@ func TestUserRepository_BotConnectionOptIn(t *testing.T) {
 	connected, err = repo.IsBotConnected(ctx, 42)
 	if err != nil || connected {
 		t.Fatalf("expected disconnected, got %v err=%v", connected, err)
+	}
+}
+
+func TestUserRepository_TaxRatePct(t *testing.T) {
+	db := openUserTestDB(t)
+	if err := EnsureUsersTaxSchema(context.Background(), db.DB); err != nil {
+		t.Fatalf("ensure tax schema: %v", err)
+	}
+	repo := NewUserRepository(db)
+	ctx := context.Background()
+
+	pct, err := repo.TaxRatePct(ctx, 1)
+	if err != nil || pct != 13 {
+		t.Fatalf("default missing user: got %v err=%v", pct, err)
+	}
+	if err := repo.SetTaxRatePct(ctx, 1, 0); err != nil {
+		t.Fatalf("set 0: %v", err)
+	}
+	pct, err = repo.TaxRatePct(ctx, 1)
+	if err != nil || pct != 0 {
+		t.Fatalf("got %v err=%v", pct, err)
+	}
+	if err := repo.SetTaxRatePct(ctx, 1, 22); err != nil {
+		t.Fatalf("set 22: %v", err)
+	}
+	pct, err = repo.TaxRatePct(ctx, 1)
+	if err != nil || pct != 22 {
+		t.Fatalf("got %v err=%v", pct, err)
+	}
+	if err := repo.SetTaxRatePct(ctx, 1, 14); err == nil {
+		t.Fatal("expected validation error")
 	}
 }
 

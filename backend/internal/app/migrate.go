@@ -27,6 +27,9 @@ func runMigrations(ctx context.Context, db *persistence.DB) error {
 	if err := persistence.EnsureUsersNotifySchema(ctx, db.DB); err != nil {
 		return fmt.Errorf("ensure users notify schema: %w", err)
 	}
+	if err := persistence.EnsureUsersTaxSchema(ctx, db.DB); err != nil {
+		return fmt.Errorf("ensure users tax schema: %w", err)
+	}
 	return nil
 }
 

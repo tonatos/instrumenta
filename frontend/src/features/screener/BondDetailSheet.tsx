@@ -408,7 +408,7 @@ export function BondDetailSheet({
                 <InfoRow
                   label="YTM нетто"
                   value={formatPct(bond.ytm_net)}
-                  tooltip="YTM после уплаты НДФЛ (13%). Именно это деньги, которые получает инвестор."
+                  tooltip="YTM после уплаты НДФЛ по вашей ставке из настроек. Именно это деньги, которые получает инвестор."
                 />
                 <InfoRow
                   label="Купон, % год."

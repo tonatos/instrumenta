@@ -34,8 +34,6 @@ type Inventory struct {
 	TTradingTokenSandbox    string  `yaml:"t_trading_token_sandbox"`
 	TTradingTokenProduction string  `yaml:"t_trading_token_production"`
 	BrokerKEK               string  `yaml:"broker_kek"`
-	KeyRate                 float64 `yaml:"key_rate"`
-	TaxRate                 float64 `yaml:"tax_rate"`
 	MaxDays                 int     `yaml:"max_days"`
 	MinVolumeRub            int     `yaml:"min_volume_rub"`
 	LogLevel                string  `yaml:"log_level"`
@@ -117,12 +115,6 @@ func (inv *Inventory) applyDefaults() {
 	}
 	if inv.TLSCaddyConfigDir == "" {
 		inv.TLSCaddyConfigDir = "/opt/tls/caddy-config"
-	}
-	if inv.KeyRate == 0 {
-		inv.KeyRate = 14.5
-	}
-	if inv.TaxRate == 0 {
-		inv.TaxRate = 13
 	}
 	if inv.MaxDays == 0 {
 		inv.MaxDays = 120

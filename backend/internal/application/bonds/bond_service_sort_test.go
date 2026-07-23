@@ -24,6 +24,7 @@ func TestListBondsScoreSortDescPutsHighestFirst(t *testing.T) {
 		bonds.BondListQuery{SortBy: "score", SortDesc: true, Page: 1, PageSize: 10},
 		portfolio.DefaultDurationPolicy,
 		portfolio.RiskProfileNormal,
+		16, 0.13,
 	)
 	if len(result.Bonds) != 3 {
 		t.Fatalf("expected 3 bonds, got %d", len(result.Bonds))
@@ -51,6 +52,7 @@ func TestListBondsScoreSortAscPutsLowestFirst(t *testing.T) {
 		bonds.BondListQuery{SortBy: "score", SortDesc: false, Page: 1, PageSize: 10},
 		portfolio.DefaultDurationPolicy,
 		portfolio.RiskProfileNormal,
+		16, 0.13,
 	)
 	if result.Bonds[0].Secid != "LOW" {
 		t.Fatalf("sort_desc=false should put lowest score first, got %s", result.Bonds[0].Secid)

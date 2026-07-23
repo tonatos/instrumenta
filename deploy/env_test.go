@@ -14,8 +14,6 @@ func TestRenderEnv(t *testing.T) {
 		TinkoffToken:             "t.test-token",
 		TTradingTokenProduction:  "t.prod-token",
 		BrokerKEK:                "test-broker-kek-material",
-		KeyRate:                  14.5,
-		TaxRate:                  18,
 		MaxDays:                  120,
 		MinVolumeRub:             500000,
 		LogLevel:                 "INFO",
@@ -41,8 +39,6 @@ func TestRenderEnv(t *testing.T) {
 		"TINKOFF_TOKEN=t.test-token",
 		"T_TRADING_TOKEN_PRODUCTION=t.prod-token",
 		"BROKER_KEK=test-broker-kek-material",
-		"KEY_RATE=14.5",
-		"TAX_RATE=18",
 		"AUTH_DISABLED=false",
 		"AUTH_SECRET=secret-value",
 		"PUBLIC_APP_URL=https://bond.example.com",
@@ -56,6 +52,12 @@ func TestRenderEnv(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("renderEnv missing %q\noutput:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "KEY_RATE=") {
+		t.Fatal("KEY_RATE should be removed from prod env")
+	}
+	if strings.Contains(out, "TAX_RATE=") {
+		t.Fatal("TAX_RATE should be removed from prod env")
 	}
 	if strings.Contains(out, "ALLOWED_TELEGRAM_IDS") {
 		t.Fatal("ALLOWED_TELEGRAM_IDS should be removed from prod env")

@@ -244,9 +244,10 @@ func (h *Handler) SetSlotOverride(w http.ResponseWriter, r *http.Request) {
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	keyRate, taxRate := h.resolveMarketRates(r.Context())
 	updated, err := h.deps.Portfolios.SetSlotOverride(
 		r.Context(), id, req.SourcePositionISIN, req.ConfirmedISIN,
-		universe.Bonds, h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(),
+		universe.Bonds, keyRate, taxRate,
 		time.Now(), durationPolicy,
 	)
 	if err != nil {
@@ -292,9 +293,10 @@ func (h *Handler) AutoCompose(w http.ResponseWriter, r *http.Request) {
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	keyRate, taxRate := h.resolveMarketRates(r.Context())
 	updated, err := h.deps.Portfolios.AutoComposePortfolio(
 		r.Context(), id, universe.Bonds,
-		h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(),
+		keyRate, taxRate,
 		time.Now(), durationPolicy,
 	)
 	if err != nil {
@@ -320,11 +322,12 @@ func (h *Handler) GetPlan(w http.ResponseWriter, r *http.Request) {
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	keyRate, taxRate := h.resolveMarketRates(r.Context())
 	today := time.Now()
 	var plan portfolio.PortfolioPlan
 	plan, err = h.deps.Portfolios.BuildPortfolioPlan(
 		r.Context(), id, universe.Bonds,
-		h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(),
+		keyRate, taxRate,
 		today, durationPolicy,
 	)
 	if err != nil {

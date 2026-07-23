@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"fmt"
 	"strconv"
-	"strings"
 	"text/template"
 )
 
@@ -21,8 +20,6 @@ type envTemplateData struct {
 	TTradingTokenSandbox     string
 	TTradingTokenProduction  string
 	BrokerKEK                string
-	KeyRate                  string
-	TaxRate                  string
 	MaxDays                  string
 	MinVolumeRub             string
 	LogLevel                 string
@@ -55,8 +52,6 @@ func renderEnv(inv Inventory) (string, error) {
 		TTradingTokenSandbox:     inv.TTradingTokenSandbox,
 		TTradingTokenProduction:  inv.TTradingTokenProduction,
 		BrokerKEK:                inv.BrokerKEK,
-		KeyRate:                  formatFloat(inv.KeyRate),
-		TaxRate:                  formatFloat(inv.TaxRate),
 		MaxDays:                  strconv.Itoa(inv.MaxDays),
 		MinVolumeRub:             strconv.Itoa(inv.MinVolumeRub),
 		LogLevel:                 inv.LogLevel,
@@ -78,12 +73,4 @@ func renderEnv(inv Inventory) (string, error) {
 		return "", fmt.Errorf("render env template: %w", err)
 	}
 	return buf.String(), nil
-}
-
-func formatFloat(value float64) string {
-	s := strconv.FormatFloat(value, 'f', -1, 64)
-	if strings.Contains(s, ".") {
-		s = strings.TrimRight(strings.TrimRight(s, "0"), ".")
-	}
-	return s
 }

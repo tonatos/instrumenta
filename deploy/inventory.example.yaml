@@ -29,9 +29,7 @@ t_trading_token_production: ""
 # Keep separately from DB backups. Example: openssl rand -base64 32
 broker_kek: ""
 
-# Scoring defaults
-key_rate: 14.5
-tax_rate: 13
+# Screener UI defaults
 max_days: 120
 min_volume_rub: 500000
 log_level: INFO

@@ -249,7 +249,8 @@ CREATE TABLE IF NOT EXISTS users (
     display_name TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    bot_connected_at TEXT
+    bot_connected_at TEXT,
+    tax_rate_pct REAL NOT NULL DEFAULT 13
 );
 CREATE TABLE IF NOT EXISTS portfolios (
     id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,

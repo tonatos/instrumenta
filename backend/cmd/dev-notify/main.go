@@ -11,8 +11,10 @@ import (
 
 	"github.com/tonatos/bond-monitor/backend/internal/app"
 	appbonds "github.com/tonatos/bond-monitor/backend/internal/application/bonds"
+	appmarket "github.com/tonatos/bond-monitor/backend/internal/application/market"
 	apptrading "github.com/tonatos/bond-monitor/backend/internal/application/trading"
 	devnotify "github.com/tonatos/bond-monitor/backend/internal/dev/notifications"
+	"github.com/tonatos/bond-monitor/backend/internal/domain/preferences"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/trading"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/notifications"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/moex"
@@ -186,8 +188,8 @@ func resolveHoldingISIN(ctx context.Context, settings config.Settings, portfolio
 	)
 	bondRefRepo := persistence.NewBondReferenceRepository(db.DB)
 	bondSvc := appbonds.NewServiceWithDeps(
-		settings.KeyRate,
-		settings.TaxRateFraction(),
+		appmarket.DefaultKeyRateFallback,
+		preferences.TaxRateFraction(preferences.DefaultTaxRatePct),
 		settings.TinkoffToken,
 		moex.NewClient(),
 		ratings.NewLoader(bondRefRepo),
@@ -228,7 +230,8 @@ func resolveHoldingISIN(ctx context.Context, settings config.Settings, portfolio
 		)
 	}
 
-	universeLookup := bondSvc.LoadUniverse().Bonds
+	keyRate, taxRate := bondSvc.DefaultRates()
+	universeLookup := bondSvc.LoadUniverse(keyRate, taxRate).Bonds
 	holdingISINs := trading.HoldingISINsFromSnapshot(brokerSnapshot, universeLookup)
 	if len(holdingISINs) == 0 {
 		var figis []string

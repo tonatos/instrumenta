@@ -5,24 +5,44 @@ import (
 
 	"github.com/tonatos/bond-monitor/backend/internal/application"
 	appbonds "github.com/tonatos/bond-monitor/backend/internal/application/bonds"
+	appmarket "github.com/tonatos/bond-monitor/backend/internal/application/market"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
+	"github.com/tonatos/bond-monitor/backend/internal/domain/preferences"
+	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/persistence"
 	"github.com/tonatos/bond-monitor/backend/internal/infrastructure/tinvest"
+	"github.com/tonatos/bond-monitor/backend/internal/interfaces/auth"
 )
 
 // BondService adapts bonds.Service to application.BondService.
 type BondService struct {
-	inner *appbonds.Service
+	inner    *appbonds.Service
+	keyRates *appmarket.KeyRateService
+	users    *persistence.UserRepository
 }
 
-func NewBondService(inner *appbonds.Service) *BondService {
-	return &BondService{inner: inner}
+func NewBondService(inner *appbonds.Service, keyRates *appmarket.KeyRateService, users *persistence.UserRepository) *BondService {
+	return &BondService{inner: inner, keyRates: keyRates, users: users}
+}
+
+func (s *BondService) resolveRates(ctx context.Context) (keyRate, taxRate float64) {
+	keyRate, taxRate = s.inner.DefaultRates()
+	if s.keyRates != nil {
+		keyRate = s.keyRates.Current(ctx)
+	}
+	taxPct := preferences.DefaultTaxRatePct
+	if owner, ok := auth.OwnerTelegramID(ctx); ok && s.users != nil {
+		if pct, err := s.users.TaxRatePct(ctx, owner); err == nil {
+			taxPct = pct
+		}
+	}
+	return keyRate, preferences.TaxRateFraction(taxPct)
 }
 
 func (s *BondService) ListBonds(ctx context.Context, query bonds.BondListQuery, riskProfile portfolio.RiskProfile, rateScenario string) (application.BondListLoadResult, error) {
-	_ = ctx
+	keyRate, taxRate := s.resolveRates(ctx)
 	policy := portfolio.ResolveDurationPolicy(portfolio.RateScenario(rateScenario), nil, nil)
-	result := s.inner.ListBonds(query, policy, riskProfile)
+	result := s.inner.ListBonds(query, policy, riskProfile, keyRate, taxRate)
 	return application.BondListLoadResult{
 		Bonds: result.Bonds, Total: result.Total,
 		Page: result.Page, PageSize: result.PageSize, Source: result.Source,
@@ -30,21 +50,21 @@ func (s *BondService) ListBonds(ctx context.Context, query bonds.BondListQuery, 
 }
 
 func (s *BondService) LoadUniverse(ctx context.Context) (application.BondLoadResult, error) {
-	_ = ctx
-	result := s.inner.LoadUniverse()
+	keyRate, taxRate := s.resolveRates(ctx)
+	result := s.inner.LoadUniverse(keyRate, taxRate)
 	return application.BondLoadResult{Bonds: result.Bonds, Source: result.Source}, nil
 }
 
 func (s *BondService) LoadBySecid(ctx context.Context, secid string, riskProfile portfolio.RiskProfile, rateScenario string) (*bonds.BondRecord, error) {
-	_ = ctx
+	keyRate, taxRate := s.resolveRates(ctx)
 	policy := portfolio.ResolveDurationPolicy(portfolio.RateScenario(rateScenario), nil, nil)
-	return s.inner.LoadBySecid(secid, policy, riskProfile), nil
+	return s.inner.LoadBySecid(secid, policy, riskProfile, keyRate, taxRate), nil
 }
 
 func (s *BondService) LoadByISINs(ctx context.Context, isins []string, riskProfile portfolio.RiskProfile, rateScenario string) ([]bonds.BondRecord, error) {
-	_ = ctx
+	keyRate, taxRate := s.resolveRates(ctx)
 	policy := portfolio.ResolveDurationPolicy(portfolio.RateScenario(rateScenario), nil, nil)
-	return s.inner.LoadByISINs(isins, policy, riskProfile), nil
+	return s.inner.LoadByISINs(isins, policy, riskProfile, keyRate, taxRate), nil
 }
 
 func (s *BondService) GetCouponSchedule(ctx context.Context, figi string) ([]map[string]any, error) {

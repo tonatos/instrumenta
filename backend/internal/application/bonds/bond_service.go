@@ -19,7 +19,7 @@ type LoadResult struct {
 
 // Service is the application service for bond data loading and enrichment.
 type Service struct {
-	keyRate  float64
+	keyRate  float64 // default / fallback for callers without explicit rates
 	taxRate  float64
 	token    string
 	moex     bonds.MOEXClient
@@ -52,15 +52,26 @@ func NewServiceWithDeps(
 	}
 }
 
-func (s *Service) universeCacheKey() infraBonds.CacheKey {
+// DefaultRates returns construction-time key/tax rates (fallback for warm-up / notifier).
+func (s *Service) DefaultRates() (keyRate, taxRate float64) {
+	return s.keyRate, s.taxRate
+}
+
+// SetDefaultRates updates fallback rates used when callers omit explicit values.
+func (s *Service) SetDefaultRates(keyRate, taxRate float64) {
+	s.keyRate = keyRate
+	s.taxRate = taxRate
+}
+
+func (s *Service) universeCacheKey(keyRate, taxRate float64) infraBonds.CacheKey {
 	return infraBonds.CacheKey{
-		KeyRate:          s.keyRate,
-		TaxRate:          s.taxRate,
+		KeyRate:          keyRate,
+		TaxRate:          taxRate,
 		TokenFingerprint: infraBonds.TokenFingerprint(s.token),
 	}
 }
 
-func (s *Service) enrichAndScore(ctx context.Context, bs []bonds.BondRecord) ([]bonds.BondRecord, string) {
+func (s *Service) enrichAndScore(ctx context.Context, bs []bonds.BondRecord, keyRate, taxRate float64) ([]bonds.BondRecord, string) {
 	source := "MOEX ISS API"
 	bs = s.enricher.EnrichBonds(bs)
 	if s.token != "" {
@@ -73,16 +84,17 @@ func (s *Service) enrichAndScore(ctx context.Context, bs []bonds.BondRecord) ([]
 	if s.ratings != nil {
 		bs = s.ratings.ApplyRatings(ctx, bs)
 	}
-	bs = screening.ScoreBondsAllProfiles(bs, s.keyRate, s.taxRate)
+	bs = screening.ScoreBondsAllProfiles(bs, keyRate, taxRate)
 	return bs, source
 }
 
-func (s *Service) LoadUniverse() LoadResult {
+// LoadUniverse loads and scores the bond universe for the given key/tax rates.
+func (s *Service) LoadUniverse(keyRate, taxRate float64) LoadResult {
 	ctx := context.Background()
 	if s.ratings != nil {
 		s.ratings.MaybeRefreshStale(ctx)
 	}
-	key := s.universeCacheKey()
+	key := s.universeCacheKey(keyRate, taxRate)
 	if cached, source, ok := infraBonds.Get(key); ok {
 		return LoadResult{Bonds: cloneList(cached), Source: source}
 	}
@@ -90,7 +102,7 @@ func (s *Service) LoadUniverse() LoadResult {
 	if err != nil {
 		return LoadResult{}
 	}
-	bs, source := s.enrichAndScore(ctx, bs)
+	bs, source := s.enrichAndScore(ctx, bs, keyRate, taxRate)
 	infraBonds.Put(key, bs, source)
 	return LoadResult{Bonds: cloneList(bs), Source: source}
 }
@@ -113,15 +125,15 @@ func (s *Service) ListBonds(
 	query bonds.BondListQuery,
 	policy portfolio.DurationPolicy,
 	riskProfile portfolio.RiskProfile,
+	keyRate, taxRate float64,
 ) bonds.BondListResult {
 	query = bonds.NormalizeBondListQuery(query)
-	universe := s.LoadUniverse()
+	universe := s.LoadUniverse(keyRate, taxRate)
 	filtered := bonds.FilterBondList(cloneList(universe.Bonds), query)
 	screenPolicy := toScreeningDurationPolicy(policy)
 	profile := toScreeningProfile(riskProfile)
 	if query.SortBy == "score" {
 		filtered = screening.SortBondsByResolvedScore(filtered, profile, screenPolicy)
-		// SortBondsByResolvedScore already returns highest score first.
 		if !query.SortDesc {
 			filtered = reverseBondList(filtered)
 		}
@@ -144,11 +156,11 @@ func reverseBondList(list []bonds.BondRecord) []bonds.BondRecord {
 	return out
 }
 
-func (s *Service) LoadByISINs(isins []string, policy portfolio.DurationPolicy, riskProfile portfolio.RiskProfile) []bonds.BondRecord {
+func (s *Service) LoadByISINs(isins []string, policy portfolio.DurationPolicy, riskProfile portfolio.RiskProfile, keyRate, taxRate float64) []bonds.BondRecord {
 	if len(isins) == 0 {
 		return nil
 	}
-	universe := s.LoadUniverse()
+	universe := s.LoadUniverse(keyRate, taxRate)
 	byISIN := make(map[string]bonds.BondRecord, len(universe.Bonds))
 	for _, b := range universe.Bonds {
 		byISIN[b.ISIN] = b
@@ -167,7 +179,7 @@ func (s *Service) LoadByISINs(isins []string, policy portfolio.DurationPolicy, r
 	}
 	if len(missing) > 0 {
 		fetched, _ := s.moex.FetchBondsByISINs(missing)
-		scored := s.enrichFetchedBonds(fetched)
+		scored := s.enrichFetchedBonds(fetched, keyRate, taxRate)
 		found = append(found, scored...)
 	}
 	_ = policy
@@ -175,8 +187,8 @@ func (s *Service) LoadByISINs(isins []string, policy portfolio.DurationPolicy, r
 	return found
 }
 
-func (s *Service) LoadBySecid(secid string, policy portfolio.DurationPolicy, riskProfile portfolio.RiskProfile) *bonds.BondRecord {
-	for _, b := range s.LoadUniverse().Bonds {
+func (s *Service) LoadBySecid(secid string, policy portfolio.DurationPolicy, riskProfile portfolio.RiskProfile, keyRate, taxRate float64) *bonds.BondRecord {
+	for _, b := range s.LoadUniverse(keyRate, taxRate).Bonds {
 		if b.Secid == secid {
 			cp := infraBonds.CloneBondRecord(b)
 			s.enricher.EnrichBondDetail(&cp)
@@ -187,7 +199,7 @@ func (s *Service) LoadBySecid(secid string, policy portfolio.DurationPolicy, ris
 	if bond == nil {
 		return nil
 	}
-	scored := s.enrichFetchedBonds([]bonds.BondRecord{*bond})
+	scored := s.enrichFetchedBonds([]bonds.BondRecord{*bond}, keyRate, taxRate)
 	if len(scored) == 0 {
 		return nil
 	}
@@ -198,16 +210,12 @@ func (s *Service) LoadBySecid(secid string, policy portfolio.DurationPolicy, ris
 	return &cp
 }
 
-func (s *Service) enrichFetchedBonds(bs []bonds.BondRecord) []bonds.BondRecord {
+func (s *Service) enrichFetchedBonds(bs []bonds.BondRecord, keyRate, taxRate float64) []bonds.BondRecord {
 	if len(bs) == 0 {
 		return nil
 	}
-	enriched, _ := s.enrichAndScore(context.Background(), bs)
+	enriched, _ := s.enrichAndScore(context.Background(), bs, keyRate, taxRate)
 	return enriched
-}
-
-func (s *Service) scoreAgainstCachedUniverse(bs []bonds.BondRecord) []bonds.BondRecord {
-	return s.enrichFetchedBonds(bs)
 }
 
 func (s *Service) GetCouponSchedule(figi string) []bonds.CouponPayment {

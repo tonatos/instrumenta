@@ -154,9 +154,10 @@ func (h *Handler) AttachAccount(w http.ResponseWriter, r *http.Request) {
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	keyRate, taxRate := h.resolveMarketRates(r.Context())
 	p, err := h.deps.Trading.AttachAccount(
 		r.Context(), portfolioID, accountID, trading.AccountKind(kind), universe.Bonds,
-		h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(), time.Now(),
+		keyRate, taxRate, time.Now(),
 	)
 	if err != nil {
 		if WriteAppError(w, err) {
@@ -225,9 +226,10 @@ func (h *Handler) GetAdvice(w http.ResponseWriter, r *http.Request) {
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	keyRate, taxRate := h.resolveMarketRates(r.Context())
 	result, err := h.deps.Trading.GetAdvice(
 		r.Context(), portfolioID, universe.Bonds,
-		h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(),
+		keyRate, taxRate,
 		time.Now(), durationPolicy,
 	)
 	if err != nil {
@@ -260,9 +262,10 @@ func (h *Handler) GetTradingState(w http.ResponseWriter, r *http.Request) {
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	keyRate, taxRate := h.resolveMarketRates(r.Context())
 	result, err := h.deps.Trading.GetTradingState(
 		r.Context(), portfolioID, universe.Bonds,
-		h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(),
+		keyRate, taxRate,
 		time.Now(), durationPolicy,
 	)
 	if err != nil {
@@ -292,9 +295,10 @@ func (h *Handler) CreateDeploySession(w http.ResponseWriter, r *http.Request) {
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	keyRate, taxRate := h.resolveMarketRates(r.Context())
 	session, err := h.deps.Trading.CreateDeploySession(
 		r.Context(), portfolioID, universe.Bonds,
-		h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(), time.Now(),
+		keyRate, taxRate, time.Now(),
 	)
 	if err != nil {
 		if errors.Is(err, application.ErrDeploySessionConflict) {
@@ -351,9 +355,10 @@ func (h *Handler) RefreshDeploySession(w http.ResponseWriter, r *http.Request) {
 		WriteClientError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	keyRate, taxRate := h.resolveMarketRates(r.Context())
 	session, err := h.deps.Trading.RefreshDeploySession(
 		r.Context(), portfolioID, sessionID, universe.Bonds,
-		h.deps.Settings.KeyRate, h.deps.Settings.TaxRateFraction(), time.Now(),
+		keyRate, taxRate, time.Now(),
 	)
 	if err != nil {
 		if errors.Is(err, application.ErrDeploySessionNotFound) {

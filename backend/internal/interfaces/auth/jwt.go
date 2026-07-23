@@ -97,7 +97,7 @@ func (m *JWTManager) ParseToken(tokenString string) (*User, error) {
 func (m *JWTManager) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isExcludedPath(r.URL.Path) {
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, r.WithContext(m.optionalUserContext(r)))
 			return
 		}
 		if !m.authEnabled {
@@ -121,6 +121,24 @@ func (m *JWTManager) Middleware(next http.Handler) http.Handler {
 		ctx = WithOwnerTelegramID(ctx, user.TelegramID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// optionalUserContext attaches a user when a valid bearer is present, or the
+// DevUser when auth is disabled — without requiring auth on public paths.
+func (m *JWTManager) optionalUserContext(r *http.Request) context.Context {
+	ctx := r.Context()
+	if token := bearerToken(r); token != "" {
+		if user, err := m.ParseToken(token); err == nil {
+			ctx = context.WithValue(ctx, userContextKey, user)
+			return WithOwnerTelegramID(ctx, user.TelegramID)
+		}
+	}
+	if !m.authEnabled {
+		user := &User{TelegramID: m.devTelegramID, DisplayName: m.devDisplayName}
+		ctx = context.WithValue(ctx, userContextKey, user)
+		return WithOwnerTelegramID(ctx, user.TelegramID)
+	}
+	return ctx
 }
 
 func UserFromContext(ctx context.Context) (*User, bool) {

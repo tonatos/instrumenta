@@ -8,6 +8,7 @@ import (
 	"time"
 
 	appbonds "github.com/tonatos/bond-monitor/backend/internal/application/bonds"
+	appmarket "github.com/tonatos/bond-monitor/backend/internal/application/market"
 	domain "github.com/tonatos/bond-monitor/backend/internal/domain/market_signals"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/bonds"
 	"github.com/tonatos/bond-monitor/backend/internal/domain/portfolio"
@@ -19,7 +20,7 @@ type ScanRadarUseCase struct {
 	bondSvc         *appbonds.Service
 	spreadSnapshots *persistence.SpreadSnapshotsRepository
 	radarRepo       *persistence.MarketRadarRepository
-	keyRatePP       float64
+	keyRates        *appmarket.KeyRateService
 	taxRateFraction float64
 }
 
@@ -27,11 +28,12 @@ func NewScanRadarUseCase(
 	bondSvc *appbonds.Service,
 	spreadSnapshots *persistence.SpreadSnapshotsRepository,
 	radarRepo *persistence.MarketRadarRepository,
-	keyRatePP, taxRateFraction float64,
+	keyRates *appmarket.KeyRateService,
+	taxRateFraction float64,
 ) *ScanRadarUseCase {
 	return &ScanRadarUseCase{
 		bondSvc: bondSvc, spreadSnapshots: spreadSnapshots, radarRepo: radarRepo,
-		keyRatePP: keyRatePP, taxRateFraction: taxRateFraction,
+		keyRates: keyRates, taxRateFraction: taxRateFraction,
 	}
 }
 
@@ -39,14 +41,21 @@ func (u *ScanRadarUseCase) Run(ctx context.Context, today time.Time) error {
 	if u.radarRepo == nil || u.spreadSnapshots == nil {
 		return nil
 	}
-	universeAll := u.bondSvc.LoadUniverse().Bonds
+	keyRatePP, defaultTax := u.bondSvc.DefaultRates()
+	if u.keyRates != nil {
+		keyRatePP = u.keyRates.Current(ctx)
+	}
+	if u.taxRateFraction >= 0 {
+		defaultTax = u.taxRateFraction
+	}
+	universeAll := u.bondSvc.LoadUniverse(keyRatePP, defaultTax).Bonds
 	filtered := domain.FilterRadarUniverse(universeAll, domain.DefaultMarketRadarPolicy.Spread)
 
 	scored := screening.ScoreBondsForProfile(
 		filtered,
 		screening.RiskProfileNormal,
-		u.keyRatePP,
-		u.taxRateFraction,
+		keyRatePP,
+		defaultTax,
 		screening.DefaultDurationPolicy,
 	)
 	scoresByISIN := make(map[string]float64, len(scored))
@@ -62,7 +71,7 @@ func (u *ScanRadarUseCase) Run(ctx context.Context, today time.Time) error {
 	isins := make([]string, 0, len(filtered))
 
 	for _, bond := range filtered {
-		spread := domain.CreditSpreadPP(bond, u.keyRatePP, u.taxRateFraction)
+		spread := domain.CreditSpreadPP(bond, keyRatePP, defaultTax)
 		if spread == nil {
 			continue
 		}
@@ -96,7 +105,7 @@ func (u *ScanRadarUseCase) Run(ctx context.Context, today time.Time) error {
 
 	snap := domain.ScanMarketRadar(domain.ScanParams{
 		Universe: filtered, TodayByISIN: todayByISIN, PastByISIN: pastByISIN,
-		KeyRatePP: u.keyRatePP, TaxRateFraction: u.taxRateFraction,
+		KeyRatePP: keyRatePP, TaxRateFraction: defaultTax,
 		Policy: domain.DefaultMarketRadarPolicy, ScoresByISIN: scoresByISIN,
 		ScannedAt: today,
 	})
