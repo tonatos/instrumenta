@@ -12,6 +12,7 @@ import {
 } from "@/features/screener/screenerRiskProfile";
 import { AnomaliesTable } from "@/features/radar/AnomaliesTable";
 import { DipIdeasPanel } from "@/features/radar/DipIdeasPanel";
+import { RADAR_SECTION } from "@/features/radar/radarHelp";
 import { SectorHeatmap } from "@/features/radar/SectorHeatmap";
 import { useMarketRadar } from "@/features/radar/useMarketRadar";
 import { sectorLabel } from "@/features/bonds/sectorLabels";
@@ -32,6 +33,23 @@ import { RISK_LABELS } from "@/features/portfolio/labels";
 const RISK_PROFILES: { value: ScreenerRiskProfile; label: string }[] = (
   Object.keys(RISK_LABELS) as ScreenerRiskProfile[]
 ).map((value) => ({ value, label: RISK_LABELS[value] }));
+
+function RadarSectionHeader({
+  title,
+  intro,
+  testId,
+}: {
+  title: string;
+  intro: string;
+  testId?: string;
+}) {
+  return (
+    <div className="space-y-1.5" data-testid={testId}>
+      <h2 className="text-sm font-semibold">{title}</h2>
+      <p className="max-w-3xl text-xs leading-relaxed text-muted-foreground">{intro}</p>
+    </div>
+  );
+}
 
 export function RadarPage() {
   const [detailSecid, setDetailSecid] = useState<string | null>(null);
@@ -72,10 +90,8 @@ export function RadarPage() {
       <div className="space-y-6" data-testid="radar-page">
         <Skeleton className="h-10 w-72" />
         <Skeleton className="h-32 w-full" />
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Skeleton className="h-64 w-full" />
-          <Skeleton className="h-64 w-full" />
-        </div>
+        <Skeleton className="h-64 w-full" />
+        <Skeleton className="h-48 w-full" />
       </div>
     );
   }
@@ -112,7 +128,7 @@ export function RadarPage() {
   const scannedLabel = data.scanned_at ? formatDateTime(data.scanned_at) : null;
 
   return (
-    <div className="space-y-6" data-testid="radar-page">
+    <div className="space-y-8" data-testid="radar-page">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
@@ -120,7 +136,8 @@ export function RadarPage() {
             Radar рынка
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Аномалии спреда и просадки по секторам · {data.universe_scanned} бумаг
+            Обзор рынка: куда уехали секторы, где завышен спред и где бумага просела сильнее сектора ·{" "}
+            {data.universe_scanned} бумаг
           </p>
           {scannedLabel && (
             <p className="mt-1 text-xs text-muted-foreground">Обновлено {scannedLabel}</p>
@@ -166,7 +183,11 @@ export function RadarPage() {
       </div>
 
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Heatmap секторов</h2>
+        <RadarSectionHeader
+          title={RADAR_SECTION.heatmap.title}
+          intro={RADAR_SECTION.heatmap.intro}
+          testId="radar-section-heatmap"
+        />
         <SectorHeatmap
           sectors={sectors}
           selectedSector={selectedSector}
@@ -193,20 +214,27 @@ export function RadarPage() {
         )}
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold">Топ аномалий спреда</h2>
-          <AnomaliesTable anomalies={anomalies} onSelectBond={setDetailSecid} />
-        </section>
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold">Идеи на просадке</h2>
-          <DipIdeasPanel
-            dipIdeas={dipIdeas}
-            portfolios={portfolios ?? []}
-            fallbackPortfolioId={fallbackPortfolioId}
-          />
-        </section>
-      </div>
+      <section className="space-y-3">
+        <RadarSectionHeader
+          title={RADAR_SECTION.anomalies.title}
+          intro={RADAR_SECTION.anomalies.intro}
+          testId="radar-section-anomalies"
+        />
+        <AnomaliesTable anomalies={anomalies} onSelectBond={setDetailSecid} />
+      </section>
+
+      <section className="space-y-3">
+        <RadarSectionHeader
+          title={RADAR_SECTION.dipIdeas.title}
+          intro={RADAR_SECTION.dipIdeas.intro}
+          testId="radar-section-dip-ideas"
+        />
+        <DipIdeasPanel
+          dipIdeas={dipIdeas}
+          portfolios={portfolios ?? []}
+          fallbackPortfolioId={fallbackPortfolioId}
+        />
+      </section>
 
       <BondDetailSheet
         secid={detailSecid}

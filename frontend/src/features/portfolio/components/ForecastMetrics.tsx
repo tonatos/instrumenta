@@ -1,47 +1,20 @@
-import { forwardRef, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { PlanResponse } from "@/api/types";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip } from "@/components/ui/tooltip";
+import { FieldHelp } from "@/components/ui/field-help";
 import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
-
-const InfoIconButton = forwardRef<
-  HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement>
->(function InfoIconButton({ className, ...props }, ref) {
-  return (
-    <button
-      ref={ref}
-      type="button"
-      className={cn(
-        "inline-flex shrink-0 cursor-help rounded-sm text-muted-foreground/50 hover:text-muted-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-        className,
-      )}
-      aria-label="Подробнее"
-      {...props}
-    >
-      <svg
-        className="h-3.5 w-3.5"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-        aria-hidden
-      >
-        <circle cx="12" cy="12" r="10" />
-        <path d="M12 16v-4M12 8h.01" strokeWidth="2" strokeLinecap="round" />
-      </svg>
-    </button>
-  );
-});
 
 export function ForecastMetrics({
   plan,
   isTrading,
   weightedDurationYears,
+  horizonDate,
 }: {
   plan: PlanResponse;
   isTrading: boolean;
   weightedDurationYears?: number | null;
+  horizonDate: string;
 }) {
   const [heldExpanded, setHeldExpanded] = useState(false);
   const durationYears = weightedDurationYears ?? plan.weighted_duration_years;
@@ -53,21 +26,23 @@ export function ForecastMetrics({
   const secondaryProfit = isTrading ? plan.total_net_profit_rub : plan.total_net_profit_with_held_rub;
   const secondaryLabel = isTrading ? "реализовано в кэш" : "с held";
 
+  const profitHelp = isTrading
+    ? "Прогноз до горизонта плана: итоговая стоимость − вложенный капитал (старт + пополнения) − НДФЛ. Включает удерживаемые бумаги. Это модель реинвестиций и денежных потоков продукта, не гарантия и не отчёт брокера."
+    : "Прогноз до горизонта плана: купоны + возврат номинала − вложения − НДФЛ. Позиции за горизонтом не входят в эту цифру. Модель, не гарантия результата.";
+
+  const xirrHelp =
+    "Прогнозная годовая доходность на вложенный капитал (XIRR) по датам покупок и итоговой стоимости на горизонте, с учётом НДФЛ и правил реинвестиций в плане. Не факт и не обещание доходности.";
+
+  const valueHelp =
+    "Прогноз стоимости на дату горизонта: свободный кэш + оценка удерживаемых позиций по правилам плана (номинал/модель). Зависит от допущений по погашениям, офертам и реинвестициям — не снимок брокерского счёта «как есть».";
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-testid="forecast-metrics">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            Чистая прибыль
-            <Tooltip
-              content={
-                isTrading
-                  ? "Итоговая стоимость на горизонте − вложенный капитал (старт + пополнения) − НДФЛ. Включает удерживаемые бумаги."
-                  : "Купоны + возврат номинала − вложения − НДФЛ. Позиции за горизонтом не учитываются."
-              }
-            >
-              <InfoIconButton />
-            </Tooltip>
+            Прогнозная чистая прибыль
+            <FieldHelp content={profitHelp} label="Что значит прогнозная чистая прибыль" />
           </p>
           <p
             className={cn(
@@ -93,10 +68,8 @@ export function ForecastMetrics({
 
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            Годовая доходность (XIRR)
-            <Tooltip content="Годовая доходность на вложенный капитал: XIRR по датам покупок и итоговой стоимости на горизонте, с учётом НДФЛ.">
-              <InfoIconButton />
-            </Tooltip>
+            Прогнозный XIRR
+            <FieldHelp content={xirrHelp} label="Что значит прогнозный XIRR" />
           </p>
           {plan.expected_xirr_pct != null ? (
             <p
@@ -115,19 +88,15 @@ export function ForecastMetrics({
           {durationYears != null && (
             <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
               дюрация: {durationYears.toFixed(1)} г
-              <Tooltip content={durationTooltip}>
-                <InfoIconButton />
-              </Tooltip>
+              <FieldHelp content={durationTooltip} label="Что значит дюрация" />
             </p>
           )}
         </div>
 
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-            Итоговая стоимость
-            <Tooltip content="Свободный кэш + рыночная стоимость всех held-позиций по номиналу к дате горизонта.">
-              <InfoIconButton />
-            </Tooltip>
+            Прогнозная стоимость
+            <FieldHelp content={valueHelp} label="Что значит прогнозная стоимость" />
           </p>
           <p className="mt-1.5 text-2xl font-bold tabular-nums">
             {formatRub(plan.final_portfolio_value)}
@@ -137,6 +106,12 @@ export function ForecastMetrics({
           </p>
         </div>
       </div>
+
+      <p className="text-xs leading-relaxed text-muted-foreground" data-testid="forecast-disclaimer">
+        Показатели — прогноз по плану до горизонта{" "}
+        <span className="font-medium text-foreground/80">{formatDate(horizonDate)}</span>
+        : модель денежных потоков и реинвестиций, а не гарантия и не факт брокерского отчёта.
+      </p>
 
       {plan.held_positions.length > 0 && (
         <div className="rounded-xl border border-border bg-card">

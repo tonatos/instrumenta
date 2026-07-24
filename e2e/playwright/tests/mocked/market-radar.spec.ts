@@ -64,7 +64,7 @@ const MOCK_RADAR = {
       sector_change_7d_pct: -15.3,
       idiosyncratic_excess_pct: -6.8,
       score: 71,
-      interpretation: "sector_panic_overshoot",
+      interpretation: "sector_stress",
       in_portfolios: [PORTFOLIO_ID],
     },
   ],
@@ -131,5 +131,20 @@ test.describe("Market Radar page", () => {
     const openPortfolio = page.getByTestId("radar-open-portfolio-TEST1");
     await expect(openPortfolio).toBeVisible();
     await expect(openPortfolio).toHaveAttribute("href", `/portfolio/${PORTFOLIO_ID}`);
+  });
+
+  test("разъясняет блоки и метрики простым языком", async ({ page }) => {
+    await page.goto("/radar");
+
+    await expect(page.getByTestId("radar-section-heatmap")).toContainText(/медиана изменения цены/i);
+    await expect(page.getByTestId("radar-section-anomalies")).toContainText(/кредитный спред/i);
+    await expect(page.getByTestId("radar-section-dip-ideas")).toContainText(/сильнее сектора/i);
+
+    await expect(page.getByTestId("radar-dip-TEST1")).toContainText("К сектору");
+    await expect(page.getByTestId("radar-dip-TEST1")).toContainText("Стресс сектора");
+    await expect(page.getByTestId("radar-dip-TEST1")).not.toContainText("Excess");
+
+    await page.getByRole("button", { name: "Что значит: К сектору" }).first().hover();
+    await expect(page.getByText(/сильнее или слабее сектора/i).first()).toBeVisible();
   });
 });

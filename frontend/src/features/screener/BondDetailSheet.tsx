@@ -9,6 +9,7 @@ import {
 import { sectorLabel } from "@/features/bonds/sectorLabels";
 import { isMarketSignal } from "@/features/portfolio/marketSignals";
 import { OFFER_WINDOW_STATUS_LABELS, RISK_LABELS } from "@/features/portfolio/labels";
+import { SCREENER_SCORE_INTRO } from "@/features/screener/screenerHelp";
 import { useRateScenario } from "@/features/settings/RateScenarioProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -471,16 +472,21 @@ export function BondDetailSheet({
 
             {/* Скоринг */}
             <section className="space-y-4">
-              <div className="flex items-center gap-1.5">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Скоринг
-                </h3>
-                <Tooltip
-                  content="Комплексная оценка 0–100: взвешенная сумма компонентов плюс корректировка дюрации под сценарий по ставке. Скор в таблице совпадает с выбранным профилем."
-                  side="right"
-                >
-                  <HelpCircle className="h-3.5 w-3.5 cursor-help opacity-60" />
-                </Tooltip>
+              <div className="space-y-2">
+                <div className="flex items-center gap-1.5">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Скоринг
+                  </h3>
+                  <Tooltip
+                    content="Комплексная оценка 0–100: взвешенная сумма компонентов плюс корректировка дюрации под сценарий по ставке. Скор в таблице совпадает с выбранным профилем."
+                    side="right"
+                  >
+                    <HelpCircle className="h-3.5 w-3.5 cursor-help opacity-60" />
+                  </Tooltip>
+                </div>
+                <p className="text-xs leading-relaxed text-muted-foreground" data-testid="bond-score-intro">
+                  {SCREENER_SCORE_INTRO}
+                </p>
               </div>
 
               <div>

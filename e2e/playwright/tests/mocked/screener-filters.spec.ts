@@ -224,4 +224,15 @@ test.describe("Скринер — серверные фильтры", () => {
     await expect(page.getByRole("checkbox", { name: /субординир/i })).toBeVisible();
     await expect(page.getByLabel("Мин. объём торгов")).toBeVisible();
   });
+
+  test("подсказки фильтров объясняют YTM и срок простым языком", async ({ page }) => {
+    await page.goto("/");
+    await ensureFiltersExpanded(page);
+
+    await page.getByRole("button", { name: "Что значит мин. YTM" }).hover();
+    await expect(page.getByText(/после НДФЛ/i).first()).toBeVisible();
+
+    await page.getByRole("button", { name: "Что значит макс. дней" }).hover();
+    await expect(page.getByText(/горизонт/i).first()).toBeVisible();
+  });
 });

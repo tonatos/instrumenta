@@ -58,6 +58,10 @@ test.describe("Cashflow — фильтры и период", () => {
 
   test("показывает прогноз с сегодня и фильтрует по типу", async ({ page }) => {
     await gotoPortfolio(page, PORTFOLIO_ID);
+
+    await expect(page.getByTestId("forecast-metrics")).toContainText("Прогнозный XIRR");
+    await expect(page.getByTestId("forecast-disclaimer")).toContainText(/модель денежных потоков/i);
+
     await page.getByRole("tab", { name: /Cashflow/i }).click();
 
     await expect(page.getByText(/Прогноз с/)).toBeVisible();

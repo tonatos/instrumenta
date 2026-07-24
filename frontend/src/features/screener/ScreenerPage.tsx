@@ -14,6 +14,10 @@ import type { Bond } from "@/api/types";
 import { BondDetailSheet } from "@/features/screener/BondDetailSheet";
 import { ScreenerFilters } from "@/features/screener/ScreenerFilters";
 import {
+  SCREENER_COLUMN_HELP,
+  SCREENER_FILTER_HELP,
+} from "@/features/screener/screenerHelp";
+import {
   getScreenerRiskProfile,
   setScreenerRiskProfile,
   subscribeScreenerRiskProfile,
@@ -26,6 +30,7 @@ import { RISK_LABELS as PROFILE_RISK_LABELS } from "@/features/portfolio/labels"
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FieldHelp } from "@/components/ui/field-help";
 import { PopoverContent, PopoverRoot, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatDate, formatPct, formatRub } from "@/lib/utils";
@@ -40,6 +45,31 @@ const RISK_LABELS: Record<number, string> = {
 };
 
 const STORAGE_KEY = "screener_column_visibility";
+
+const COLUMN_LABELS: Record<string, string> = {
+  name: "Название",
+  days_to_maturity: "Дней",
+  duration_years: "Дюрация",
+  ytm_net: "YTM нетто",
+  ytm: "YTM брутто",
+  coupon_rate: "Купон, %",
+  coupon_type: "Тип купона",
+  risk_level: "Риск",
+  lot_price: "Лот, ₽",
+  credit_rating: "Рейтинг",
+  score: "Скор",
+  volume_rub: "Объём",
+  maturity_date: "Погашение",
+};
+
+function ColumnHeader({ label, help }: { label: string; help: string }) {
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      {label}
+      <FieldHelp content={help} label={`Что значит: ${label}`} stopPropagation side="bottom" />
+    </span>
+  );
+}
 
 const MOBILE_HIDDEN_COLUMNS: VisibilityState = {
   duration_years: false,
@@ -283,7 +313,9 @@ export function ScreenerPage() {
         ),
       }),
       columnHelper.accessor("name", {
-        header: "Название",
+        header: () => (
+          <ColumnHeader label="Название" help={SCREENER_COLUMN_HELP.name} />
+        ),
         enableHiding: false,
         enableSorting: true,
         cell: (info) => (
@@ -300,13 +332,13 @@ export function ScreenerPage() {
         ),
       }),
       columnHelper.accessor("days_to_maturity", {
-        header: "Дней",
+        header: () => <ColumnHeader label="Дней" help={SCREENER_COLUMN_HELP.days} />,
         enableSorting: true,
         cell: (i) => i.getValue() ?? "—",
       }),
       columnHelper.accessor("duration_years", {
         id: "duration_years",
-        header: "Дюрация",
+        header: () => <ColumnHeader label="Дюрация" help={SCREENER_COLUMN_HELP.duration} />,
         enableSorting: false,
         cell: (i) => {
           const v = i.getValue();
@@ -314,22 +346,22 @@ export function ScreenerPage() {
         },
       }),
       columnHelper.accessor("ytm_net", {
-        header: "YTM нетто",
+        header: () => <ColumnHeader label="YTM нетто" help={SCREENER_COLUMN_HELP.ytmNet} />,
         enableSorting: true,
         cell: (i) => formatPct(i.getValue()),
       }),
       columnHelper.accessor("ytm", {
         id: "ytm",
-        header: "YTM брутто",
+        header: () => <ColumnHeader label="YTM брутто" help={SCREENER_COLUMN_HELP.ytmGross} />,
         enableSorting: false,
         cell: (i) => formatPct(i.getValue()),
       }),
       columnHelper.accessor("coupon_rate", {
-        header: "Купон, %",
+        header: () => <ColumnHeader label="Купон, %" help={SCREENER_COLUMN_HELP.couponRate} />,
         cell: (i) => formatPct(i.getValue()),
       }),
       columnHelper.accessor("coupon_type", {
-        header: "Тип купона",
+        header: () => <ColumnHeader label="Тип купона" help={SCREENER_COLUMN_HELP.couponType} />,
         cell: (i) => {
           const labels: Record<string, string> = {
             fixed: "Фикс.",
@@ -341,7 +373,7 @@ export function ScreenerPage() {
         },
       }),
       columnHelper.accessor("risk_level", {
-        header: "Риск",
+        header: () => <ColumnHeader label="Риск" help={SCREENER_COLUMN_HELP.risk} />,
         cell: (i) => {
           const v = i.getValue();
           const colorMap: Record<number, string> = {
@@ -359,7 +391,7 @@ export function ScreenerPage() {
       }),
       columnHelper.display({
         id: "lot_price",
-        header: "Лот, ₽",
+        header: () => <ColumnHeader label="Лот, ₽" help={SCREENER_COLUMN_HELP.lotPrice} />,
         cell: ({ row }) => {
           const b = row.original;
           if (b.last_price == null) return "—";
@@ -367,11 +399,11 @@ export function ScreenerPage() {
         },
       }),
       columnHelper.accessor("credit_rating", {
-        header: "Рейтинг",
+        header: () => <ColumnHeader label="Рейтинг" help={SCREENER_COLUMN_HELP.rating} />,
         cell: (i) => i.getValue() ?? "—",
       }),
       columnHelper.accessor("score", {
-        header: "Скор",
+        header: () => <ColumnHeader label="Скор" help={SCREENER_COLUMN_HELP.score} />,
         enableSorting: true,
         cell: (i) => (
           <Badge variant={i.getValue() != null && i.getValue()! >= 60 ? "default" : "secondary"}>
@@ -381,7 +413,7 @@ export function ScreenerPage() {
       }),
       columnHelper.accessor((b) => b.prev_volume_rub ?? b.volume_rub, {
         id: "volume_rub",
-        header: "Объём",
+        header: () => <ColumnHeader label="Объём" help={SCREENER_COLUMN_HELP.volume} />,
         enableSorting: true,
         cell: ({ row }) => {
           const bond = row.original;
@@ -402,7 +434,7 @@ export function ScreenerPage() {
         },
       }),
       columnHelper.accessor("maturity_date", {
-        header: "Погашение",
+        header: () => <ColumnHeader label="Погашение" help={SCREENER_COLUMN_HELP.maturity} />,
         cell: (i) => formatDate(i.getValue()),
       }),
     ],
@@ -520,23 +552,30 @@ export function ScreenerPage() {
           {isLoading ? "Загрузка…" : `${bonds.length} из ${total} бумаг`}
         </p>
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            aria-label="Стратегия"
-            data-testid="screener-risk-profile"
-            className="flex h-9 min-h-10 max-w-[11rem] rounded-md border border-border bg-card px-2.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring sm:min-h-9"
-            value={riskProfile}
-            onChange={(e) => {
-              const value = e.target.value as ScreenerRiskProfile;
-              setScreenerRiskProfile(value);
-              setRiskProfile(value);
-            }}
-          >
-            {(Object.keys(PROFILE_RISK_LABELS) as ScreenerRiskProfile[]).map((profile) => (
-              <option key={profile} value={profile}>
-                {PROFILE_RISK_LABELS[profile]}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-0.5">
+            <select
+              aria-label="Стратегия"
+              data-testid="screener-risk-profile"
+              className="flex h-9 min-h-10 max-w-[11rem] rounded-md border border-border bg-card px-2.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring sm:min-h-9"
+              value={riskProfile}
+              onChange={(e) => {
+                const value = e.target.value as ScreenerRiskProfile;
+                setScreenerRiskProfile(value);
+                setRiskProfile(value);
+              }}
+            >
+              {(Object.keys(PROFILE_RISK_LABELS) as ScreenerRiskProfile[]).map((profile) => (
+                <option key={profile} value={profile}>
+                  {PROFILE_RISK_LABELS[profile]}
+                </option>
+              ))}
+            </select>
+            <FieldHelp
+              content={SCREENER_FILTER_HELP.strategy}
+              label="Что значит стратегия"
+              side="bottom"
+            />
+          </div>
           <PopoverRoot>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-9 min-h-10 gap-1.5 sm:min-h-9">
@@ -553,7 +592,7 @@ export function ScreenerPage() {
                       checked={col.getIsVisible()}
                       onCheckedChange={(v) => col.toggleVisibility(!!v)}
                     />
-                    {typeof col.columnDef.header === "string" ? col.columnDef.header : col.id}
+                    {COLUMN_LABELS[col.id] ?? col.id}
                   </label>
                 ))}
               </div>

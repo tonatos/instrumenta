@@ -3,6 +3,7 @@ import { ExternalLink } from "lucide-react";
 import type { Portfolio } from "@/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FieldHelp } from "@/components/ui/field-help";
 import {
   SelectContent,
   SelectItem,
@@ -11,11 +12,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { sectorLabel } from "@/features/bonds/sectorLabels";
+import {
+  RADAR_INTERPRETATION_LABELS,
+  RADAR_METRIC_HELP,
+} from "@/features/radar/radarHelp";
 import type { MarketRadarDipIdeaRow } from "@/features/radar/useMarketRadar";
 import { cn, formatPct } from "@/lib/utils";
 
 function portfolioLink(portfolioId: string) {
   return `/portfolio/${portfolioId}`;
+}
+
+function MetricLabel({ label, help }: { label: string; help: string }) {
+  return (
+    <p className="flex items-center gap-0.5 text-muted-foreground">
+      {label}
+      <FieldHelp content={help} label={`Что значит: ${label}`} side="top" />
+    </p>
+  );
 }
 
 function DipIdeaActions({
@@ -96,6 +110,10 @@ export function DipIdeasPanel({
     <div className="space-y-3" data-testid="radar-dip-ideas">
       {dipIdeas.map((idea) => {
         const inPortfolio = (idea.in_portfolios?.length ?? 0) > 0;
+        const interpretationLabel =
+          idea.interpretation != null
+            ? RADAR_INTERPRETATION_LABELS[idea.interpretation]
+            : undefined;
         return (
           <div
             key={idea.isin}
@@ -114,27 +132,35 @@ export function DipIdeasPanel({
                       В портфеле
                     </Badge>
                   )}
+                  {interpretationLabel && (
+                    <Badge variant="secondary" className="text-xs font-normal">
+                      {interpretationLabel}
+                    </Badge>
+                  )}
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {sectorLabel(idea.sector)} · {idea.secid}
                 </p>
               </div>
-              <Badge className="bg-sky-500/15 font-mono text-sky-900 dark:text-sky-200">
-                {Math.round(idea.score)}
-              </Badge>
+              <div className="flex items-center gap-0.5">
+                <Badge className="bg-sky-500/15 font-mono text-sky-900 dark:text-sky-200">
+                  {Math.round(idea.score)}
+                </Badge>
+                <FieldHelp content={RADAR_METRIC_HELP.dipScore} label="Что значит скор" />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
               <div>
-                <p className="text-muted-foreground">Δ7д бумаги</p>
+                <MetricLabel label="Δ7д бумаги" help={RADAR_METRIC_HELP.bondChange7d} />
                 <p className="font-mono tabular-nums">{formatPct(idea.bond_change_7d_pct, 1)}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Δ7д сектора</p>
+                <MetricLabel label="Δ7д сектора" help={RADAR_METRIC_HELP.sectorChange7d} />
                 <p className="font-mono tabular-nums">{formatPct(idea.sector_change_7d_pct, 1)}</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Excess</p>
+                <MetricLabel label="К сектору" help={RADAR_METRIC_HELP.excessVsSector} />
                 <p className="font-mono tabular-nums">{formatPct(idea.idiosyncratic_excess_pct, 1)}</p>
               </div>
             </div>

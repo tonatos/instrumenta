@@ -1,10 +1,12 @@
 import { ChevronDown, ChevronUp, RotateCcw, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { SECTOR_FILTER_OPTIONS } from "@/features/bonds/sectorLabels";
+import { SCREENER_FILTER_HELP } from "@/features/screener/screenerHelp";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FieldHelp } from "@/components/ui/field-help";
 import { Input } from "@/components/ui/input";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { cn } from "@/lib/utils";
@@ -71,18 +73,26 @@ export interface ScreenerFiltersProps {
 function FieldLabel({
   htmlFor,
   className,
+  help,
+  helpLabel,
   children,
 }: {
   htmlFor?: string;
   className?: string;
+  help?: string;
+  helpLabel?: string;
   children: ReactNode;
 }) {
   return (
     <label
       htmlFor={htmlFor}
-      className={cn("mb-1.5 block text-xs font-medium text-muted-foreground", className)}
+      className={cn(
+        "mb-1.5 flex items-center gap-0.5 text-xs font-medium text-muted-foreground",
+        className,
+      )}
     >
-      {children}
+      <span>{children}</span>
+      {help && <FieldHelp content={help} label={helpLabel ?? `Что значит: ${String(children)}`} />}
     </label>
   );
 }
@@ -176,18 +186,31 @@ export function ScreenerFilters({
               />
               <Input
                 id="screener-search"
-                className="h-10 pl-9"
+                className="h-10 pl-9 pr-10"
                 placeholder="Поиск по названию, SECID или ISIN…"
                 value={searchInput}
                 onChange={(e) => onSearchChange(e.target.value)}
                 aria-label="Поиск облигаций"
               />
+              <span className="absolute right-1 top-1/2 -translate-y-1/2">
+                <FieldHelp
+                  content={SCREENER_FILTER_HELP.search}
+                  label="Что значит поиск"
+                  side="bottom"
+                />
+              </span>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:flex sm:shrink-0">
             <div className="min-w-0 sm:w-[7.5rem]">
-              <FieldLabel htmlFor="screener-min-ytm">Мин. YTM, %</FieldLabel>
+              <FieldLabel
+                htmlFor="screener-min-ytm"
+                help={SCREENER_FILTER_HELP.minYtm}
+                helpLabel="Что значит мин. YTM"
+              >
+                Мин. YTM, %
+              </FieldLabel>
               <Input
                 id="screener-min-ytm"
                 type="number"
@@ -204,7 +227,13 @@ export function ScreenerFilters({
             </div>
 
             <div className="min-w-0 sm:w-[15.5rem]">
-              <FieldLabel htmlFor="screener-max-days">Макс. дней</FieldLabel>
+              <FieldLabel
+                htmlFor="screener-max-days"
+                help={SCREENER_FILTER_HELP.maxDays}
+                helpLabel="Что значит макс. дней"
+              >
+                Макс. дней
+              </FieldLabel>
               <div className="flex h-10 overflow-hidden rounded-md border border-border bg-card shadow-sm focus-within:ring-1 focus-within:ring-ring">
                 <Input
                   id="screener-max-days"
@@ -225,6 +254,7 @@ export function ScreenerFilters({
                   onChange={(e) =>
                     onFilterByChange(e.target.value as "effective" | "maturity")
                   }
+                  title={SCREENER_FILTER_HELP.filterBy}
                 >
                   <option value="effective">До оферты</option>
                   <option value="maturity">До погашения</option>
@@ -264,7 +294,13 @@ export function ScreenerFilters({
               {/* Ликвидность / инструмент */}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="min-w-0">
-                  <FieldLabel htmlFor="screener-min-volume">Мин. объём, ₽</FieldLabel>
+                  <FieldLabel
+                    htmlFor="screener-min-volume"
+                    help={SCREENER_FILTER_HELP.minVolume}
+                    helpLabel="Что значит мин. объём"
+                  >
+                    Мин. объём, ₽
+                  </FieldLabel>
                   <Input
                     id="screener-min-volume"
                     type="number"
@@ -279,7 +315,13 @@ export function ScreenerFilters({
                   />
                 </div>
                 <div className="min-w-0">
-                  <FieldLabel htmlFor="screener-max-lot">Макс. стоимость лота, ₽</FieldLabel>
+                  <FieldLabel
+                    htmlFor="screener-max-lot"
+                    help={SCREENER_FILTER_HELP.maxLotPrice}
+                    helpLabel="Что значит макс. стоимость лота"
+                  >
+                    Макс. стоимость лота, ₽
+                  </FieldLabel>
                   <Input
                     id="screener-max-lot"
                     type="number"
@@ -294,7 +336,9 @@ export function ScreenerFilters({
                   />
                 </div>
                 <div className="min-w-0 sm:col-span-2 lg:col-span-1">
-                  <FieldLabel>Тип купона</FieldLabel>
+                  <FieldLabel help={SCREENER_FILTER_HELP.couponTypes} helpLabel="Что значит тип купона">
+                    Тип купона
+                  </FieldLabel>
                   <MultiSelect
                     options={COUPON_OPTIONS}
                     values={couponTypes}
@@ -305,7 +349,9 @@ export function ScreenerFilters({
                   />
                 </div>
                 <div className="min-w-0 sm:col-span-2 lg:col-span-1">
-                  <FieldLabel>Сектор</FieldLabel>
+                  <FieldLabel help={SCREENER_FILTER_HELP.sectors} helpLabel="Что значит сектор">
+                    Сектор
+                  </FieldLabel>
                   <MultiSelect
                     options={SECTOR_FILTER_OPTIONS}
                     values={sectors}
@@ -322,7 +368,9 @@ export function ScreenerFilters({
               {/* Риск / исключения */}
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="min-w-0">
-                  <FieldLabel>Уровень риска</FieldLabel>
+                  <FieldLabel help={SCREENER_FILTER_HELP.riskLevels} helpLabel="Что значит уровень риска">
+                    Уровень риска
+                  </FieldLabel>
                   <MultiSelect
                     options={RISK_LEVEL_OPTIONS}
                     values={riskLevels.map(String)}
@@ -336,24 +384,32 @@ export function ScreenerFilters({
                   <span className="mb-1.5 block text-xs leading-none opacity-0" aria-hidden>
                     &nbsp;
                   </span>
-                  <label className="flex h-10 cursor-pointer items-center gap-2.5 text-sm">
+                  <label className="flex h-10 cursor-pointer items-center gap-1 text-sm">
                     <Checkbox
                       checked={hideDefault}
                       onCheckedChange={(c) => onHideDefaultChange(!!c)}
                     />
-                    Скрыть дефолтные
+                    <span>Скрыть дефолтные</span>
+                    <FieldHelp
+                      content={SCREENER_FILTER_HELP.hideDefault}
+                      label="Что значит скрыть дефолтные"
+                    />
                   </label>
                 </div>
                 <div className="flex min-w-0 flex-col justify-end sm:col-span-2 lg:col-span-1">
                   <span className="mb-1.5 block text-xs leading-none opacity-0" aria-hidden>
                     &nbsp;
                   </span>
-                  <label className="flex h-10 cursor-pointer items-center gap-2.5 text-sm">
+                  <label className="flex h-10 cursor-pointer items-center gap-1 text-sm">
                     <Checkbox
                       checked={hideSubordinated}
                       onCheckedChange={(c) => onHideSubordinatedChange(!!c)}
                     />
-                    Скрыть субординированные
+                    <span>Скрыть субординированные</span>
+                    <FieldHelp
+                      content={SCREENER_FILTER_HELP.hideSubordinated}
+                      label="Что значит скрыть субординированные"
+                    />
                   </label>
                 </div>
               </div>

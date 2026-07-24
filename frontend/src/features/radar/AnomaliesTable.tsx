@@ -1,7 +1,18 @@
 import { Badge } from "@/components/ui/badge";
+import { FieldHelp } from "@/components/ui/field-help";
 import { sectorLabel } from "@/features/bonds/sectorLabels";
+import { RADAR_METRIC_HELP } from "@/features/radar/radarHelp";
 import type { MarketRadarAnomalyRow } from "@/features/radar/useMarketRadar";
 import { cn, formatPct } from "@/lib/utils";
+
+function MetricHeader({ label, help }: { label: string; help: string }) {
+  return (
+    <span className="inline-flex items-center justify-end gap-0.5">
+      {label}
+      <FieldHelp content={help} label={`Что значит: ${label}`} stopPropagation side="bottom" />
+    </span>
+  );
+}
 
 function AnomalyCard({
   row,
@@ -39,13 +50,13 @@ function AnomalyCard({
         <div className="text-right text-xs">
           <p className="font-mono tabular-nums">{formatPct(row.spread_pp, 1)}</p>
           <p className="font-mono tabular-nums text-red-600 dark:text-red-400">
-            +{formatPct(row.delta_pp, 1)}
+            +{formatPct(row.delta_pp, 1)} к peers
           </p>
         </div>
       </div>
       {row.z_score != null && (
         <p className="mt-2 text-xs text-muted-foreground">
-          Z-score: <span className="font-mono tabular-nums">{row.z_score.toFixed(1)}</span>
+          Z: <span className="font-mono tabular-nums">{row.z_score.toFixed(1)}</span>
         </p>
       )}
     </button>
@@ -81,9 +92,15 @@ export function AnomaliesTable({
             <tr className="border-b border-border/60 text-left text-xs text-muted-foreground">
               <th className="px-3 py-2 font-medium">Бумага</th>
               <th className="px-3 py-2 font-medium">Сектор</th>
-              <th className="px-3 py-2 text-right font-medium">Спред</th>
-              <th className="px-3 py-2 text-right font-medium">vs peers</th>
-              <th className="px-3 py-2 text-right font-medium">Z</th>
+              <th className="px-3 py-2 text-right font-medium">
+                <MetricHeader label="Спред" help={RADAR_METRIC_HELP.spread} />
+              </th>
+              <th className="px-3 py-2 text-right font-medium">
+                <MetricHeader label="к peers" help={RADAR_METRIC_HELP.vsPeers} />
+              </th>
+              <th className="px-3 py-2 text-right font-medium">
+                <MetricHeader label="Z" help={RADAR_METRIC_HELP.zScore} />
+              </th>
             </tr>
           </thead>
           <tbody>

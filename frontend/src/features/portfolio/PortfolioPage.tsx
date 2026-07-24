@@ -103,7 +103,7 @@ export function PortfolioPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Портфель</h1>
-          <p className="text-sm text-muted-foreground">Планирование и прогноз доходности</p>
+          <p className="text-sm text-muted-foreground">Планирование и прогнозный расчёт доходности</p>
         </div>
 
         <DialogRoot open={createOpen} onOpenChange={setCreateOpen}>
@@ -442,6 +442,7 @@ export function PortfolioPage() {
             <ForecastMetrics
               plan={plan}
               isTrading={isTrading}
+              horizonDate={active.horizon_date}
               weightedDurationYears={
                 isTrading
                   ? tradingAdvice?.weighted_duration_years ?? plan.weighted_duration_years

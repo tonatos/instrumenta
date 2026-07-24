@@ -73,6 +73,7 @@ export function SectorHeatmap({
             )}
             <p className="text-sm font-semibold">{sectorLabel(row.sector)}</p>
             <p className="mt-1 font-mono text-lg tabular-nums">
+              <span className="text-xs font-sans font-normal text-muted-foreground">Δ7д </span>
               {formatPct(row.change_7d_pct, 1)}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
