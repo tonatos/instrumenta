@@ -52,9 +52,11 @@ func (r *UserRepository) MarkBotConnected(ctx context.Context, telegramID int64,
 		at = time.Now().UTC()
 	}
 	now := at.UTC().Format(time.RFC3339)
+	// $3 = created_at/updated_at (TIMESTAMPTZ); $4 = bot_connected_at (TEXT).
+	// Postgres rejects reusing one placeholder across incompatible column types (42P08).
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO users (telegram_id, display_name, created_at, updated_at, bot_connected_at)
-		VALUES ($1, $2, $3, $3, $3)
+		VALUES ($1, $2, $3, $3, $4)
 		ON CONFLICT(telegram_id) DO UPDATE SET
 			display_name = CASE
 				WHEN excluded.display_name = '' THEN users.display_name
@@ -62,7 +64,7 @@ func (r *UserRepository) MarkBotConnected(ctx context.Context, telegramID int64,
 			END,
 			bot_connected_at = excluded.bot_connected_at,
 			updated_at = excluded.updated_at
-	`, telegramID, displayName, now)
+	`, telegramID, displayName, now, now)
 	return err
 }
 
