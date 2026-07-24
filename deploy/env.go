@@ -31,6 +31,7 @@ type envTemplateData struct {
 	NotifierScanIntervalSec  string
 	TelegramBotToken         string
 	TelegramBotUsername      string
+	TelegramSupportChatID    string
 	YooKassaShopID           string
 	YooKassaSecretKey        string
 	ComplimentaryTelegramIDs string
@@ -64,6 +65,7 @@ func renderEnv(inv Inventory) (string, error) {
 		NotifierScanIntervalSec:  strconv.Itoa(inv.NotifierScanIntervalSec),
 		TelegramBotToken:         inv.TelegramBotToken,
 		TelegramBotUsername:      inv.TelegramBotUsername,
+		TelegramSupportChatID:    strconv.FormatInt(inv.TelegramSupportChatID, 10),
 		YooKassaShopID:           inv.YooKassaShopID,
 		YooKassaSecretKey:        inv.YooKassaSecretKey,
 		ComplimentaryTelegramIDs: inv.ComplimentaryTelegramIDs,

@@ -287,7 +287,7 @@ func WireNotifier(ctx context.Context, settings config.Settings, logger *slog.Lo
 		tradingCtx, bondSvc, deliver, spreadRepo, radarScan, logger, settings.NotificationsDev,
 		keyRates, usersRepo, defaultTaxFrac,
 	)
-	inbox := appnotifications.NewBotInbox(telegram, usersRepo, billingSvc, logger)
+	inbox := appnotifications.NewBotInbox(telegram, usersRepo, billingSvc, logger, settings.TelegramSupportChatID)
 	cleanup := func() { _ = db.Close() }
 	return scanner, billingSvc, inbox, db, cleanup, nil
 }

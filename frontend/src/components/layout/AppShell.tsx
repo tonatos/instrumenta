@@ -5,6 +5,7 @@ import {
   Calculator,
   Heart,
   KeyRound,
+  LifeBuoy,
   LogOut,
   Moon,
   Settings,
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { SettingsSheet } from "@/features/settings/SettingsSheet";
 import { useAuth } from "@/features/auth/AuthContext";
+import { supportBotDeepLink } from "@/features/support/supportDeepLink";
 import { api } from "@/api/client";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -37,6 +39,13 @@ export function AppShell() {
     queryKey: ["favorites"],
     queryFn: api.getFavorites,
   });
+  const { data: me } = useQuery({
+    queryKey: ["auth-me"],
+    queryFn: () => api.getMe(),
+  });
+  const supportHref = supportBotDeepLink(
+    me?.telegram_bot?.configured ? me.telegram_bot.deep_link : undefined,
+  );
 
   return (
     <div className="flex h-dvh overflow-hidden bg-transparent">
@@ -76,6 +85,19 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
+        {supportHref ? (
+          <div className="shrink-0 px-4 py-3">
+            <a
+              href={supportHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex min-h-10 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            >
+              <LifeBuoy className="h-4 w-4" aria-hidden />
+              Поддержка
+            </a>
+          </div>
+        ) : null}
         <div className="flex shrink-0 gap-2 border-t border-border p-4">
           {authEnabled && displayName && (
             <div className="flex min-w-0 flex-1 items-center text-xs text-muted-foreground">
@@ -108,6 +130,18 @@ export function AppShell() {
             />
           </Link>
           <div className="flex shrink-0 gap-2">
+            {supportHref ? (
+              <Button variant="outline" size="icon" asChild>
+                <a
+                  href={supportHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Поддержка"
+                >
+                  <LifeBuoy className="h-4 w-4" />
+                </a>
+              </Button>
+            ) : null}
             <Button variant="outline" size="icon" onClick={toggle} aria-label="Тема">
               {theme === "light" ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
             </Button>

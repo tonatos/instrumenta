@@ -47,6 +47,7 @@ type Settings struct {
 	TelegramBotToken         string
 	TelegramBotUsername      string // optional override; otherwise resolved via getMe
 	TelegramHTTPProxy        string // optional; only Bot API + OIDC (TSPU bypass)
+	TelegramSupportChatID    int64  // private support group; 0 = relay disabled
 	NotifierLedgerPath       string
 	NotificationsDev         bool
 
@@ -129,6 +130,7 @@ func Load() Settings {
 		TelegramBotToken:        os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramBotUsername:     strings.TrimPrefix(strings.TrimSpace(os.Getenv("TELEGRAM_BOT_USERNAME")), "@"),
 		TelegramHTTPProxy:       strings.TrimSpace(os.Getenv("TELEGRAM_HTTP_PROXY")),
+		TelegramSupportChatID:   envInt64("TELEGRAM_SUPPORT_CHAT_ID", 0),
 		NotifierLedgerPath:      envString("NOTIFIER_LEDGER_PATH", defaultNotifierLedgerPath(root)),
 		NotificationsDev:        envBool("NOTIFICATIONS_DEV", false),
 

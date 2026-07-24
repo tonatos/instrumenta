@@ -47,6 +47,7 @@ type Inventory struct {
 	NotifierScanIntervalSec int    `yaml:"notifier_scan_interval_sec"`
 	TelegramBotToken        string `yaml:"telegram_bot_token"`
 	TelegramBotUsername     string `yaml:"telegram_bot_username"`
+	TelegramSupportChatID   int64  `yaml:"telegram_support_chat_id"`
 
 	YooKassaShopID           string `yaml:"yookassa_shop_id"`
 	YooKassaSecretKey        string `yaml:"yookassa_secret_key"`

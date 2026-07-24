@@ -66,3 +66,51 @@ test.describe("Telegram-бот — кабинет", () => {
     await expect(page.getByRole("button", { name: "Отключить в приложении" })).toBeVisible();
   });
 });
+
+test.describe("Telegram support — AppShell", () => {
+  test("в сайдбаре ссылка Поддержка ведёт на deep link с start=support", async ({ page }) => {
+    await mockConfig(page);
+    await mockBillingStatus(page, { hasAccess: true });
+    await mockAuthMe(page, {
+      telegramBot: { configured: true, connected: false, username: "instrumenta_bot" },
+    });
+    await mockBondsEmpty(page);
+    await seedAuth(page);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    const support = page.getByRole("link", { name: "Поддержка" });
+    await expect(support).toBeVisible();
+    await expect(support).toHaveAttribute("href", "https://t.me/instrumenta_bot?start=support");
+  });
+
+  test("в mobile header иконка Поддержка с тем же deep link", async ({ page }) => {
+    await mockConfig(page);
+    await mockBillingStatus(page, { hasAccess: true });
+    await mockAuthMe(page, {
+      telegramBot: { configured: true, connected: false, username: "instrumenta_bot" },
+    });
+    await mockBondsEmpty(page);
+    await seedAuth(page);
+
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto("/");
+    const support = page.getByRole("link", { name: "Поддержка" });
+    await expect(support).toBeVisible();
+    await expect(support).toHaveAttribute("href", "https://t.me/instrumenta_bot?start=support");
+  });
+
+  test("без бота пункт Поддержка скрыт", async ({ page }) => {
+    await mockConfig(page);
+    await mockBillingStatus(page, { hasAccess: true });
+    await mockAuthMe(page, {
+      telegramBot: { configured: false, connected: false, username: "" },
+    });
+    await mockBondsEmpty(page);
+    await seedAuth(page);
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: "Поддержка" })).toHaveCount(0);
+  });
+});

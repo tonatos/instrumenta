@@ -105,9 +105,11 @@ type Update struct {
 }
 
 type IncomingMsg struct {
-	Text string    `json:"text"`
-	Chat Chat      `json:"chat"`
-	From *MsgFrom  `json:"from"`
+	MessageID      int64         `json:"message_id"`
+	Text           string        `json:"text"`
+	Chat           Chat          `json:"chat"`
+	From           *MsgFrom      `json:"from"`
+	ReplyToMessage *IncomingMsg  `json:"reply_to_message"`
 }
 
 type Chat struct {

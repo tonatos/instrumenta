@@ -25,6 +25,7 @@ func TestRenderEnv(t *testing.T) {
 		NotifierScanIntervalSec:  3600,
 		TelegramBotToken:         "bot-token",
 		TelegramBotUsername:      "instrumenta_bot",
+		TelegramSupportChatID:    -1001,
 		ComplimentaryTelegramIDs: "111999777",
 		PostgresPassword:         "pg-secret",
 	}
@@ -45,6 +46,7 @@ func TestRenderEnv(t *testing.T) {
 		"PUBLIC_APP_URL=https://bond.example.com",
 		"TELEGRAM_BOT_TOKEN=bot-token",
 		"TELEGRAM_BOT_USERNAME=instrumenta_bot",
+		"TELEGRAM_SUPPORT_CHAT_ID=-1001",
 		"DEV_TELEGRAM_ID=1",
 		"NOTIFIER_SCAN_INTERVAL_SEC=3600",
 		"COMPLIMENTARY_TELEGRAM_IDS=111999777",

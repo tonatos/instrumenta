@@ -47,6 +47,8 @@ notifier_scan_interval_sec: 3600
 telegram_bot_token: ""
 # Optional username for deep link (otherwise API resolves via getMe)
 # telegram_bot_username: ""
+# Private support group (operator inbox). Set in inventory.yaml only — do not commit the id.
+# telegram_support_chat_id: 0
 
 # Billing / YooKassa (leave empty until shop is ready — catalog/UI still work)
 yookassa_shop_id: ""

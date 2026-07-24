@@ -133,7 +133,7 @@ func TestBotInbox_StartRequiresSubscription(t *testing.T) {
 
 	tg := infranotify.NewTelegramClient("test-token", "")
 	tg.SetAPIBaseForTest(srv.URL)
-	inbox := NewBotInbox(tg, users, billingSvc, nil)
+	inbox := NewBotInbox(tg, users, billingSvc, nil, 0)
 
 	inbox.handleStart(context.Background(), 11, "NoSub")
 	connected, _ := users.IsBotConnected(context.Background(), 11)
@@ -154,5 +154,130 @@ func TestBotInbox_StartRequiresSubscription(t *testing.T) {
 	connected, _ = users.IsBotConnected(context.Background(), 11)
 	if !connected {
 		t.Fatal("expected connected after /start with subscription")
+	}
+}
+
+func TestBotInbox_SupportRelay(t *testing.T) {
+	_, users := openNotifyTestDB(t)
+	billingSvc := appbilling.NewService(&memBillingStore{subs: map[int64]*billing.Subscription{}}, yookassa.DisabledGateway{}, nil, "")
+
+	const supportChat int64 = -1001
+	type sentMsg struct {
+		chatID int64
+		text   string
+	}
+	var sent []sentMsg
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/sendMessage"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			chatID, _ := body["chat_id"].(float64)
+			sent = append(sent, sentMsg{chatID: int64(chatID), text: body["text"].(string)})
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": map[string]any{}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	tg := infranotify.NewTelegramClient("test-token", "")
+	tg.SetAPIBaseForTest(srv.URL)
+	inbox := NewBotInbox(tg, users, billingSvc, nil, supportChat)
+
+	inbox.handleUpdate(context.Background(), infranotify.Update{
+		Message: &infranotify.IncomingMsg{
+			Text: "Помогите с оплатой",
+			Chat: infranotify.Chat{ID: 42, Type: "private"},
+			From: &infranotify.MsgFrom{ID: 42, Username: "bob"},
+		},
+	})
+	if len(sent) != 2 {
+		t.Fatalf("want relay+ack, got %#v", sent)
+	}
+	if sent[0].chatID != supportChat || !strings.Contains(sent[0].text, "Support tg_id=42") {
+		t.Fatalf("relay to group: %#v", sent[0])
+	}
+	if sent[1].chatID != 42 || !strings.Contains(sent[1].text, "отправлено") {
+		t.Fatalf("ack to user: %#v", sent[1])
+	}
+
+	relayed := sent[0].text
+	sent = nil
+	inbox.handleUpdate(context.Background(), infranotify.Update{
+		Message: &infranotify.IncomingMsg{
+			Text: "Проверьте ЮKassa",
+			Chat: infranotify.Chat{ID: supportChat, Type: "group"},
+			From: &infranotify.MsgFrom{ID: 99, FirstName: "Op"},
+			ReplyToMessage: &infranotify.IncomingMsg{
+				Text: relayed,
+				Chat: infranotify.Chat{ID: supportChat, Type: "group"},
+			},
+		},
+	})
+	if len(sent) != 1 || sent[0].chatID != 42 || sent[0].text != "Проверьте ЮKassa" {
+		t.Fatalf("reply to user: %#v", sent)
+	}
+}
+
+func TestBotInbox_SupportDisabledAndCommands(t *testing.T) {
+	_, users := openNotifyTestDB(t)
+	billingSvc := appbilling.NewService(&memBillingStore{subs: map[int64]*billing.Subscription{}}, yookassa.DisabledGateway{}, nil, "")
+
+	var sent []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/sendMessage"):
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			sent = append(sent, body["text"].(string))
+			_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": map[string]any{}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	tg := infranotify.NewTelegramClient("test-token", "")
+	tg.SetAPIBaseForTest(srv.URL)
+	inbox := NewBotInbox(tg, users, billingSvc, nil, 0)
+
+	inbox.handleUpdate(context.Background(), infranotify.Update{
+		Message: &infranotify.IncomingMsg{
+			Text: "hello support",
+			Chat: infranotify.Chat{ID: 7, Type: "private"},
+			From: &infranotify.MsgFrom{ID: 7},
+		},
+	})
+	if len(sent) != 1 || !strings.Contains(sent[0], "недоступна") {
+		t.Fatalf("disabled support: %#v", sent)
+	}
+
+	sent = nil
+	inbox.handleUpdate(context.Background(), infranotify.Update{
+		Message: &infranotify.IncomingMsg{
+			Text: "/help",
+			Chat: infranotify.Chat{ID: 7, Type: "private"},
+			From: &infranotify.MsgFrom{ID: 7},
+		},
+	})
+	if len(sent) != 1 || !strings.Contains(sent[0], "/support") {
+		t.Fatalf("help: %#v", sent)
+	}
+
+	sent = nil
+	inbox.handleUpdate(context.Background(), infranotify.Update{
+		Message: &infranotify.IncomingMsg{
+			Text: "/start support",
+			Chat: infranotify.Chat{ID: 7, Type: "private"},
+			From: &infranotify.MsgFrom{ID: 7},
+		},
+	})
+	connected, _ := users.IsBotConnected(context.Background(), 7)
+	if connected {
+		t.Fatal("/start support must not connect notifications")
+	}
+	if len(sent) != 1 || !strings.Contains(sent[0], "поддержк") {
+		t.Fatalf("start support intro: %#v", sent)
 	}
 }
